@@ -1,0 +1,528 @@
+// SPDX-License-Identifier: UNLICENSED
+pragma solidity ^0.8.13;
+
+// foundry imports
+import { Test, console2 } from "../lib/forge-std/src/Test.sol";
+
+// oz imports
+import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { Checkpoints } from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
+import { ERC20Mock } from "@openzeppelin/contracts/mocks/token/ERC20Mock.sol";
+
+// local imports
+import { RevenueStream } from "../src/RevenueStream.sol";
+import { RevenueDistributor } from "../src/RevenueDistributor.sol";
+import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
+import { VotingEscrowVesting } from "../src/governance/VotingEscrowVesting.sol";
+import { RWAToken } from "../src/RWAToken.sol";
+import { DelegateFactory } from "../src/governance/DelegateFactory.sol";
+import { Delegator } from "../src/governance/Delegator.sol";
+
+// local helper imports
+import { Utility } from "./utils/Utility.sol";
+import { VotingMath } from "../src/governance/VotingMath.sol";
+
+/**
+ * @title RWARevenueStreamTest
+ * @author Chase Brown
+ * @notice This test file contains the basic unit tests for the RevenueStream contract.
+ */
+contract RWARevenueStreamTest is Utility {
+    using VotingMath for uint256;
+
+    // ~ Contracts ~
+
+    RevenueStream public revStream;
+    RevenueDistributor public revDistributor;
+    RWAVotingEscrow public veRWA;
+    VotingEscrowVesting public vesting;
+    RWAToken public rwaToken;
+    DelegateFactory public delegateFactory;
+    Delegator public delegator;
+
+    ERC20Mock public mockRevToken;
+
+    // proxies
+    ERC1967Proxy public revStreamProxy;
+    ERC1967Proxy public revDistributorProxy;
+    ERC1967Proxy public veRWAProxy;
+    ERC1967Proxy public vestingProxy;
+    ERC1967Proxy public rwaTokenProxy;
+    ERC1967Proxy public delegateFactoryProxy;
+
+
+    function setUp() public {
+
+        // ~ $RWA Deployment ~
+
+        // Deploy $RWA Token implementation
+        rwaToken = new RWAToken();
+
+        // Deploy proxy for $RWA Token
+        rwaTokenProxy = new ERC1967Proxy(
+            address(rwaToken),
+            abi.encodeWithSelector(RWAToken.initialize.selector,
+                ADMIN,
+                address(0),
+                address(0)
+            )
+        );
+        rwaToken = RWAToken(payable(address(rwaTokenProxy)));
+
+
+        // ~ Vesting Deployment ~
+
+        // Deploy vesting contract
+        vesting = new VotingEscrowVesting();
+
+        // Deploy proxy for vesting contract
+        vestingProxy = new ERC1967Proxy(
+            address(vesting),
+            abi.encodeWithSelector(VotingEscrowVesting.initialize.selector,
+                ADMIN
+            )
+        );
+        vesting = VotingEscrowVesting(address(vestingProxy));
+
+
+        // ~ veRWA Deployment ~
+
+        // Deploy veRWA implementation
+        veRWA = new RWAVotingEscrow();
+
+        // Deploy proxy for veRWA
+        veRWAProxy = new ERC1967Proxy(
+            address(veRWA),
+            abi.encodeWithSelector(RWAVotingEscrow.initialize.selector,
+                address(rwaToken),
+                address(vesting),
+                LAYER_Z, // Note: Layer Zero Endpoint -> For migration
+                ADMIN
+            )
+        );
+        veRWA = RWAVotingEscrow(address(veRWAProxy));
+
+
+        // ~ Revenue Distributor Deployment ~
+
+        // Deploy mock rev token
+        mockRevToken = new ERC20Mock();
+
+        // Deploy revStream contract
+        revStream = new RevenueStream();
+
+        // Deploy revDistributor contract
+        revDistributor = new RevenueDistributor();
+
+        // Deploy proxy for revDistributor
+        revDistributorProxy = new ERC1967Proxy(
+            address(revDistributor),
+            abi.encodeWithSelector(RevenueDistributor.initialize.selector,
+                ADMIN,
+                address(revStream),
+                address(veRWA)
+            )
+        );
+        revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));
+
+        // ~ Delegator Deployment ~
+
+        // Deploy Delegator implementation
+        delegator = new Delegator();
+
+        // Deploy DelegateFactory
+        delegateFactory = new DelegateFactory();
+
+        // Deploy DelegateFactory proxy
+        delegateFactoryProxy = new ERC1967Proxy(
+            address(delegateFactory),
+            abi.encodeWithSelector(DelegateFactory.initialize.selector,
+                address(veRWA),
+                address(delegator),
+                ADMIN
+            )
+        );
+        delegateFactory = DelegateFactory(address(delegateFactoryProxy));
+
+
+        // ~ Config ~
+
+        //vm.prank(ADMIN);
+        //revStream = RevenueStream(revDistributor.createNewRevStream(address(mockRevToken)));
+
+        // set votingEscrow on vesting contract
+        vm.prank(ADMIN);
+        vesting.setVotingEscrowContract(address(veRWA));
+
+        // Grant minter role to address(this) & veRWA
+        vm.startPrank(ADMIN);
+        rwaToken.grantRole(MINTER_ROLE, address(this)); // for testing
+        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
+        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
+        vm.stopPrank();
+
+        // Exclude necessary addresses from RWA fees.
+        vm.startPrank(ADMIN);
+        rwaToken.excludeFromFees(address(veRWA), true);
+        rwaToken.excludeFromFees(JOE, true);
+        vm.stopPrank();
+
+        // Mint Joe $RWA tokens
+        rwaToken.mintFor(JOE, 1_000 ether);
+    }
+
+
+    // ------------------
+    // Initial State Test
+    // ------------------
+
+    /// @dev Verifies initial state of RevenueStream contract.
+    function test_revStream_init_state() public {
+        assertEq(address(revStream.revenueToken()), address(mockRevToken));
+        assertEq(address(revStream.votingEscrow()), address(veRWA));
+        assertEq(revStream.hasRole(0x00, ADMIN), true);
+        assertEq(revStream.hasRole(DEPOSITOR_ROLE, address(revDistributor)), true);
+        assertEq(revStream.getCyclesArray().length, 1);
+    }
+
+
+    // ----------
+    // Unit Tests
+    // ----------
+
+    // ~ deposit ~
+
+    /// @dev Verifies proper state changes when RevenueStream::deposit() is executed.
+    function test_revStream_deposit() public {
+        
+        // ~ Config ~
+
+        uint256 amount = 1_000 ether;
+        mockRevToken.mint(address(revDistributor), amount);
+
+        // ~ Pre-state check ~
+
+        assertEq(mockRevToken.balanceOf(address(revStream)), 0);
+        assertEq(mockRevToken.balanceOf(address(revDistributor)), amount);
+
+        uint256[] memory cycles = revStream.getCyclesArray();
+        assertEq(cycles.length, 1);
+        assertEq(cycles[0], block.timestamp);
+
+        // ~ Execute Deposit ~
+
+        vm.startPrank(address(revDistributor));
+        mockRevToken.approve(address(revStream), amount);
+        revStream.deposit(amount);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+
+        assertEq(mockRevToken.balanceOf(address(revStream)), amount);
+        assertEq(mockRevToken.balanceOf(address(revDistributor)), 0);
+
+        assertEq(revStream.revenue(block.timestamp), amount);
+
+        cycles = revStream.getCyclesArray();
+        assertEq(cycles.length, 2);
+        assertEq(cycles[0], block.timestamp);
+        assertEq(cycles[1], block.timestamp);
+    }
+
+    // ~ claimable ~
+
+    /// @dev Verifies proper return variable when RevenueStream::claimable() is called.
+    function test_revStream_claimable_single() public {
+
+        // ~ Config ~
+
+        uint256 amount = 1_000 ether;
+        uint256 amountRevenue = 5_000 ether;
+        uint256 duration = (1 * 30 days);
+
+        // mint Joe veRWA token
+        vm.startPrank(JOE);
+        rwaToken.approve(address(veRWA), amount);
+        veRWA.mint(
+            JOE,
+            uint208(rwaToken.balanceOf(JOE)),
+            duration
+        );
+
+        // deposit revenue into RevStream contract
+        mockRevToken.mint(address(revDistributor), amountRevenue);
+        vm.startPrank(address(revDistributor));
+        mockRevToken.approve(address(revStream), amountRevenue);
+        revStream.deposit(amountRevenue);
+        vm.stopPrank();
+
+        // ~ Skip to avoid FutureLookup error ~
+
+        skip(1);
+
+        // ~ Call claimableForToken ~
+
+        uint256 claimable = revStream.claimable(JOE);
+
+        // ~ Verify ~
+
+        assertEq(claimable, amountRevenue);
+    }
+
+    /// @dev Verifies proper return variable when RevenueStream::claimable() is called.
+    function test_revStream_claimable_multiple() public {
+
+        // ~ Config ~
+
+        uint256 amount1 = 1_000 ether;
+        // Mint Joe more$RWA tokens
+        rwaToken.mintFor(JOE, amount1);
+
+        uint256 amountRevenue = 5_000 ether;
+        uint256 duration = (1 * 30 days);
+
+        // mint Joe veRWA token
+        vm.startPrank(JOE);
+        rwaToken.approve(address(veRWA), amount1);
+        veRWA.mint(
+            JOE,
+            uint208(amount1),
+            duration
+        );
+        // mint Joe veRWA token
+        vm.startPrank(JOE);
+        rwaToken.approve(address(veRWA), amount1);
+        veRWA.mint(
+            JOE,
+            uint208(amount1),
+            duration
+        );
+
+        // deposit revenue into RevStream contract
+        mockRevToken.mint(address(revDistributor), amountRevenue);
+        vm.startPrank(address(revDistributor));
+        mockRevToken.approve(address(revStream), amountRevenue);
+        revStream.deposit(amountRevenue);
+        vm.stopPrank();
+
+        // ~ Skip to avoid FutureLookup error ~
+
+        skip(1);
+
+        // ~ Call claimable ~
+
+        uint256 claimableJoe = revStream.claimable(JOE);
+
+        // ~ Verify ~
+
+        assertEq(claimableJoe, amountRevenue);
+    }
+
+    /// @dev Verifies proper state changes when RevenueStream::claim() is executed.
+    function test_revStream_claim_single() public {
+        
+        // ~ Config ~
+
+        uint256 amount = 1_000 ether;
+        uint256 amountRevenue = 5_000 ether;
+        uint256 duration = (1 * 30 days);
+
+        // mint Joe veRWA token
+        vm.startPrank(JOE);
+        rwaToken.approve(address(veRWA), amount);
+        veRWA.mint(
+            JOE,
+            uint208(amount),
+            duration
+        );
+
+        // deposit revenue into RevStream contract
+        mockRevToken.mint(address(revDistributor), amountRevenue * 3);
+        vm.startPrank(address(revDistributor));
+        mockRevToken.approve(address(revStream), amountRevenue * 2);
+        revStream.deposit(amountRevenue);
+        revStream.deposit(amountRevenue);
+        vm.stopPrank();
+
+        // Skip to avoid FutureLookup error (when querying voting power)
+        skip(1);
+
+        // ~ Pre-state check ~
+
+        assertEq(mockRevToken.balanceOf(JOE), 0);
+        assertEq(mockRevToken.balanceOf(address(revStream)), amountRevenue * 2);
+        assertEq(revStream.lastClaim(JOE), 0);
+
+        uint256 claimable = revStream.claimable(JOE);
+
+        // ~ Execute claim ~
+
+        vm.prank(JOE);
+        revStream.claim(JOE);
+
+        // ~ Post-state check 1 ~
+
+        assertEq(claimable, amountRevenue * 2);
+        assertEq(mockRevToken.balanceOf(JOE), amountRevenue * 2);
+        assertEq(mockRevToken.balanceOf(address(revStream)), 0);
+        assertEq(revStream.lastClaim(JOE), block.timestamp - 1);
+
+        // ~ Another deposit ~
+
+        vm.startPrank(address(revDistributor));
+        mockRevToken.approve(address(revStream), amountRevenue);
+        revStream.deposit(amountRevenue);
+        vm.stopPrank();
+
+        claimable = revStream.claimable(JOE);
+
+        // ~ Execute claim ~
+
+        vm.prank(JOE);
+        revStream.claim(JOE);
+
+        // ~ Post-state check 2 ~
+
+        assertEq(claimable, amountRevenue);
+        assertEq(mockRevToken.balanceOf(JOE), amountRevenue * 3);
+        assertEq(mockRevToken.balanceOf(address(revStream)), 0);
+        assertEq(revStream.lastClaim(JOE), block.timestamp);
+    }
+
+    /// @dev Verifies proper state changes when RevenueStream::claim() is executed.
+    function test_revStream_claim_multiple() public {
+
+        // ~ Config ~
+
+        uint256 amount1 = 1_000 ether;
+        // Mint Joe more$RWA tokens
+        rwaToken.mintFor(JOE, amount1);
+
+        uint256 amountRevenue = 5_000 ether;
+        uint256 duration = (1 * 30 days);
+
+        // mint Joe veRWA token
+        vm.startPrank(JOE);
+        rwaToken.approve(address(veRWA), amount1);
+        veRWA.mint(
+            JOE,
+            uint208(amount1),
+            duration
+        );
+        // mint Joe veRWA token
+        vm.startPrank(JOE);
+        rwaToken.approve(address(veRWA), amount1);
+        veRWA.mint(
+            JOE,
+            uint208(amount1),
+            duration
+        );
+
+        // deposit revenue into RevStream contract
+        mockRevToken.mint(address(revDistributor), amountRevenue);
+        vm.startPrank(address(revDistributor));
+        mockRevToken.approve(address(revStream), amountRevenue);
+        revStream.deposit(amountRevenue);
+        vm.stopPrank();
+
+        // ~ Skip to avoid FutureLookup error ~
+
+        skip(1);
+
+        // ~ Pre-state check ~
+
+        assertEq(mockRevToken.balanceOf(JOE), 0);
+        assertEq(mockRevToken.balanceOf(address(revStream)), amountRevenue);
+        assertEq(revStream.lastClaim(JOE), 0);
+
+        assertEq(revStream.claimable(JOE), amountRevenue);
+
+        // ~ Execute claim ~
+
+        vm.prank(JOE);
+        revStream.claim(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(mockRevToken.balanceOf(JOE), amountRevenue);
+        assertEq(mockRevToken.balanceOf(address(revStream)), 0);
+        assertEq(revStream.lastClaim(JOE), block.timestamp - 1);
+
+        assertEq(revStream.claimable(JOE), 0);
+    }
+
+    /// @notice Verifies delegatees can claim rent. 
+    function test_revStream_claim_delegate() public {
+        
+        // ~ Config ~
+
+        uint256 amount = 1_000 ether;
+        uint256 amountRevenue = 5_000 ether;
+        uint256 duration = (1 * 30 days);
+
+        // Mint ADMIN $RWA tokens
+        rwaToken.mintFor(ADMIN, amount);
+
+        // mint ADMIN veRWA token
+        vm.startPrank(ADMIN);
+        rwaToken.approve(address(veRWA), amount);
+        uint256 tokenId = veRWA.mint(
+            ADMIN,
+            uint208(amount),
+            duration
+        );
+
+        // Admin delegates voting power to Joe for 1 month.
+        vm.startPrank(ADMIN);
+        veRWA.approve(address(delegateFactory), tokenId);
+        address delegator = delegateFactory.deployDelegator(
+            tokenId,
+            JOE,
+            (30 days)
+        );
+        vm.stopPrank();
+
+        // deposit revenue into RevStream contract
+        mockRevToken.mint(address(revDistributor), amountRevenue);
+        vm.startPrank(address(revDistributor));
+        mockRevToken.approve(address(revStream), amountRevenue);
+        revStream.deposit(amountRevenue);
+        vm.stopPrank();
+
+        // Skip to avoid FutureLookup error (when querying voting power)
+        skip(1);
+
+        // ~ Pre-state check ~
+
+        assertEq(mockRevToken.balanceOf(ADMIN), 0);
+        assertEq(mockRevToken.balanceOf(JOE), 0);
+        assertEq(mockRevToken.balanceOf(address(revStream)), amountRevenue);
+        assertEq(revStream.lastClaim(ADMIN), 0);
+        assertEq(revStream.lastClaim(JOE), 0);
+
+        assertEq(revStream.claimable(JOE), amountRevenue);
+
+        assertEq(veRWA.ownerOf(tokenId), address(delegator));
+        assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
+        assertGt(veRWA.getAccountVotingPower(address(delegator)), 0);
+        assertEq(veRWA.getAccountVotingPower(JOE), 0);
+
+        assertEq(veRWA.getVotes(ADMIN), 0);
+        assertEq(veRWA.getVotes(address(delegator)), 0);
+        assertGt(veRWA.getVotes(JOE), 0);
+
+        assertEq(veRWA.delegates(ADMIN), ADMIN);
+        assertEq(veRWA.delegates(address(delegator)), JOE);
+
+        // ~ Execute claim ~
+
+        vm.prank(JOE);
+        revStream.claim(JOE);
+
+        // ~ Post-state check 1 ~
+
+        assertEq(mockRevToken.balanceOf(JOE), amountRevenue);
+        assertEq(mockRevToken.balanceOf(address(revStream)), 0);
+        assertEq(revStream.lastClaim(JOE), block.timestamp - 1);
+    }
+}

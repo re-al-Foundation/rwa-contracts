@@ -1,0 +1,33 @@
+[submodule "lib/forge-std"]
+	path = lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+
+[submodule "lib/openzeppelin-contracts"]
+	path = lib/openzeppelin-contracts
+	branch = release-v5.0
+	url = git@github.com:OpenZeppelin/openzeppelin-contracts.git
+
+[submodule "lib/openzeppelin-contracts-upgradeable"]
+	path = lib/openzeppelin-contracts-upgradeable
+	branch = release-v5.0
+	url = git@github.com:OpenZeppelin/openzeppelin-contracts-upgradeable.git
+
+[submodule "lib/tnftv2-audit"]
+	path = lib/tnftv2-audit
+	url = git@github.com:TangibleTNFT/tnftv2-audit.git
+
+[submodule "lib/LayerZero"]
+	path = lib/LayerZero
+	url = git@github.com:LayerZero-Labs/LayerZero.git
+
+[submodule "lib/tangible-foundation-contracts"]
+	path = lib/tangible-foundation-contracts
+	url = git@github.com:TangibleTNFT/tangible-foundation-contracts.git
+
+[submodule "lib/solidity-examples"]
+	path = lib/solidity-examples
+	url = git@github.com:LayerZero-Labs/solidity-examples.git
+
+[submodule "lib/passive-income-nft"]
+	path = lib/passive-income-nft
+	url = git@github.com:TangibleTNFT/passive-income-nft.git

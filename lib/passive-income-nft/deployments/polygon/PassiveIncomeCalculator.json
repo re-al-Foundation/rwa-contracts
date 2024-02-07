@@ -1,0 +1,174 @@
+{
+  "address": "0xC419568E7673bDc0d65aB3b56986CCEc7776D7f2",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "startTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "endTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "currentTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "startBalance",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "multiplier",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "claimed",
+          "type": "uint256"
+        }
+      ],
+      "name": "claimableIncome",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "freeClaim",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "maxClaim",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "start",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "end",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lockDurationInMonths",
+          "type": "uint256"
+        }
+      ],
+      "name": "determineMultiplier",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "start",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "end",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256[]",
+          "name": "lockDurationsInMonths",
+          "type": "uint256[]"
+        }
+      ],
+      "name": "determineMultipliers",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "multipliers",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    }
+  ],
+  "transactionHash": "0x48d47df5509ca9bb7c1da2c7e8c9346dbb9078db8dc9be1b8b91f56cbcedf217",
+  "receipt": {
+    "to": null,
+    "from": "0x3d41487A3c5662eDE90D0eE8854f3cC59E8D66AD",
+    "contractAddress": "0xC419568E7673bDc0d65aB3b56986CCEc7776D7f2",
+    "transactionIndex": 40,
+    "gasUsed": "504867",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000800000000000008000000000000000000000008000000000000000000000000000000080000000000000000000000000800000000000000000000100000000000000000000000000000000000000000000000000000000000080000000000000000000000000000000000000000000000000000000000000000000000000080000200000080000000000000000000000000000000000000000000000000000004000000000000000000001000000000000000000000000000000100000000000000000000000000000020000000000000000000000000000000000000000100000",
+    "blockHash": "0xcb478a143d1829d2aeb0e199dbb9c30d6a7368282b5446ef9d2a01c373cc68cf",
+    "transactionHash": "0x48d47df5509ca9bb7c1da2c7e8c9346dbb9078db8dc9be1b8b91f56cbcedf217",
+    "logs": [
+      {
+        "transactionIndex": 40,
+        "blockNumber": 27822626,
+        "transactionHash": "0x48d47df5509ca9bb7c1da2c7e8c9346dbb9078db8dc9be1b8b91f56cbcedf217",
+        "address": "0x0000000000000000000000000000000000001010",
+        "topics": [
+          "0x4dfe1bbbcf077ddc3e01291eea2d5c70c2b422b415d95645b9adcfd678cb1d63",
+          "0x0000000000000000000000000000000000000000000000000000000000001010",
+          "0x0000000000000000000000003d41487a3c5662ede90d0ee8854f3cc59e8d66ad",
+          "0x000000000000000000000000f0245f6251bef9447a08766b9da2b07b28ad80b0"
+        ],
+        "data": "0x000000000000000000000000000000000000000000000000003b30bbbb9494b1000000000000000000000000000000000000000000000000fc0417552c59e8c30000000000000000000000000000000000000000000001d5111d30a5dcdb3a0c000000000000000000000000000000000000000000000000fbc8e69970c554120000000000000000000000000000000000000000000001d511586161986fcebd",
+        "logIndex": 150,
+        "blockHash": "0xcb478a143d1829d2aeb0e199dbb9c30d6a7368282b5446ef9d2a01c373cc68cf"
+      }
+    ],
+    "blockNumber": 27822626,
+    "cumulativeGasUsed": "5754791",
+    "status": 1,
+    "byzantium": true
+  },
+  "args": [],
+  "numDeployments": 1,
+  "solcInputHash": "791b9e0b638edfcc60529310ec8144aa",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.4+commit.c7e474f2\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"startTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"endTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"currentTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"startBalance\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"multiplier\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"claimed\",\"type\":\"uint256\"}],\"name\":\"claimableIncome\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"freeClaim\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"maxClaim\",\"type\":\"uint256\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"start\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"end\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"timestamp\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"lockDurationInMonths\",\"type\":\"uint256\"}],\"name\":\"determineMultiplier\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"start\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"end\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"timestamp\",\"type\":\"uint256\"},{\"internalType\":\"uint256[]\",\"name\":\"lockDurationsInMonths\",\"type\":\"uint256[]\"}],\"name\":\"determineMultipliers\",\"outputs\":[{\"internalType\":\"uint256[]\",\"name\":\"multipliers\",\"type\":\"uint256[]\"}],\"stateMutability\":\"pure\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/PassiveIncomeCalculator.sol\":\"PassiveIncomeCalculator\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\",\"useLiteralContent\":true},\"optimizer\":{\"enabled\":true,\"runs\":1000},\"remappings\":[]},\"sources\":{\"contracts/Globals.sol\":{\"content\":\"// SPDX-License-Identifier: AGPL-3.0-or-later\\npragma solidity ^0.8.4;\\n\\nuint8 constant MIN_LOCK_DURATION = 2;\\nuint8 constant MAX_LOCK_DURATION = 48;\\n\",\"keccak256\":\"0x4be59af86075abafbfe761b71883b910f7b69d8a6cb477781eeeb4370ea755dd\",\"license\":\"AGPL-3.0-or-later\"},\"contracts/PassiveIncomeCalculator.sol\":{\"content\":\"// SPDX-License-Identifier: AGPL-3.0-or-later\\npragma solidity ^0.8.4;\\n\\nimport \\\"./Globals.sol\\\";\\n\\nabstract contract IPassiveIncomeCalculator {\\n    function claimableIncome(\\n        uint256 startTime,\\n        uint256 endTime,\\n        uint256 currentTime,\\n        uint256 startBalance,\\n        uint256 endBalance,\\n        uint256 claimed\\n    ) external view virtual returns (uint256, uint256);\\n\\n    function determineMultiplier(\\n        uint256 start,\\n        uint256 end,\\n        uint256 timestamp,\\n        uint256 lockDurationInMonths\\n    ) public view virtual returns (uint256);\\n\\n    function determineMultipliers(\\n        uint256 start,\\n        uint256 end,\\n        uint256 timestamp,\\n        uint256[] calldata lockDurationsInMonths\\n    ) external view virtual returns (uint256[] memory);\\n}\\n\\ncontract PassiveIncomeCalculator is IPassiveIncomeCalculator {\\n    function sqrt(uint256 x) internal pure returns (uint256 y) {\\n        uint256 z = (x + 1) / 2;\\n        y = x;\\n        while (z < y) {\\n            y = z;\\n            z = (x / z + z) / 2;\\n        }\\n    }\\n\\n    function _totalPayout(\\n        uint256 startTime,\\n        uint256 endTime,\\n        uint256 currentTime,\\n        uint256 startBalance,\\n        uint256 multiplier\\n    ) private pure returns (uint256) {\\n        if (currentTime == endTime) {\\n            return (startBalance * multiplier) / 1e18;\\n        }\\n        return\\n            (startBalance * multiplier * (currentTime - startTime)**2) /\\n            (1e18 * (endTime - startTime)**2);\\n    }\\n\\n    function claimableIncome(\\n        uint256 startTime,\\n        uint256 endTime,\\n        uint256 currentTime,\\n        uint256 startBalance,\\n        uint256 multiplier,\\n        uint256 claimed\\n    ) external pure override returns (uint256 freeClaim, uint256 maxClaim) {\\n        if (currentTime > endTime) {\\n            currentTime = endTime;\\n        }\\n        maxClaim = _totalPayout(\\n            startTime,\\n            endTime,\\n            currentTime,\\n            startBalance,\\n            multiplier - 1e18\\n        );\\n        if (claimed > 0) {\\n            if (claimed >= maxClaim) {\\n                maxClaim = 0;\\n            } else {\\n                maxClaim -= claimed;\\n            }\\n        }\\n        if (currentTime == endTime) {\\n            freeClaim = maxClaim;\\n        } else {\\n            freeClaim =\\n                (((((currentTime - startTime) * 1e9) / (endTime - startTime)) **\\n                    2) * maxClaim) /\\n                1e18;\\n        }\\n    }\\n\\n    function determineMultiplier(\\n        uint256 start,\\n        uint256 end,\\n        uint256 timestamp,\\n        uint256 lockDurationInMonths\\n    ) public pure override returns (uint256) {\\n        uint256 base;\\n        uint256 adjustedEnd = end - MIN_LOCK_DURATION * 30 * 86400;\\n        if (timestamp >= adjustedEnd) {\\n            return 1e18;\\n        }\\n        uint256 eod5 = start + 86400 * 5;\\n        if (timestamp >= eod5) {\\n            // after day 5\\n            base = 5e18;\\n            if (timestamp < adjustedEnd) {\\n                base +=\\n                    (10e18 * (adjustedEnd - timestamp)) /\\n                    (adjustedEnd - eod5);\\n            }\\n        } else if (timestamp >= start + 86400 * 4) {\\n            // after day 4\\n            base = 15e18;\\n        } else if (timestamp >= start + 86400 * 3) {\\n            // after day 3\\n            base = 175e17;\\n        } else if (timestamp >= start + 86400 * 2) {\\n            // after day 2\\n            base = 20e18;\\n        } else if (timestamp >= start + 86400) {\\n            // after day 1\\n            base = 225e17;\\n        } else {\\n            // day 1\\n            assert(timestamp >= start);\\n            base = 25e18;\\n        }\\n        if (lockDurationInMonths < MAX_LOCK_DURATION) {\\n            base =\\n                (base *\\n                    (((lockDurationInMonths * 1e9) / MAX_LOCK_DURATION)**2)) /\\n                1e18;\\n            if (base < 1e18) {\\n                base = 1e18;\\n            }\\n        }\\n        return base;\\n    }\\n\\n    function determineMultipliers(\\n        uint256 start,\\n        uint256 end,\\n        uint256 timestamp,\\n        uint256[] calldata lockDurationsInMonths\\n    ) external pure override returns (uint256[] memory multipliers) {\\n        uint256 len = lockDurationsInMonths.length;\\n        multipliers = new uint256[](len);\\n        while (len > 0) {\\n            len--;\\n            multipliers[len] = determineMultiplier(\\n                start,\\n                end,\\n                timestamp,\\n                lockDurationsInMonths[len]\\n            );\\n        }\\n    }\\n}\\n\",\"keccak256\":\"0x51b3cec670ab04510cd4e422df1ccf3df9cf55225e0cf03bd66b52ae2078d66a\",\"license\":\"AGPL-3.0-or-later\"}},\"version\":1}",
+  "bytecode": "0x608060405234801561001057600080fd5b5061082d806100206000396000f3fe608060405234801561001057600080fd5b50600436106100415760003560e01c80635723c12d14610046578063debb58711461006f578063ed6ecb2c14610090575b600080fd5b6100596100543660046104d2565b6100b8565b60405161006691906105d0565b60405180910390f35b61008261007d36600461055d565b61018f565b604051908152602001610066565b6100a361009e36600461058e565b610377565b60408051928352602083019190915201610066565b6060818067ffffffffffffffff8111156100e257634e487b7160e01b600052604160045260246000fd5b60405190808252806020026020018201604052801561010b578160200160208202803683370190505b5091505b8015610185578061011f816107ca565b91505061015487878787878681811061014857634e487b7160e01b600052603260045260246000fd5b9050602002013561018f565b82828151811061017457634e487b7160e01b600052603260045260246000fd5b60200260200101818152505061010f565b5095945050505050565b6000808061019f6002601e610792565b6101af9060ff1662015180610748565b6101be9062ffffff16876107b3565b90508085106101d957670de0b6b3a76400009250505061036f565b60006101e88862069780610614565b905080861061024657674563918244f400009250818610156102415761020e81836107b3565b61021887846107b3565b61022a90678ac7230489e80000610773565b610234919061062c565b61023e9084610614565b92505b6102ff565b6102538862054600610614565b86106102695767d02ab486cedc000092506102ff565b610276886203f480610614565b861061028c5767f2dc7d47f156000092506102ff565b610299886202a300610614565b86106102b0576801158e460913d0000092506102ff565b6102bd8862015180610614565b86106102d457680138400eca364a000092506102ff565b878610156102f257634e487b7160e01b600052600160045260246000fd5b68015af1d78b58c4000092505b603085101561036957670de0b6b3a76400006002603061032388633b9aca00610773565b61032d919061062c565b610337919061068f565b6103419085610773565b61034b919061062c565b9250670de0b6b3a764000083101561036957670de0b6b3a764000092505b50909150505b949350505050565b60008086861115610386578695505b6103a48888888861039f670de0b6b3a76400008a6107b3565b61043c565b905082156103c8578083106103bb575060006103c8565b6103c583826107b3565b90505b868614156103d857809150610431565b670de0b6b3a76400008160026103ee8b8b6107b3565b6103f88c8b6107b3565b61040690633b9aca00610773565b610410919061062c565b61041a919061068f565b6104249190610773565b61042e919061062c565b91505b965096945050505050565b60008484141561046a57670de0b6b3a76400006104598385610773565b610463919061062c565b90506104c9565b600261047687876107b3565b610480919061068f565b61049290670de0b6b3a7640000610773565b600261049e88876107b3565b6104a8919061068f565b6104b28486610773565b6104bc9190610773565b6104c6919061062c565b90505b95945050505050565b6000806000806000608086880312156104e9578081fd5b853594506020860135935060408601359250606086013567ffffffffffffffff80821115610515578283fd5b818801915088601f830112610528578283fd5b813581811115610536578384fd5b8960208260051b850101111561054a578384fd5b9699959850939650602001949392505050565b60008060008060808587031215610572578283fd5b5050823594602084013594506040840135936060013592509050565b60008060008060008060c087890312156105a6578081fd5b505084359660208601359650604086013595606081013595506080810135945060a0013592509050565b6020808252825182820181905260009190848201906040850190845b81811015610608578351835292840192918401916001016105ec565b50909695505050505050565b60008219821115610627576106276107e1565b500190565b60008261064757634e487b7160e01b81526012600452602481fd5b500490565b600181815b8085111561068757816000190482111561066d5761066d6107e1565b8085161561067a57918102915b93841c9390800290610651565b509250929050565b600061069e60ff8416836106a5565b9392505050565b6000826106b457506001610742565b816106c157506000610742565b81600181146106d757600281146106e1576106fd565b6001915050610742565b60ff8411156106f2576106f26107e1565b50506001821b610742565b5060208310610133831016604e8410600b8410161715610720575081810a610742565b61072a838361064c565b806000190482111561073e5761073e6107e1565b0290505b92915050565b600062ffffff8083168185168183048111821515161561076a5761076a6107e1565b02949350505050565b600081600019048311821515161561078d5761078d6107e1565b500290565b600060ff821660ff84168160ff048111821515161561073e5761073e6107e1565b6000828210156107c5576107c56107e1565b500390565b6000816107d9576107d96107e1565b506000190190565b634e487b7160e01b600052601160045260246000fdfea2646970667358221220fa4c9930cd28300e4bc9ddfa04f68500a58bd7089572d39df46145afdc30d5b264736f6c63430008040033",
+  "deployedBytecode": "0x608060405234801561001057600080fd5b50600436106100415760003560e01c80635723c12d14610046578063debb58711461006f578063ed6ecb2c14610090575b600080fd5b6100596100543660046104d2565b6100b8565b60405161006691906105d0565b60405180910390f35b61008261007d36600461055d565b61018f565b604051908152602001610066565b6100a361009e36600461058e565b610377565b60408051928352602083019190915201610066565b6060818067ffffffffffffffff8111156100e257634e487b7160e01b600052604160045260246000fd5b60405190808252806020026020018201604052801561010b578160200160208202803683370190505b5091505b8015610185578061011f816107ca565b91505061015487878787878681811061014857634e487b7160e01b600052603260045260246000fd5b9050602002013561018f565b82828151811061017457634e487b7160e01b600052603260045260246000fd5b60200260200101818152505061010f565b5095945050505050565b6000808061019f6002601e610792565b6101af9060ff1662015180610748565b6101be9062ffffff16876107b3565b90508085106101d957670de0b6b3a76400009250505061036f565b60006101e88862069780610614565b905080861061024657674563918244f400009250818610156102415761020e81836107b3565b61021887846107b3565b61022a90678ac7230489e80000610773565b610234919061062c565b61023e9084610614565b92505b6102ff565b6102538862054600610614565b86106102695767d02ab486cedc000092506102ff565b610276886203f480610614565b861061028c5767f2dc7d47f156000092506102ff565b610299886202a300610614565b86106102b0576801158e460913d0000092506102ff565b6102bd8862015180610614565b86106102d457680138400eca364a000092506102ff565b878610156102f257634e487b7160e01b600052600160045260246000fd5b68015af1d78b58c4000092505b603085101561036957670de0b6b3a76400006002603061032388633b9aca00610773565b61032d919061062c565b610337919061068f565b6103419085610773565b61034b919061062c565b9250670de0b6b3a764000083101561036957670de0b6b3a764000092505b50909150505b949350505050565b60008086861115610386578695505b6103a48888888861039f670de0b6b3a76400008a6107b3565b61043c565b905082156103c8578083106103bb575060006103c8565b6103c583826107b3565b90505b868614156103d857809150610431565b670de0b6b3a76400008160026103ee8b8b6107b3565b6103f88c8b6107b3565b61040690633b9aca00610773565b610410919061062c565b61041a919061068f565b6104249190610773565b61042e919061062c565b91505b965096945050505050565b60008484141561046a57670de0b6b3a76400006104598385610773565b610463919061062c565b90506104c9565b600261047687876107b3565b610480919061068f565b61049290670de0b6b3a7640000610773565b600261049e88876107b3565b6104a8919061068f565b6104b28486610773565b6104bc9190610773565b6104c6919061062c565b90505b95945050505050565b6000806000806000608086880312156104e9578081fd5b853594506020860135935060408601359250606086013567ffffffffffffffff80821115610515578283fd5b818801915088601f830112610528578283fd5b813581811115610536578384fd5b8960208260051b850101111561054a578384fd5b9699959850939650602001949392505050565b60008060008060808587031215610572578283fd5b5050823594602084013594506040840135936060013592509050565b60008060008060008060c087890312156105a6578081fd5b505084359660208601359650604086013595606081013595506080810135945060a0013592509050565b6020808252825182820181905260009190848201906040850190845b81811015610608578351835292840192918401916001016105ec565b50909695505050505050565b60008219821115610627576106276107e1565b500190565b60008261064757634e487b7160e01b81526012600452602481fd5b500490565b600181815b8085111561068757816000190482111561066d5761066d6107e1565b8085161561067a57918102915b93841c9390800290610651565b509250929050565b600061069e60ff8416836106a5565b9392505050565b6000826106b457506001610742565b816106c157506000610742565b81600181146106d757600281146106e1576106fd565b6001915050610742565b60ff8411156106f2576106f26107e1565b50506001821b610742565b5060208310610133831016604e8410600b8410161715610720575081810a610742565b61072a838361064c565b806000190482111561073e5761073e6107e1565b0290505b92915050565b600062ffffff8083168185168183048111821515161561076a5761076a6107e1565b02949350505050565b600081600019048311821515161561078d5761078d6107e1565b500290565b600060ff821660ff84168160ff048111821515161561073e5761073e6107e1565b6000828210156107c5576107c56107e1565b500390565b6000816107d9576107d96107e1565b506000190190565b634e487b7160e01b600052601160045260246000fdfea2646970667358221220fa4c9930cd28300e4bc9ddfa04f68500a58bd7089572d39df46145afdc30d5b264736f6c63430008040033",
+  "devdoc": {
+    "kind": "dev",
+    "methods": {},
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [],
+    "types": null
+  }
+}

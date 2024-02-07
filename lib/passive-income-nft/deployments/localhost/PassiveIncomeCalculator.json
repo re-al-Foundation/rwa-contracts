@@ -1,0 +1,124 @@
+{
+  "address": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "startTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "endTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "currentTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "startBalance",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "multiplier",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "claimed",
+          "type": "uint256"
+        }
+      ],
+      "name": "claimableIncome",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "freeClaim",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "maxClaim",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "start",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "end",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "timestamp",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lockDurationInMonths",
+          "type": "uint256"
+        }
+      ],
+      "name": "determineMultiplier",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "pure",
+      "type": "function"
+    }
+  ],
+  "transactionHash": "0xd91a75af20594551f993750e2bc1b0d76c25da17ff3e129cadb33d4e54a1f47e",
+  "receipt": {
+    "to": null,
+    "from": "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266",
+    "contractAddress": "0x5FC8d32690cc91D4c39d9d3abcBD16989F875707",
+    "transactionIndex": 0,
+    "gasUsed": "398634",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "blockHash": "0xae8c29d65ace139c29c7128a020d57664fa64acf03e59e86aa24dd902cb9b2d8",
+    "transactionHash": "0xd91a75af20594551f993750e2bc1b0d76c25da17ff3e129cadb33d4e54a1f47e",
+    "logs": [],
+    "blockNumber": 6,
+    "cumulativeGasUsed": "398634",
+    "status": 1,
+    "byzantium": true
+  },
+  "args": [],
+  "numDeployments": 1,
+  "solcInputHash": "8c67182d4eb06597fb18fa6e651d2c89",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.4+commit.c7e474f2\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"startTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"endTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"currentTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"startBalance\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"multiplier\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"claimed\",\"type\":\"uint256\"}],\"name\":\"claimableIncome\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"freeClaim\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"maxClaim\",\"type\":\"uint256\"}],\"stateMutability\":\"pure\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"start\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"end\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"timestamp\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"lockDurationInMonths\",\"type\":\"uint256\"}],\"name\":\"determineMultiplier\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"pure\",\"type\":\"function\"}],\"devdoc\":{\"kind\":\"dev\",\"methods\":{},\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/PassiveIncomeCalculator.sol\":\"PassiveIncomeCalculator\"},\"evmVersion\":\"istanbul\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\",\"useLiteralContent\":true},\"optimizer\":{\"enabled\":true,\"runs\":1000},\"remappings\":[]},\"sources\":{\"contracts/Globals.sol\":{\"content\":\"// SPDX-License-Identifier: AGPL-3.0-or-later\\npragma solidity ^0.8.4;\\n\\nuint8 constant MIN_LOCK_DURATION = 2;\\nuint8 constant MAX_LOCK_DURATION = 48;\\n\",\"keccak256\":\"0x4be59af86075abafbfe761b71883b910f7b69d8a6cb477781eeeb4370ea755dd\",\"license\":\"AGPL-3.0-or-later\"},\"contracts/PassiveIncomeCalculator.sol\":{\"content\":\"// SPDX-License-Identifier: AGPL-3.0-or-later\\npragma solidity ^0.8.4;\\n\\nimport \\\"./Globals.sol\\\";\\n\\ninterface IPassiveIncomeCalculator {\\n    function claimableIncome(\\n        uint256 startTime,\\n        uint256 endTime,\\n        uint256 currentTime,\\n        uint256 startBalance,\\n        uint256 endBalance,\\n        uint256 claimed\\n    ) external view returns (uint256, uint256);\\n\\n    function determineMultiplier(\\n        uint256 start,\\n        uint256 end,\\n        uint256 timestamp,\\n        uint256 lockDurationInMonths\\n    ) external view returns (uint256);\\n}\\n\\ncontract PassiveIncomeCalculator is IPassiveIncomeCalculator {\\n    function sqrt(uint256 x) internal pure returns (uint256 y) {\\n        uint256 z = (x + 1) / 2;\\n        y = x;\\n        while (z < y) {\\n            y = z;\\n            z = (x / z + z) / 2;\\n        }\\n    }\\n\\n    function _totalPayout(\\n        uint256 startTime,\\n        uint256 endTime,\\n        uint256 currentTime,\\n        uint256 startBalance,\\n        uint256 multiplier\\n    ) private pure returns (uint256) {\\n        if (currentTime == endTime) {\\n            return (startBalance * multiplier) / 1e18;\\n        }\\n        return\\n            (startBalance * multiplier * (currentTime - startTime)**2) /\\n            (1e18 * (endTime - startTime)**2);\\n    }\\n\\n    function claimableIncome(\\n        uint256 startTime,\\n        uint256 endTime,\\n        uint256 currentTime,\\n        uint256 startBalance,\\n        uint256 multiplier,\\n        uint256 claimed\\n    ) external pure override returns (uint256 freeClaim, uint256 maxClaim) {\\n        if (currentTime > endTime) {\\n            currentTime = endTime;\\n        }\\n        maxClaim = _totalPayout(\\n            startTime,\\n            endTime,\\n            currentTime,\\n            startBalance,\\n            multiplier - 1e18\\n        );\\n        if (claimed > 0) {\\n            if (claimed >= maxClaim) {\\n                maxClaim = 0;\\n            } else {\\n                maxClaim -= claimed;\\n            }\\n        }\\n        if (currentTime == endTime) {\\n            freeClaim = maxClaim;\\n        } else {\\n            freeClaim =\\n                (((((currentTime - startTime) * 1e9) / (endTime - startTime)) **\\n                    2) * maxClaim) /\\n                1e18;\\n        }\\n    }\\n\\n    function determineMultiplier(\\n        uint256 start,\\n        uint256 end,\\n        uint256 timestamp,\\n        uint256 lockDurationInMonths\\n    ) external pure override returns (uint256) {\\n        uint256 base;\\n        uint256 adjustedEnd = end - MIN_LOCK_DURATION * 30 * 86400;\\n        if (timestamp >= adjustedEnd) {\\n            return 1e18;\\n        }\\n        uint256 eod5 = start + 86400 * 5;\\n        if (timestamp >= eod5) {\\n            // after day 5\\n            base = 5e18;\\n            if (timestamp < adjustedEnd) {\\n                base +=\\n                    (10e18 * (adjustedEnd - timestamp)) /\\n                    (adjustedEnd - eod5);\\n            }\\n        } else if (timestamp >= start + 86400 * 4) {\\n            // after day 4\\n            base = 15e18;\\n        } else if (timestamp >= start + 86400 * 3) {\\n            // after day 3\\n            base = 175e17;\\n        } else if (timestamp >= start + 86400 * 2) {\\n            // after day 2\\n            base = 20e18;\\n        } else if (timestamp >= start + 86400) {\\n            // after day 1\\n            base = 225e17;\\n        } else {\\n            // day 1\\n            assert(timestamp >= start);\\n            base = 25e18;\\n        }\\n        if (lockDurationInMonths < MAX_LOCK_DURATION) {\\n            base =\\n                (base *\\n                    (((lockDurationInMonths * 1e9) / MAX_LOCK_DURATION)**2)) /\\n                1e18;\\n            if (base < 1e18) {\\n                base = 1e18;\\n            }\\n        }\\n        return base;\\n    }\\n}\\n\",\"keccak256\":\"0xfb78acc3a1c7d8b0aef6580f9ca52cfee07c579978d9bdf8d964798847850e56\",\"license\":\"AGPL-3.0-or-later\"}},\"version\":1}",
+  "bytecode": "0x608060405234801561001057600080fd5b50610641806100206000396000f3fe608060405234801561001057600080fd5b50600436106100365760003560e01c8063debb58711461003b578063ed6ecb2c14610061575b600080fd5b61004e6100493660046103cc565b610089565b6040519081526020015b60405180910390f35b61007461006f3660046103fd565b610271565b60408051928352602083019190915201610058565b600080806100996002601e6105bd565b6100a99060ff1662015180610573565b6100b89062ffffff16876105de565b90508085106100d357670de0b6b3a764000092505050610269565b60006100e2886206978061043f565b905080861061014057674563918244f4000092508186101561013b5761010881836105de565b61011287846105de565b61012490678ac7230489e8000061059e565b61012e9190610457565b610138908461043f565b92505b6101f9565b61014d886205460061043f565b86106101635767d02ab486cedc000092506101f9565b610170886203f48061043f565b86106101865767f2dc7d47f156000092506101f9565b610193886202a30061043f565b86106101aa576801158e460913d0000092506101f9565b6101b7886201518061043f565b86106101ce57680138400eca364a000092506101f9565b878610156101ec57634e487b7160e01b600052600160045260246000fd5b68015af1d78b58c4000092505b603085101561026357670de0b6b3a76400006002603061021d88633b9aca0061059e565b6102279190610457565b61023191906104ba565b61023b908561059e565b6102459190610457565b9250670de0b6b3a764000083101561026357670de0b6b3a764000092505b50909150505b949350505050565b60008086861115610280578695505b61029e88888888610299670de0b6b3a76400008a6105de565b610336565b905082156102c2578083106102b5575060006102c2565b6102bf83826105de565b90505b868614156102d25780915061032b565b670de0b6b3a76400008160026102e88b8b6105de565b6102f28c8b6105de565b61030090633b9aca0061059e565b61030a9190610457565b61031491906104ba565b61031e919061059e565b6103289190610457565b91505b965096945050505050565b60008484141561036457670de0b6b3a7640000610353838561059e565b61035d9190610457565b90506103c3565b600261037087876105de565b61037a91906104ba565b61038c90670de0b6b3a764000061059e565b600261039888876105de565b6103a291906104ba565b6103ac848661059e565b6103b6919061059e565b6103c09190610457565b90505b95945050505050565b600080600080608085870312156103e1578384fd5b5050823594602084013594506040840135936060013592509050565b60008060008060008060c08789031215610415578182fd5b505084359660208601359650604086013595606081013595506080810135945060a0013592509050565b60008219821115610452576104526105f5565b500190565b60008261047257634e487b7160e01b81526012600452602481fd5b500490565b600181815b808511156104b2578160001904821115610498576104986105f5565b808516156104a557918102915b93841c939080029061047c565b509250929050565b60006104c960ff8416836104d0565b9392505050565b6000826104df5750600161056d565b816104ec5750600061056d565b8160018114610502576002811461050c57610528565b600191505061056d565b60ff84111561051d5761051d6105f5565b50506001821b61056d565b5060208310610133831016604e8410600b841016171561054b575081810a61056d565b6105558383610477565b8060001904821115610569576105696105f5565b0290505b92915050565b600062ffffff80831681851681830481118215151615610595576105956105f5565b02949350505050565b60008160001904831182151516156105b8576105b86105f5565b500290565b600060ff821660ff84168160ff0481118215151615610569576105696105f5565b6000828210156105f0576105f06105f5565b500390565b634e487b7160e01b600052601160045260246000fdfea2646970667358221220cdb9306d20f2b6dd2fe1cecb1820c80940bac8764fa99a08610000bbf12ada1f64736f6c63430008040033",
+  "deployedBytecode": "0x608060405234801561001057600080fd5b50600436106100365760003560e01c8063debb58711461003b578063ed6ecb2c14610061575b600080fd5b61004e6100493660046103cc565b610089565b6040519081526020015b60405180910390f35b61007461006f3660046103fd565b610271565b60408051928352602083019190915201610058565b600080806100996002601e6105bd565b6100a99060ff1662015180610573565b6100b89062ffffff16876105de565b90508085106100d357670de0b6b3a764000092505050610269565b60006100e2886206978061043f565b905080861061014057674563918244f4000092508186101561013b5761010881836105de565b61011287846105de565b61012490678ac7230489e8000061059e565b61012e9190610457565b610138908461043f565b92505b6101f9565b61014d886205460061043f565b86106101635767d02ab486cedc000092506101f9565b610170886203f48061043f565b86106101865767f2dc7d47f156000092506101f9565b610193886202a30061043f565b86106101aa576801158e460913d0000092506101f9565b6101b7886201518061043f565b86106101ce57680138400eca364a000092506101f9565b878610156101ec57634e487b7160e01b600052600160045260246000fd5b68015af1d78b58c4000092505b603085101561026357670de0b6b3a76400006002603061021d88633b9aca0061059e565b6102279190610457565b61023191906104ba565b61023b908561059e565b6102459190610457565b9250670de0b6b3a764000083101561026357670de0b6b3a764000092505b50909150505b949350505050565b60008086861115610280578695505b61029e88888888610299670de0b6b3a76400008a6105de565b610336565b905082156102c2578083106102b5575060006102c2565b6102bf83826105de565b90505b868614156102d25780915061032b565b670de0b6b3a76400008160026102e88b8b6105de565b6102f28c8b6105de565b61030090633b9aca0061059e565b61030a9190610457565b61031491906104ba565b61031e919061059e565b6103289190610457565b91505b965096945050505050565b60008484141561036457670de0b6b3a7640000610353838561059e565b61035d9190610457565b90506103c3565b600261037087876105de565b61037a91906104ba565b61038c90670de0b6b3a764000061059e565b600261039888876105de565b6103a291906104ba565b6103ac848661059e565b6103b6919061059e565b6103c09190610457565b90505b95945050505050565b600080600080608085870312156103e1578384fd5b5050823594602084013594506040840135936060013592509050565b60008060008060008060c08789031215610415578182fd5b505084359660208601359650604086013595606081013595506080810135945060a0013592509050565b60008219821115610452576104526105f5565b500190565b60008261047257634e487b7160e01b81526012600452602481fd5b500490565b600181815b808511156104b2578160001904821115610498576104986105f5565b808516156104a557918102915b93841c939080029061047c565b509250929050565b60006104c960ff8416836104d0565b9392505050565b6000826104df5750600161056d565b816104ec5750600061056d565b8160018114610502576002811461050c57610528565b600191505061056d565b60ff84111561051d5761051d6105f5565b50506001821b61056d565b5060208310610133831016604e8410600b841016171561054b575081810a61056d565b6105558383610477565b8060001904821115610569576105696105f5565b0290505b92915050565b600062ffffff80831681851681830481118215151615610595576105956105f5565b02949350505050565b60008160001904831182151516156105b8576105b86105f5565b500290565b600060ff821660ff84168160ff0481118215151615610569576105696105f5565b6000828210156105f0576105f06105f5565b500390565b634e487b7160e01b600052601160045260246000fdfea2646970667358221220cdb9306d20f2b6dd2fe1cecb1820c80940bac8764fa99a08610000bbf12ada1f64736f6c63430008040033",
+  "devdoc": {
+    "kind": "dev",
+    "methods": {},
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [],
+    "types": null
+  }
+}

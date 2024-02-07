@@ -22,7 +22,7 @@ This ecosystem takes advantage of LayerZero v1 to facilitate cross-chain messagi
 
 Users who migrate their 3,3+ NFT will receive a veRWA NFT with an identical locked balance. Users who migrate TNGBL tokens will receive 1-to-1 minted RWA tokens.
 
-The CrossChainMigrator will send a message to the LayerZero endpoint on Polygon to then be passed by their Relayer over to Real Chain where the message will be passed to the appropriate smart contract. If the message is from an NFT migration, the endpoint will call the **RealReceiverNFT** contract. Otherwise, if the message is from an ERC-20 token migration, it will call the **RealReceiverRWA** contract.
+The CrossChainMigrator will send a message to the LayerZero endpoint on Polygon to then be passed by their Relayer over to Real Chain where the message will be passed to the **RealReceiver** smart contract.
 
 # Contracts
 
@@ -40,16 +40,12 @@ The CrossChainMigrator will send a message to the LayerZero endpoint on Polygon 
 ## Migration
 
 - [CrossChainMigrator](./src/CrossChainMigrator.sol) - This contract handles migration of TNGBL holders and 3,3+ NFT holders. This contract will spark a migration from Polygon to Tangible's new Real Chain.
-- [RealReceiverNFT](./src/RealReceiverNFT.sol) - This contract inherits `ILayerZeroReceiver` and facilitates the migration message from the source on Polygon to the migration method on the destination contract. This contract specifically handles the migration messages for 3,3+ NFTs. Once this contract receives the message from the REAL LZ endpoint, it’ll facilitate the completion of migration and mint the migrator the necessary NFT(s) on veRWA.
-- [RealReceiverRWA](./src/RealReceiverRWA.sol) - This contract inherits `ILayerZeroReceiver` and facilitates the migration message from the source on Polygon to the migration method on the destination contract. This contract specifically handles the migration messages for TNGBL tokens. Once this contract receives the message from the REAL LZ endpoint, it’ll facilitate the completion of migration and mint the migrator the necessary amount of tokens on RWA.
+- [RealReceiver](./src/RealReceiverNFT.sol) - This contract inherits `ILayerZeroReceiver` and facilitates the migration message from the source on Polygon to the migration method on the destination contract. This contract specifically handles the migration messages for 3,3+ NFTs and TNGBL tokens. Once this contract receives the message from the REAL LZ endpoint, it’ll facilitate the completion of migration and mint the migrator the necessary NFT(s) on veRWA or $RWA on RWAToken.
 
 ## Revenue Management
 
-- [RevenueDistributor](./src/RevenueDistributor.sol) - This contract is in charge of routing revenue streams to the correct RevenueStream contract. This contract will hold all assets until the distribute method is executed, distributing its ERC-20/ETH assets to their corresponding RevenueStream contract.
-- [RevenueStream](./src/RevenueStream.sol) - This contract facilitates the distribution of claimable revenue to veRWA shareholders. This contract will facilitate the distribution of only 1 ERC-20 revenue token. If there are several streams of ERC-20 revenue, it's suggested to deploy multiple RevenueStream contracts.
-- [RevenueStreamETH](./src/RevenueStreamETH.sol) - This contract facilitates the distribution of claimable revenue to veRWA shareholders. This contract will facilitate the distribution of ETH revenue only.
-- [RevStreamSingleAsset](./src/RevStreamSingleAsset.sol) - This contract allows an eligible veRWA stakeholder to claim their claimable revenue shares as a single ERC-20 asset from all RevenueStream contracts. If an account has any claimable revenue from any existing RevenueStream or RevenueStreamETH contracts, this contract will claim and swap the assets to a single ERC-20 token before transferring to the stakeholders's wallet.
-- [RevStreamSingleAssetETH](./src/RevStreamSingleAssetETH.sol) - This contract allows an eligible veRWA stakeholder to claim their revenue shares as a single ERC-20 asset from all RevenueStream contracts. If an account has any claimable revenue from any existing RevenueStream or RevenueStreamETH contracts, this contract will claim and swap the assets to a single ETH asset before transferring to the stakeholders's wallet.
+- [RevenueDistributor](./src/RevenueDistributor.sol) - This contract is in charge of routing revenue streams to the RevenueStreamETH contract. This contract will hold all assets until the distribute method is executed. When distributing, ERC-20 assets are converted to ETH before being sent to the RevenueStreamETH contract.
+- [RevenueStreamETH](./src/RevenueStreamETH.sol) - This contract facilitates the distribution of claimable ETH revenue to veRWA shareholders.
 
 # Testing
 

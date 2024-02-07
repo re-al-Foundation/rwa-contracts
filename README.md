@@ -78,6 +78,4 @@ To run tests using forge:
 ### Revenue Management
 
 - [RevenueDistributorTest](./test/RevenueDistribution.t.sol) - This test file contains the basic unit tests for the **RevenueDistributor** contract.
-- [RWARevenueStreamTest](./test/RevenueStream.t.sol) - This test file contains the basic unit tests for the **RevenueStream** contract.
 - [RWARevenueStreamETHTest](./test/RevenueStreamETH.t.sol) - This test file contains the basic unit tests for the **RevenueStreamETH** contract.
-- [RWARevStreamSingleAssetTest](./test/RevStreamSingleAsset.t.sol) - This test file contains the basic unit tests for the **RevStreamSingleAsset** & **RevStreamSingleAssetETH** contracts.

@@ -24,10 +24,6 @@
 	path = lib/tangible-foundation-contracts
 	url = git@github.com:TangibleTNFT/tangible-foundation-contracts.git
 
-[submodule "lib/solidity-examples"]
-	path = lib/solidity-examples
-	url = git@github.com:LayerZero-Labs/solidity-examples.git
-
 [submodule "lib/passive-income-nft"]
 	path = lib/passive-income-nft
 	url = git@github.com:TangibleTNFT/passive-income-nft.git

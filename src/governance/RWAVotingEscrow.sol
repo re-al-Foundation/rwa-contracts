@@ -364,18 +364,19 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      * @return tokenIds An array of newly minted token identifiers (excluding index 0) resulting from the split.
      */
     function split(uint256 tokenId, uint256[] calldata shares) external returns (uint256[] memory tokenIds) {
+        uint256 len = shares.length;
         // If there is not 2 or more shares, revert
-        if (shares.length < 2) revert InvalidSharesLength();
+        if (len < 2) revert InvalidSharesLength();
         // fetch owner of tokenId being split
         address owner = _requireOwned(tokenId);
         // verify ownership of token
         _checkAuthorized(owner, _msgSender(), tokenId);
         // create array to store all newly minted tokenIds
-        tokenIds = new uint256[](shares.length);
+        tokenIds = new uint256[](len);
         tokenIds[0] = tokenId;
         // find total shares from shares array
         uint256 totalShares;
-        for (uint256 i = shares.length; i != 0;) {
+        for (uint256 i = len; i != 0;) {
             unchecked {
                 --i;
             }
@@ -393,7 +394,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         // find timestamp of current block
         uint48 mintingTimestamp = clock();
         // start iterating through shares array
-        for (uint256 i = 1; i < shares.length;) {
+        for (uint256 i = 1; i < len;) {
             // grab current share
             uint256 share = shares[i];
             // locked balance for this NFT is percentage of shares * total locked balance

@@ -33,6 +33,8 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
     // State Variables
     // ---------------
 
+    /// @notice max vesting duration
+    uint256 private constant MAX_DURATION = 36 * (30 days);
     /// @notice Packet type for ERC-20 token migration message.
     uint16 private constant SEND = 0;
     /// @notice Packet type for NFT migration message.
@@ -172,6 +174,10 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
 
         uint256 amountTokens = (lockedAmount + maxPayout) - claimed;
         uint256 duration = endTime - startTime;
+
+        if (duration > MAX_DURATION) {
+            duration = MAX_DURATION;
+        }
         
         bytes memory toAddress = abi.encodePacked(to);
         bytes memory lzPayload = abi.encode(SEND_NFT, toAddress, amountTokens, duration);
@@ -218,6 +224,10 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
 
             lockedAmounts[i] = (lockedAmount + maxPayout) - claimed;
             durations[i] = endTime - startTime;
+
+            if (durations[i] > MAX_DURATION) {
+                durations[i] = MAX_DURATION;
+            }
 
             unchecked {
                 ++i;
@@ -276,6 +286,24 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
     }
 
     /**
+     * @notice This method allows a permissioned admin to update the `tngblToken` address.
+     * @dev This is mainly for testnet since the current mainnet TNGBL contract will not change.
+     */
+    function setTngblAddress(address _newContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_newContract != address(0), "invalid input");
+        tngblToken = ERC20Burnable(_newContract);
+    }
+
+    /**
+     * @notice This method allows a permissioned admin to update the `passiveIncomeNFT` address.
+     * @dev This is mainly for testnet since the current mainnet PI NFT contract will not change.
+     */
+    function setPassiveIncomeNFTAddress(address _newContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_newContract != address(0), "invalid input");
+        passiveIncomeNFT = PassiveIncomeNFT(_newContract);
+    }
+
+    /**
      * @notice This method allows a permissioned admin to burn the balance of TNGBL in this contract.
      */
     function burnTngbl() external onlyRole(DEFAULT_ADMIN_ROLE) {
@@ -283,6 +311,11 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
 
         tngblToken.approve(address(this), amount);
         tngblToken.burnFrom(address(this), amount);
+    }
+
+    function setReceiver(address _newReceiver) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(_newReceiver != address(0), "invalid input");
+        receiver = _newReceiver;
     }
 
     /**

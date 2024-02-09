@@ -33,7 +33,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
     // State Variables
     // ---------------
 
-    /// @notice max vesting duration
+    /// @notice max vesting duration.
     uint256 private constant MAX_DURATION = 36 * (30 days);
     /// @notice Packet type for ERC-20 token migration message.
     uint16 private constant SEND = 0;

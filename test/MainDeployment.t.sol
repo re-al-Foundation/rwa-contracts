@@ -30,6 +30,8 @@ import { VotingMath } from "../src/governance/VotingMath.sol";
 import { DelegateFactory } from "../src/governance/DelegateFactory.sol";
 import { Delegator } from "../src/governance/Delegator.sol";
 
+import { VotingEscrowRWAAPI } from "../src/helpers/VotingEscrowRWAAPI.sol";
+
 import { IUniswapV2Router02 } from "../src/interfaces/IUniswapV2Router02.sol";
 import { IUniswapV2Factory } from "../src/interfaces/IUniswapV2Factory.sol";
 import { IUniswapV2Pair } from "../src/interfaces/IUniswapV2Pair.sol";
@@ -63,6 +65,7 @@ contract MainDeploymentTest is Utility {
     RWAToken public rwaToken;
     DelegateFactory public delegateFactory;
     Delegator public delegator;
+    VotingEscrowRWAAPI public api;
 
     // helper
     LZEndpointMock public endpoint;
@@ -77,6 +80,7 @@ contract MainDeploymentTest is Utility {
     ERC1967Proxy public receiverProxy;
     ERC1967Proxy public revStreamETHProxy;
     ERC1967Proxy public delegateFactoryProxy;
+    ERC1967Proxy public apiProxy;
 
     // ~ Variables ~
 
@@ -212,7 +216,22 @@ contract MainDeploymentTest is Utility {
         );
         delegateFactory = DelegateFactory(address(delegateFactoryProxy));
 
-        // (16) Deploy wrapper
+        // (16) Deploy API
+        api = new VotingEscrowRWAAPI();
+
+        // (17) Deploy api proxy
+        apiProxy = new ERC1967Proxy(
+            address(api),
+            abi.encodeWithSelector(VotingEscrowRWAAPI.initialize.selector,
+                ADMIN,
+                address(veRWA),
+                address(vesting),
+                address(revStreamETH)
+            )
+        );
+        api = VotingEscrowRWAAPI(address(apiProxy));
+
+        // (18) Deploy wrapper
         exactInputWrapper = new ExactInputWrapper(address(UNREAL_SWAP_ROUTER), WETH);
 
         // ~ Config ~
@@ -899,6 +918,14 @@ contract MainDeploymentTest is Utility {
         // check Joe's voting power
         assertEq(veRWA.getAccountVotingPower(JOE), votingPower);
         assertEq(veRWA.getVotes(JOE), votingPower);
+
+        uint256[] memory joeTokens = api.getNFTsOfOwner(JOE);
+        assertEq(joeTokens.length, 1);
+        assertEq(joeTokens[0], tokenId);
+
+        uint256[] memory allTokens = api.getAllNFTs();
+        assertEq(allTokens.length, 1);
+        assertEq(allTokens[0], tokenId);
     }
 
     /**
@@ -1083,6 +1110,16 @@ contract MainDeploymentTest is Utility {
         // check Joe's voting power
         assertEq(veRWA.getAccountVotingPower(JOE), amount1 + amount2); // 1_000
         assertEq(veRWA.getVotes(JOE), amount1 + amount2);
+
+        uint256[] memory joeTokens = api.getNFTsOfOwner(JOE);
+        assertEq(joeTokens.length, 2);
+        assertEq(joeTokens[0], tokenId-1);
+        assertEq(joeTokens[1], tokenId);
+
+        uint256[] memory allTokens = api.getAllNFTs();
+        assertEq(allTokens.length, 2);
+        assertEq(allTokens[0], tokenId-1);
+        assertEq(allTokens[1], tokenId);
     }
 
     /**
@@ -3436,6 +3473,7 @@ contract MainDeploymentTest is Utility {
         // ~ Verify ~
 
         assertEq(claimable, amountRevenue);
+        assertEq(api.getClaimable(JOE), claimable);
     }
 
     /// @dev Verifies proper return variable when RevenueStreamETH::claimable() is called.
@@ -3493,6 +3531,7 @@ contract MainDeploymentTest is Utility {
         // ~ Verify ~
 
         assertEq(claimableJoe, amountRevenue);
+        assertEq(api.getClaimable(JOE), claimableJoe);
     }
 
     /// @dev Verifies proper state changes when RevenueStreamETH::claim() is executed.

@@ -280,9 +280,18 @@ contract MigrationTest is Utility {
         (uint256 startTime,
         uint256 endTime,
         uint256 lockedAmount,
-        /** multiplier */,
+        uint256 multiplier,
         /** claimed */,
         uint256 maxPayout) = passiveIncomeNFTV1.locks(tokenId);
+
+        emit log_named_uint("lockedAmount", lockedAmount); // 1000.000000000000000000
+
+        emit log_named_uint("multiplier", multiplier); // 1.085069440972222225
+        emit log_named_uint("max payout", maxPayout);  // 85.069440972222225000
+
+        emit log_named_uint("max + locked", lockedAmount + maxPayout);       // 1085.069440972222225000
+
+        emit log_named_uint("manual max", lockedAmount * multiplier / 1e18); // 1085.069440972222225000
 
         // create adapterParams for custom gas.
         adapterParams = abi.encodePacked(uint16(1), uint256(200000));

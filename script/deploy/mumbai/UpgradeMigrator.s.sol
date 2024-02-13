@@ -13,7 +13,7 @@ import { CrossChainMigrator } from "../../../src/CrossChainMigrator.sol";
 import "../../../test/utils/Constants.sol";
 
 /// @dev To run: forge script script/deploy/mumbai/UpgradeMigrator.s.sol:UpgradeMigrator --broadcast --verify -vvvv
-/// @dev To verify: forge verify-contract <CONTRACT_ADDRESS> --chain-id 80001 --watch src/CrossChainMigrator.sol:CrossChainMigrator --verifier etherscan
+/// @dev To verify: forge verify-contract <CONTRACT_ADDRESS> --chain-id 80001 --watch src/CrossChainMigrator.sol:CrossChainMigrator --verifier etherscan --constructor-args $(cast abi-encode "constructor(address)" 0xf69186dfBa60DdB133E91E9A4B5673624293d8F8)
 
 /**
  * @title UpgradeMigrator

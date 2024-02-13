@@ -165,6 +165,7 @@ contract MigrationTest is Utility {
             address(migrator),
             abi.encodeWithSelector(CrossChainMigrator.initialize.selector,
                 address(passiveIncomeNFTV1), // LOCAL ADDRESS 1 -> 3,3+ NFT
+                address(piCalculator), // LOCAL ADDRESS -> Passive Income Calculator
                 address(tngblToken), // LOCAL ADDRESS 2 -> $TNGBL
                 address(receiver), // REMOTE ADDRESS 1 -> RECEIVER for NFT
                 uint16(block.chainid), // REMOTE CHAIN ID
@@ -830,13 +831,22 @@ contract MigrationTest is Utility {
     }
 
     function test_math() public {
-        uint256 lockedAmount = 10000000000000000000; // 10
-        uint256 multiplier = 1000025061923222223; //    1.000025
-        uint256 claimed = 12891694555962858655; //      12.89
-        uint256 maxPayout = 10000250619232222230; //    10.00025
 
-        emit log_named_uint("max", lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) );
-        emit log_named_uint("claimed", claimed );
+        uint256 startTime = 1667828012;
+        uint256 endTime = 1792244012;
+        uint256 lockedAmount = 10000000000000000000; // 10
+        uint256 multiplier = 13468618518518518518; // 13.47
+        uint256 claimed = 0;
+        uint256 maxPayout = 124686185185185185180; // 124.69
+
+        uint256 OGmultiplier = piCalculator.determineMultiplier(
+            1649203200,
+            1649203200 + (1440 days),
+            startTime,
+            uint8((endTime - startTime) / 30 days)
+        );
+
+        emit log_named_uint("OG Mul", OGmultiplier);
         
     }
 }

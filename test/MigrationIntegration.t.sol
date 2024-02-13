@@ -12,6 +12,7 @@ import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.so
 
 // passive income nft imports
 import { PassiveIncomeNFT } from "../src/refs/PassiveIncomeNFT.sol";
+import { PassiveIncomeCalculator } from "../src/refs/PassiveIncomeCalculator.sol";
 
 // layerZero imports
 import { ILayerZeroEndpoint } from "@layerZero/contracts/interfaces/ILayerZeroEndpoint.sol";
@@ -42,6 +43,7 @@ contract MirgationIntegrationTest is Utility {
     // ~ Contracts ~
 
     PassiveIncomeNFT public passiveIncomeNFTV1 = PassiveIncomeNFT(POLYGON_PI_NFT);
+    PassiveIncomeCalculator public piCalculator = PassiveIncomeCalculator(POLYGON_PI_CALC);
     TangibleERC20Mock public tngblToken = TangibleERC20Mock(POLYGON_TNGBL_TOKEN);
     CrossChainMigrator public migrator;
     RealReceiver public receiver;
@@ -150,6 +152,7 @@ contract MirgationIntegrationTest is Utility {
             address(migrator),
             abi.encodeWithSelector(CrossChainMigrator.initialize.selector,
                 address(passiveIncomeNFTV1), // LOCAL ADDRESS 1 -> 3,3+ NFT
+                address(piCalculator),
                 address(tngblToken), // LOCAL ADDRESS 2 -> $TNGBL
                 address(receiver), // REMOTE ADDRESS 1 -> RECEIVER for NFT
                 uint16(block.chainid), // REMOTE CHAIN ID

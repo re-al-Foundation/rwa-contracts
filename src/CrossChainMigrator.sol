@@ -5,13 +5,14 @@ pragma solidity ^0.8.19;
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { ERC20Burnable } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
-import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 // tangible imports
 import { NonblockingLzAppUpgradeable } from "@tangible-foundation-contracts/layerzero/lzApp/NonblockingLzAppUpgradeable.sol";
 
 // passive income nft imports
 import { PassiveIncomeNFT } from "./refs/PassiveIncomeNFT.sol";
+import { PassiveIncomeCalculator } from "./refs/PassiveIncomeCalculator.sol";
 
 /**
  * @title CrossChainMigrator
@@ -27,7 +28,7 @@ import { PassiveIncomeNFT } from "./refs/PassiveIncomeNFT.sol";
  * - On $TNGBL migrations, the CrossChainMigrator contract will burn the migrated $TNGBL tokens and send a 
  *   message to the RealReceiver on Real Chain to mint new tokens.
  */
-contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUPSUpgradeable, AccessControlUpgradeable {
+contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, AccessControlUpgradeable {
 
     // ---------------
     // State Variables
@@ -54,6 +55,24 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
     bool public migrationActive;
     /// @notice If true, migration message payloads will require a custom `adapterParams` argument.
     bool public useCustomAdapterParams;
+    /// @notice Contact reference for passive income calculator.
+    PassiveIncomeCalculator public piCalculator;
+
+    struct LockCache {
+        uint256 startTime;
+        uint256 endTime;
+        uint256 lockedAmount;
+        uint256 multiplier;
+        uint256 claimed;
+        uint256 maxPayout;
+    }
+
+    /// @notice Private var for storing lock data locally. Avoid stack-too-deep errors
+    LockCache private lCache;
+    /// @notice boost start time for passiveIncomeNFT locks.
+    uint256 private BOOST_START;
+    /// @notice boost end time for passiveIncomeNFT locks.
+    uint256 private BOOST_END;
 
 
     // ------
@@ -64,6 +83,11 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
      * @notice This error is emitted when a migration message fails to be sent to the LZ endpoint.
      */
     error FailedMigration();
+
+    /**
+     * @notice This error is emitted when a user attempts to mirgate an expired NFT.
+     */
+    error ExpiredNFT(uint256 _tokenId);
 
 
     // ------
@@ -76,13 +100,6 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
      * @param _tokenId Token identifier that was migrated.
      */
     event MigrationMessageSent_PINFT(address indexed _account, uint256 indexed _tokenId);
-
-    /**
-     * @notice This event is emitted when there's a successful execution of `migrateNFTBatch`.
-     * @param _account Address of migrator.
-     * @param _tokenIds Array of token identifiers that were migrated.
-     */
-    event MigrationMessageSent_PINFT(address indexed _account, uint256[] indexed _tokenIds);
 
     /**
      * @notice This event is emitted when there's a successful execution of `migrateTokens`.'
@@ -109,6 +126,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
     /**
      * @notice This method initializes the CrossChainMigrator contract.
      * @param _legacyPINFT Contract address of PassiveIncomeNFT.
+     * @param _piCalc Contract address of PassiveIncomeCalculator.
      * @param _legacyTngbl Contract address of TNGBL token.
      * @param _receiver RealReceiver contract address on destination chain.
      * @param _remoteChainId Chain Id of destination chain.
@@ -116,6 +134,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
      */
     function initialize(
         address _legacyPINFT,
+        address _piCalc,
         address _legacyTngbl,
         address _receiver,
         uint16 _remoteChainId,
@@ -125,12 +144,16 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
         useCustomAdapterParams = true;
 
         passiveIncomeNFT = PassiveIncomeNFT(_legacyPINFT);
+        piCalculator = PassiveIncomeCalculator(_piCalc);
         tngblToken = ERC20Burnable(_legacyTngbl);
 
         receiver = _receiver;
 
         // destination chain id
         remoteChainId = _remoteChainId;
+
+        BOOST_START = passiveIncomeNFT.boostStartTime();
+        BOOST_END = passiveIncomeNFT.boostEndTime();
 
         _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
@@ -162,7 +185,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
         require(migrationActive, "Migration is not active");
 
         // Transfer NFT into this contract. Keep custody
-        passiveIncomeNFT.safeTransferFrom(msg.sender, address(this), _tokenId);
+        passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenId);
 
         _checkAdapterParams(remoteChainId, SEND_NFT, adapterParams, 0);
 
@@ -170,19 +193,38 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
         uint256 endTime,
         uint256 lockedAmount,
         uint256 multiplier,
-        uint256 claimed,) = passiveIncomeNFT.locks(_tokenId);
+        uint256 claimed,
+        uint256 maxPayout) = passiveIncomeNFT.locks(_tokenId);
 
-        uint256 amountTokens = lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) - claimed;
-        uint256 duration = endTime - startTime;
+        uint256 amountTokens;
+        if (multiplier != piCalculator.determineMultiplier(BOOST_START, BOOST_END, startTime, uint8((endTime - startTime) / 30 days))) {
+            // if early claim, just mint them remaining in `maxPayout`.
+            amountTokens = maxPayout;
+        }
+        else {
+            // otherwise, just calculate amount to mint/lock as normal.
+            amountTokens = lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) - claimed;
+        }
+
+        // if lock is expired -> just mint them RWA tokens
+        if (block.timestamp >= endTime) {
+            revert ExpiredNFT(_tokenId);
+        }
+
+        uint256 duration = endTime - block.timestamp;
 
         if (duration > MAX_DURATION) {
             duration = MAX_DURATION;
         }
         
-        bytes memory toAddress = abi.encodePacked(to);
-        bytes memory lzPayload = abi.encode(SEND_NFT, toAddress, amountTokens, duration);
-
-        _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
+        _lzSend(
+            remoteChainId,
+            abi.encode(SEND_NFT, abi.encodePacked(to), amountTokens, duration),
+            refundAddress,
+            zroPaymentAddress,
+            adapterParams,
+            msg.value
+        );
 
         emit MigrationMessageSent_PINFT(msg.sender, _tokenId);
     }
@@ -205,29 +247,47 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
         address payable refundAddress,
         address zroPaymentAddress,
         bytes calldata adapterParams
-    ) payable external {
+    ) payable external nonReentrant {
         require(migrationActive, "Migration is not active");
 
         uint256[] memory lockedAmounts = new uint256[](_tokenIds.length);
         uint256[] memory durations = new uint256[](_tokenIds.length);
 
         for (uint256 i; i < _tokenIds.length;) {
-
             // Transfer NFT into this contract. Keep custody
-            passiveIncomeNFT.safeTransferFrom(msg.sender, address(this), _tokenIds[i]);
+            passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenIds[i]);
 
-            (uint256 startTime,
-            uint256 endTime,
-            uint256 lockedAmount,
-            uint256 multiplier,
-            uint256 claimed,) = passiveIncomeNFT.locks(_tokenIds[i]);
+            (lCache.startTime,
+            lCache.endTime,
+            lCache.lockedAmount,
+            lCache.multiplier,
+            lCache.claimed,
+            lCache.maxPayout) = passiveIncomeNFT.locks(_tokenIds[i]);
 
-            lockedAmounts[i] = lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) - claimed;
-            durations[i] = endTime - startTime;
+            uint8 durationInMonths = uint8((lCache.endTime - lCache.startTime) / 30 days);
+
+            if (lCache.multiplier != piCalculator.determineMultiplier(BOOST_START, BOOST_END, lCache.startTime, durationInMonths)) {
+                // if early claim, just mint them remaining in `maxPayout`.
+                lockedAmounts[i] = lCache.maxPayout;
+            }
+            else {
+                // otherwise, just calculate amount to mint/lock as normal.
+                lockedAmounts[i] = lCache.lockedAmount + ((lCache.lockedAmount * (lCache.multiplier - 1e18)) / 1e18) - lCache.claimed;
+            }
+
+            // if lock is expired -> just mint them RWA tokens
+            if (block.timestamp >= lCache.endTime) {
+                revert ExpiredNFT(_tokenIds[i]);
+            }
+
+            durations[i] = lCache.endTime - block.timestamp;
 
             if (durations[i] > MAX_DURATION) {
                 durations[i] = MAX_DURATION;
             }
+
+            emit MigrationMessageSent_PINFT(msg.sender, _tokenIds[i]);
+            _clearLockCache();
 
             unchecked {
                 ++i;
@@ -236,12 +296,14 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
 
         _checkAdapterParams(remoteChainId, SEND_NFT_BATCH, adapterParams, 0);
 
-        bytes memory toAddress = abi.encodePacked(to);
-        bytes memory lzPayload = abi.encode(SEND_NFT_BATCH, toAddress, lockedAmounts, durations);
-
-        _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
-
-        emit MigrationMessageSent_PINFT(msg.sender, _tokenIds);
+        _lzSend(
+            remoteChainId,
+            abi.encode(SEND_NFT_BATCH, abi.encodePacked(to), lockedAmounts, durations),
+            refundAddress,
+            zroPaymentAddress,
+            adapterParams,
+            msg.value
+        );
     }
 
     /**
@@ -270,8 +332,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
 
         _checkAdapterParams(remoteChainId, SEND, adapterParams, 0);
 
-        bytes memory toAddress = abi.encodePacked(to);
-        bytes memory lzPayload = abi.encode(SEND, toAddress, _amount);
+        bytes memory lzPayload = abi.encode(SEND, abi.encodePacked(to), _amount);
 
         _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
 
@@ -316,13 +377,6 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
     function setReceiver(address _newReceiver) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_newReceiver != address(0), "invalid input");
         receiver = _newReceiver;
-    }
-
-    /**
-     * @notice Inherited from IERC721Receiver to support `safeTransferFrom`.
-     */
-    function onERC721Received(address, address, uint256, bytes calldata) external returns (bytes4) {
-        return IERC721Receiver.onERC721Received.selector;
     }
 
 
@@ -412,9 +466,16 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
     // ----------------
 
     /**
-     * @notice Inherited from UUPSUpgradeable. Allows us to authorize the DEFAULT_ADMIN_ROLE role to upgrade this contract's implementation.
+     * @notice This method resets `lCache` to zero values.
      */
-    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _clearLockCache() private {
+        lCache.startTime = 0;
+        lCache.endTime = 0;
+        lCache.lockedAmount = 0;
+        lCache.multiplier = 0;
+        lCache.claimed = 0;
+        lCache.maxPayout = 0;
+    }
 
     /**
      * @dev Internal function to check the adapter parameters for a LayerZero message. It ensures that the parameters
@@ -448,4 +509,8 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
         assert(false);
     }
 
+    /**
+     * @notice Inherited from UUPSUpgradeable. Allows us to authorize the DEFAULT_ADMIN_ROLE role to upgrade this contract's implementation.
+     */
+    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 }

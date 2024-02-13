@@ -98,6 +98,36 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     }
 
     /**
+     * @notice Returns an array of tokenIds owned by an address. It also returns the locked amount of RWA and remaining duration of each NFT.
+     * @param account Address of account we wish to fetch array of NFTs in custody of.
+     * @return tokenIds Array of tokenIds owned by `account`.
+     * @return lockedAmount Array of locked amount of RWA in lock. Indexes correspond with `tokenIds`.
+     * @return remainingDuration Array of remaining duration of each lock. Indexes correspond with `tokenIds`.
+     */
+    function getNFTsOfOwnerWithData(address account) external view returns (
+        uint256[] memory tokenIds,
+        uint256[] memory lockedAmount, 
+        uint256[] memory remainingDuration
+    ) {
+        uint256 amount = veRWA.balanceOf(account);
+
+        tokenIds = new uint256[](amount);
+        lockedAmount = new uint256[](amount);
+        remainingDuration = new uint256[](amount);
+
+        for (uint256 i; i < amount;) {
+
+            tokenIds[i] = veRWA.tokenOfOwnerByIndex(account, i);
+            lockedAmount[i] = veRWA.getLockedAmount(tokenIds[i]);
+            remainingDuration[i] = veRWA.getRemainingVestingDuration(tokenIds[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /**
      * @notice Returns the total supply of RWAVotingEscrow NFTs.
      */
     function getNFTTotalSupply() external view returns (uint256) {
@@ -167,8 +197,32 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
      * @notice Returns an array of RWAVotingEscrow NFTs that are being actively vested by a single owner.
      * @param account EOA with NFTs being vested.
      */
-    function getDepositedTokensByOwner(address account) external view returns (uint256[] memory) {
+    function getVestedTokensByOwner(address account) external view returns (uint256[] memory) {
         return veVesting.getDepositedTokens(account);
+    }
+
+    /**
+     * @notice Returns an array of tokenIds owned by an address that are being vested. It also returns the locked amount of RWA and remaining duration of each NFT.
+     * @param account Address of account we wish to fetch array of NFTs being vested.
+     * @return tokenIds Array of tokenIds being vested by `account`.
+     * @return vestingSchedules Array of vesting schedules for each token in `tokenIds`.
+     * @dev `vestingSchedules` is of struct type VotingEscrowVesting.VestingSchedule.
+     */
+    function getVestedTokensByOwnerWithData(address account) external view returns (
+        uint256[] memory tokenIds,
+        VotingEscrowVesting.VestingSchedule[] memory vestingSchedules
+    ) {
+        uint256 amount = veVesting.balanceOf(account);
+        
+        tokenIds = veVesting.getDepositedTokens(account);
+        vestingSchedules = new VotingEscrowVesting.VestingSchedule[](amount);
+
+        for (uint256 i; i < amount;) {
+            vestingSchedules[i] = veVesting.getSchedule(tokenIds[i]);
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     // ~ voting power ~

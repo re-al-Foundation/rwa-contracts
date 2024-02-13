@@ -828,4 +828,16 @@ contract MigrationTest is Utility {
         assertEq(tngblToken.balanceOf(address(migrator)), 0);
         assertEq(tngblToken.totalSupply(), preSupplyTngbl - amountTokens);
     }
+
+    function test_math() public {
+        uint256 lockedAmount = 10000000000000000000; // 10
+        uint256 multiplier = 1000025061923222223; //    1.000025
+        uint256 claimed = 12891694555962858655; //      12.89
+        uint256 maxPayout = 10000250619232222230; //    10.00025
+
+        emit log_named_uint("max", lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) );
+        emit log_named_uint("claimed", claimed );
+        
+    }
 }
+

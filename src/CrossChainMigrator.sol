@@ -172,7 +172,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
         uint256 multiplier,
         uint256 claimed,) = passiveIncomeNFT.locks(_tokenId);
 
-        uint256 amountTokens = ((lockedAmount * multiplier) / 1e18) - claimed;
+        uint256 amountTokens = lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) - claimed;
         uint256 duration = endTime - startTime;
 
         if (duration > MAX_DURATION) {
@@ -222,7 +222,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, IERC721Receiver, UUP
             uint256 multiplier,
             uint256 claimed,) = passiveIncomeNFT.locks(_tokenIds[i]);
 
-            lockedAmounts[i] = ((lockedAmount * multiplier) / 1e18) - claimed;
+            lockedAmounts[i] = lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) - claimed;
             durations[i] = endTime - startTime;
 
             if (durations[i] > MAX_DURATION) {

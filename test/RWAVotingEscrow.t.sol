@@ -13,6 +13,8 @@ import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
 import { VotingEscrowVesting } from "../src/governance/VotingEscrowVesting.sol";
 import { RWAToken } from "../src/RWAToken.sol";
 
+import { VotingEscrowRWAAPI } from "../src/helpers/VotingEscrowRWAAPI.sol";
+
 // local helper imports
 import { Utility } from "./utils/Utility.sol";
 import { VotingMath } from "../src/governance/VotingMath.sol";
@@ -31,11 +33,13 @@ contract RWAVotingEscrowTest is Utility {
     RWAVotingEscrow public veRWA;
     VotingEscrowVesting public vesting;
     RWAToken public rwaToken;
+    VotingEscrowRWAAPI public api;
 
     // proxies
     ERC1967Proxy public veRWAProxy;
     ERC1967Proxy public vestingProxy;
     ERC1967Proxy public rwaTokenProxy;
+    ERC1967Proxy public apiProxy;
 
     function setUp() public {
 
@@ -79,6 +83,21 @@ contract RWAVotingEscrowTest is Utility {
             )
         );
         veRWA = RWAVotingEscrow(address(veRWAProxy));
+
+        // Deploy API
+        api = new VotingEscrowRWAAPI();
+
+        // Deploy api proxy
+        apiProxy = new ERC1967Proxy(
+            address(api),
+            abi.encodeWithSelector(VotingEscrowRWAAPI.initialize.selector,
+                ADMIN,
+                address(veRWA),
+                address(vesting),
+                address(0)
+            )
+        );
+        api = VotingEscrowRWAAPI(address(apiProxy));
 
         // set votingEscrow on vesting contract
         vm.prank(ADMIN);
@@ -636,6 +655,11 @@ contract RWAVotingEscrowTest is Utility {
 
         // check depositors mapping
         assertEq(vesting.depositors(tokenId), JOE);
+
+        (,VotingEscrowVesting.VestingSchedule[] memory schedule) = api.getVestedTokensByOwnerWithData(JOE);
+        assertEq(schedule[0].startTime, block.timestamp);
+        assertEq(schedule[0].endTime, block.timestamp + (36 * 30 days));
+        assertEq(schedule[0].amount, amountTokens);
     }
 
     // ~ VotingEscrowVesting::withdraw ~

@@ -377,6 +377,69 @@ contract MigrationTest is Utility {
         assertEq(veRWA.getAccountVotingPower(JOE), votingPower);
     }
 
+    /// @notice Verifies proper state changes when CrossChainMigrator::migrateNFT is executed.
+    function test_migrator_migrateNFT_single_expired() public {
+        
+        // ~ Config ~
+
+        amountToLock = 1_000 ether;
+        durationInMonths = 10; // months
+        totalDuration = (uint256(durationInMonths) * 30 days);
+        uint256 tokenId = _mintPassiveIncomeNFT(JOE, amountToLock, durationInMonths);
+
+        (uint256 startTime,
+        uint256 endTime,
+        uint256 lockedAmount,
+        uint256 multiplier,
+        /** claimed */,
+        uint256 maxPayout) = passiveIncomeNFTV1.locks(tokenId);
+
+        // create adapterParams for custom gas.
+        adapterParams = abi.encodePacked(uint16(1), uint256(200000));
+
+        // get quote for fees
+        (amountETH,) = migrator.estimateMigrateNFTFee(
+            uint16(block.chainid),
+            abi.encodePacked(JOE),
+            lockedAmount + maxPayout,
+            endTime - startTime,
+            false,
+            adapterParams
+        );
+
+        uint256 votingPower = (lockedAmount + maxPayout).calculateVotingPower(totalDuration);
+
+        vm.deal(JOE, amountETH);
+
+        Checkpoints.Trace208 memory votingPowerCheckpoints;
+        Checkpoints.Trace208 memory totalVotingPowerCheckpoints;
+
+        uint256 veRWATokenId = veRWA.getTokenId();
+        ++veRWATokenId;
+
+        uint256 preSupply = rwaToken.totalSupply();
+
+        // ~ Skip to expiration ~
+
+        skip(endTime);
+
+        // ~ Execute migrateNFT ~
+
+        emit log_address(passiveIncomeNFTV1.ownerOf(tokenId));
+
+        vm.startPrank(JOE);
+        passiveIncomeNFTV1.approve(address(migrator), tokenId);
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.ExpiredNFT.selector, tokenId));
+        migrator.migrateNFT{value:amountETH}(
+            tokenId,
+            JOE,
+            payable(JOE),
+            address(0),
+            adapterParams
+        );
+        vm.stopPrank();
+    }
+
     /// @notice Verifies proper state changes when CrossChainMigrator::migrateNFTBatch is executed.
     function test_migrator_migrateNFTBatch_single() public {
 

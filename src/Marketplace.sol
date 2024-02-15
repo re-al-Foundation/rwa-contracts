@@ -16,15 +16,10 @@ import "./interfaces/IRouter.sol";
 import "./utils/Collection.sol";
 import "./utils/SafeCollection.sol";
 
-// TODO: Do we want to offer payment methods or just 1 token for buying?
-//  - if 1 token for payments, sellers will receive this payment
-//  - offering payment options would be nice for UX, but would require a router
-// TODO: Where do marketplace fees go? RevenueDistributor?
-
 /**
  * @title Marketplace
  * @author @chasebrownn
- * @notice TODO
+ * @notice This marketplace contract facilitates the listing and purchase of RWAVotingEscrow Tokens.
  */
 contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;

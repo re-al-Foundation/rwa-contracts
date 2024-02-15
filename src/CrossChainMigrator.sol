@@ -6,6 +6,7 @@ import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/ac
 import { ERC20Burnable } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
+import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
 // tangible imports
 import { NonblockingLzAppUpgradeable } from "@tangible-foundation-contracts/layerzero/lzApp/NonblockingLzAppUpgradeable.sol";
@@ -13,6 +14,9 @@ import { NonblockingLzAppUpgradeable } from "@tangible-foundation-contracts/laye
 // passive income nft imports
 import { PassiveIncomeNFT } from "./refs/PassiveIncomeNFT.sol";
 import { PassiveIncomeCalculator } from "./refs/PassiveIncomeCalculator.sol";
+
+// local
+import { VotingMath } from "./governance/VotingMath.sol";
 
 /**
  * @title CrossChainMigrator
@@ -29,6 +33,7 @@ import { PassiveIncomeCalculator } from "./refs/PassiveIncomeCalculator.sol";
  *   message to the RealReceiver on Real Chain to mint new tokens.
  */
 contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, AccessControlUpgradeable {
+    using VotingMath for uint256;
 
     // ---------------
     // State Variables
@@ -98,8 +103,10 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
      * @notice This event is emitted when there's a successful execution of `migrateNFT`.
      * @param _account Address of migrator.
      * @param _tokenId Token identifier that was migrated.
+     * @param _amount Amount of RWA that will be minted on destination chain for this new veRWA token.
+     * @param _vp Voting power that will be granted with the new veRWA token.
      */
-    event MigrationMessageSent_PINFT(address indexed _account, uint256 indexed _tokenId);
+    event MigrationMessageSent_PINFT(address indexed _account, uint256 indexed _tokenId, uint256 _amount, uint256 _vp);
 
     /**
      * @notice This event is emitted when there's a successful execution of `migrateTokens`.'
@@ -226,7 +233,12 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
             msg.value
         );
 
-        emit MigrationMessageSent_PINFT(msg.sender, _tokenId);
+        emit MigrationMessageSent_PINFT(
+            msg.sender,
+            _tokenId,
+            amountTokens,
+            SafeCast.toUint208(amountTokens.calculateVotingPower(duration))
+        );
     }
 
     /**
@@ -286,7 +298,12 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
                 durations[i] = MAX_DURATION;
             }
 
-            emit MigrationMessageSent_PINFT(msg.sender, _tokenIds[i]);
+            emit MigrationMessageSent_PINFT(
+                msg.sender,
+                _tokenIds[i],
+                lockedAmounts[i],
+                SafeCast.toUint208(lockedAmounts[i].calculateVotingPower(durations[i]))
+            );
             _clearLockCache();
 
             unchecked {
@@ -374,6 +391,9 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
         tngblToken.burnFrom(address(this), amount);
     }
 
+    /**
+     * @notice This method allows a permissioned admin to update the `receiver` state variable.
+     */
     function setReceiver(address _newReceiver) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(_newReceiver != address(0), "invalid input");
         receiver = _newReceiver;

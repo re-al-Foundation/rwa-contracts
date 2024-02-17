@@ -62,9 +62,7 @@ contract RWARevenueStreamETHTest is Utility {
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
-                ADMIN,
-                address(0),
-                address(0)
+                ADMIN
             )
         );
         rwaToken = RWAToken(payable(address(rwaTokenProxy)));
@@ -167,9 +165,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // Grant minter role to address(this) & veRWA
         vm.startPrank(ADMIN);
-        rwaToken.grantRole(MINTER_ROLE, address(this)); // for testing
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
+        rwaToken.setVotingEscrowRWA(address(veRWA));
         vm.stopPrank();
 
         vm.startPrank(ADMIN);
@@ -178,7 +174,7 @@ contract RWARevenueStreamETHTest is Utility {
         vm.stopPrank();
 
         // Mint Joe $RWA tokens
-        rwaToken.mintFor(JOE, 1_000 ether);
+        deal(address(rwaToken), JOE, 1_000 ether);
     }
 
 

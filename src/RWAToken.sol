@@ -195,7 +195,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @notice Allows a permissioned address to burn tokens.
      * @param amount Amount of tokens to burn.
      */
-    function burn(uint256 amount) public override {
+    function burn(uint256 amount) public {
         require(msg.sender == votingEscrowRWA || msg.sender == royaltyHandler, "Not authorized");
         _burn(msg.sender, amount);
     }
@@ -233,6 +233,8 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     // ----------------
     // Internal Methods
     // ----------------
+
+    event Debug(uint256);
 
     /**
      * @notice Transfers an `amount` amount of tokens from `from` to `to`, or alternatively mints (or burns) if `from`.

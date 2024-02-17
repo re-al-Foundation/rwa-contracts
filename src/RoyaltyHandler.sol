@@ -50,12 +50,11 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
 
     /**
      * @notice This event is emitted when `updateFees` is executed.
-     * @param totalFee New total fee taken out of 100%.
      * @param burnPortion New burn fee.
      * @param revSharePortion New fee taken for veRWA revenue share.
      * @param lpPortion New fee taken for adding liquidity.
      */
-    event FeesUpdated(uint256 totalFee, uint8 burnPortion, uint8 revSharePortion, uint8 lpPortion);
+    event DistributionUpdated(uint8 burnPortion, uint8 revSharePortion, uint8 lpPortion);
 
     /**
      * @notice This event is emitted when `_handleRoyalties` is executed.
@@ -127,7 +126,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         revSharePortion = _burnPortion;
         lpPortion = _lpPortion;
 
-        emit FeesUpdated(totalFee, _burnPortion, _revSharePortion, _lpPortion);
+        emit DistributionUpdated(_burnPortion, _revSharePortion, _lpPortion);
     }
 
     /**
@@ -149,11 +148,11 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param amount Amount to distribute.
      */
     function _handleRoyalties(uint256 amount) internal {
-        uint256 totalFee = burnPortion + revSharePortion + burnPortion;
+        uint256 totalFee = burnPortion + revSharePortion + lpPortion;
 
         uint256 amountToBurn = (amount * burnPortion) / totalFee; // 2/5 default
         uint256 amountForRevShare = (amount * revSharePortion) / totalFee; // 2/5 default
-        uint256 amountForLp = amount - burnPortion - revSharePortion; // 1/5 default
+        uint256 amountForLp = amount - amountToBurn - amountForRevShare; // 1/5 default
 
         // burn
         (bool success,) = address(rwaToken).call(abi.encodeWithSignature("burn(uint256)", amountToBurn));
@@ -179,7 +178,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     function _swapTokensForETH(uint256 tokenAmount) internal {
         // generate the uniswap pair path of token -> weth
         address[] memory path = new address[](2);
-        path[0] = address(this);
+        path[0] = address(rwaToken);
         path[1] = uniswapV2Router.WETH();
 
         rwaToken.approve(address(uniswapV2Router), tokenAmount);
@@ -204,7 +203,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         rwaToken.approve(address(uniswapV2Router), tokensForLp);
         // add liquidity to LP
         uniswapV2Router.addLiquidityETH{value: amountETH}(
-            address(this),
+            address(rwaToken),
             tokensForLp,
             0, // since ratio will be unknown, assign 0 RWA minimum
             0, // since ratio will be unknown, assign 0 ETH minimum

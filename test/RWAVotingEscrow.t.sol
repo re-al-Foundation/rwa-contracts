@@ -50,9 +50,7 @@ contract RWAVotingEscrowTest is Utility {
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
-                ADMIN,
-                address(0),
-                address(0)
+                ADMIN
             )
         );
         rwaToken = RWAToken(payable(address(rwaTokenProxy)));
@@ -105,9 +103,7 @@ contract RWAVotingEscrowTest is Utility {
 
         // Grant minter role to address(this) & veRWA
         vm.startPrank(ADMIN);
-        rwaToken.grantRole(MINTER_ROLE, address(this)); // for testing
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
+        rwaToken.setVotingEscrowRWA(address(veRWA));
         vm.stopPrank();
 
         // Exclude necessary addresses from RWA fees.
@@ -118,7 +114,7 @@ contract RWAVotingEscrowTest is Utility {
         vm.stopPrank();
 
         // Mint Joe $RWA tokens
-        rwaToken.mintFor(JOE, 1_000 ether);
+        deal(address(rwaToken), JOE, 1_000 ether);
     }
 
 
@@ -139,7 +135,7 @@ contract RWAVotingEscrowTest is Utility {
         // rwaToken
         assertEq(rwaToken.name(), "re.al");
         assertEq(rwaToken.symbol(), "RWA");
-        assertEq(rwaToken.hasRole(0x00, ADMIN), true); // DEFAULT_ADMIN_ROLE == 0x00
+        assertEq(rwaToken.owner(), ADMIN);
         assertEq(rwaToken.balanceOf(JOE), 1_000 ether);
         assertEq(rwaToken.totalSupply(), 1_000 ether);
 

@@ -200,10 +200,8 @@ contract MigrationTest is Utility {
 
         // Grant minter role to address(this) & veRWA
         vm.startPrank(ADMIN);
-        rwaToken.grantRole(MINTER_ROLE, address(this)); // for testing
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(MINTER_ROLE, address(receiver)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
+        rwaToken.setVotingEscrowRWA(address(veRWA));
+        rwaToken.setReceiver(address(receiver));
         vm.stopPrank();
 
         tngblToken.grantRole(MINTER_ROLE, address(this));
@@ -217,7 +215,8 @@ contract MigrationTest is Utility {
         vm.stopPrank();
 
         // Mint Joe $RWA tokens
-        rwaToken.mintFor(JOE, 1_000 ether);
+        //rwaToken.mintFor(JOE, 1_000 ether);
+        deal(address(rwaToken), JOE, 1_000 ether);
 
         // begin migration
         vm.prank(ADMIN);

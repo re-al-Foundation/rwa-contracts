@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 pragma solidity ^0.8.4;
 
-import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+// oz imports
+import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // oz upgradeable imports
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
@@ -49,7 +51,7 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
 
     mapping(address => bool) public isPaymentToken;
     mapping(uint256 => MarketItem) public idToMarketItem;
-    mapping(address => Collection) public _itemsByOwner;
+    //mapping(address => Collection) public _itemsByOwner;
     mapping(address => address[]) private _routerPaths;
 
     address[] public paymentTokens;
@@ -123,77 +125,6 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
     // ----------------
     // External Methods
     // ----------------
-
-    /**
-     * @dev Sets the TX fee that is applied to each purchase.
-     */
-    function setFee(uint256 fee_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(revDistributor != address(0), "fee collector not set");
-        require(fee_ <= 10000, "invalid fee");
-        fee = fee_;
-    }
-
-    /**
-     * @dev Sets the address where TX fees are being sent to.
-     */
-    function setRevDistributor(address revDistributor_) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(
-            revDistributor_ != address(0) || fee == 0,
-            "invalid fee collector"
-        );
-        revDistributor = revDistributor_;
-    }
-
-    /**
-     * @dev Adds a new token as payment option.
-     */
-    function addPaymentToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        // require(
-        //     (tokenAddress == address(USDC) && routerPath.length == 0) ||
-        //         (tokenAddress != address(USDC) &&
-        //             routerPath[0] == tokenAddress &&
-        //             routerPath[routerPath.length - 1] == address(USDC)),
-        //     "invalid route"
-        // );
-        if (!isPaymentToken[tokenAddress]) {
-            paymentTokens.push(tokenAddress);
-            isPaymentToken[tokenAddress] = true;
-        }
-        //_routerPaths[tokenAddress] = routerPath;
-    }
-
-    /**
-     * @dev Removes a token from payment options.
-     */
-    function removePaymentToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(isPaymentToken[tokenAddress], "payment token does not exist");
-        delete isPaymentToken[tokenAddress];
-
-        uint256 len = paymentTokens.length;
-        for (uint256 i; i < len;) {
-            if (paymentTokens[i] == tokenAddress) {
-                paymentTokens[i] = paymentTokens[len - 1];
-                paymentTokens.pop();
-            }
-            unchecked {
-                ++i;
-            }
-        }
-    }
-
-    /**
-     * @dev Returns all valid payment tokens.
-     */
-    function getPaymentTokens() external view returns (address[] memory) {
-        return paymentTokens;
-    }
-
-    /**
-     * @dev Returns the swap route for the given token.
-     */
-    // function getSwapRoute(address tokenAddress) external view returns (address[] memory) {
-    //     return _routerPaths[tokenAddress];
-    // }
 
     /**
      * @dev Lists an item for sale on the marketplace.
@@ -284,9 +215,9 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
                 uint256 payout = price - feeAmount;
                 
                 if (feeAmount > 0) {
-                    IERC20(paymentToken).transfer(revDistributor, feeAmount);
+                    IERC20(paymentToken).safeTransfer(revDistributor, feeAmount);
                 }
-                IERC20(paymentToken).transfer(item.seller, payout);
+                IERC20(paymentToken).safeTransfer(item.seller, payout);
             }
         }
 
@@ -306,11 +237,82 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
     }
 
     /**
+     * @dev Adds a new token as payment option.
+     */
+    function addPaymentToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        // require(
+        //     (tokenAddress == address(USDC) && routerPath.length == 0) ||
+        //         (tokenAddress != address(USDC) &&
+        //             routerPath[0] == tokenAddress &&
+        //             routerPath[routerPath.length - 1] == address(USDC)),
+        //     "invalid route"
+        // );
+        if (!isPaymentToken[tokenAddress]) {
+            paymentTokens.push(tokenAddress);
+            isPaymentToken[tokenAddress] = true;
+        }
+        //_routerPaths[tokenAddress] = routerPath;
+    }
+
+    /**
+     * @dev Removes a token from payment options.
+     */
+    function removePaymentToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(isPaymentToken[tokenAddress], "payment token does not exist");
+        delete isPaymentToken[tokenAddress];
+
+        uint256 len = paymentTokens.length;
+        for (uint256 i; i < len;) {
+            if (paymentTokens[i] == tokenAddress) {
+                paymentTokens[i] = paymentTokens[len - 1];
+                paymentTokens.pop();
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /**
+     * @dev Sets the TX fee that is applied to each purchase.
+     */
+    function setFee(uint256 fee_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(revDistributor != address(0), "fee collector not set");
+        require(fee_ <= 10000, "invalid fee");
+        fee = fee_;
+    }
+
+    /**
+     * @dev Sets the address where TX fees are being sent to.
+     */
+    function setRevDistributor(address revDistributor_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(
+            revDistributor_ != address(0) || fee == 0,
+            "invalid fee collector"
+        );
+        revDistributor = revDistributor_;
+    }
+
+    /**
      * @dev Called by NFT contract after a token was burned.
      */
-    function afterBurnToken(uint256 tokenId) external {
+    function afterBurnToken(uint256 tokenId) external { // TODO: call from veRWA post-burn
         require(_isBurned(tokenId), "token is not burned");
         delete idToMarketItem[tokenId];
+    }
+
+    /**
+     * @dev Returns the swap route for the given token.
+     */
+    // function getSwapRoute(address tokenAddress) external view returns (address[] memory) {
+    //     return _routerPaths[tokenAddress];
+    // }
+
+    /**
+     * @dev Returns all valid payment tokens.
+     */
+    function getPaymentTokens() external view returns (address[] memory) {
+        return paymentTokens;
     }
 
     /**
@@ -355,52 +357,52 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
         }
     }
 
-    function updateTokenOwner(uint256 tokenId, address from, address to) external {
-        require(
-            msg.sender == address(nftContract),
-            "caller is not the NFT contract"
-        );
-        if (from != address(0)) {
-            _itemsByOwner[from].safeRemove(tokenId);
-        }
-        if (to != address(0)) {
-            _itemsByOwner.safeAdd(to, tokenId);
-        }
-    }
+    // function updateTokenOwner(uint256 tokenId, address from, address to) external {
+    //     require(
+    //         msg.sender == address(nftContract),
+    //         "caller is not the NFT contract"
+    //     );
+    //     if (from != address(0)) {
+    //         _itemsByOwner[from].safeRemove(tokenId);
+    //     }
+    //     if (to != address(0)) {
+    //         _itemsByOwner.safeAdd(to, tokenId);
+    //     }
+    // }
 
 
     // --------------
     // Public Methods
     // --------------
 
-    /**
-     * @dev Returns a page of listed market items.
-     */
-    function fetchItemsByOwner(
-        address owner,
-        uint256 lastItemId,
-        uint256 pageSize,
-        bool ascending
-    ) public view returns (MarketItem[] memory items) {
-        Collection collection = _itemsByOwner[owner];
-        if (address(collection) != address(0)) {
-            (
-                Collection.Item memory first,
-                uint256 numItems
-            ) = _countRemainingItems(
-                    collection,
-                    lastItemId,
-                    ascending,
-                    pageSize
-                );
-            items = new MarketItem[](numItems);
-            Collection.Item memory current = first;
-            for (uint256 i = 0; i < numItems; i++) {
-                items[i] = idToMarketItem[current.itemId];
-                current = collection.getNext(current, ascending);
-            }
-        }
-    }
+    // /**
+    //  * @dev Returns a page of listed market items.
+    //  */
+    // function fetchItemsByOwner(
+    //     address owner,
+    //     uint256 lastItemId,
+    //     uint256 pageSize,
+    //     bool ascending
+    // ) public view returns (MarketItem[] memory items) {
+    //     Collection collection = _itemsByOwner[owner];
+    //     if (address(collection) != address(0)) {
+    //         (
+    //             Collection.Item memory first,
+    //             uint256 numItems
+    //         ) = _countRemainingItems(
+    //                 collection,
+    //                 lastItemId,
+    //                 ascending,
+    //                 pageSize
+    //             );
+    //         items = new MarketItem[](numItems);
+    //         Collection.Item memory current = first;
+    //         for (uint256 i = 0; i < numItems; i++) {
+    //             items[i] = idToMarketItem[current.itemId];
+    //             current = collection.getNext(current, ascending);
+    //         }
+    //     }
+    // }
 
     /**
      * @dev Returns a list of items.

@@ -73,9 +73,7 @@ contract DeployReceiver is Script {
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
-                ADMIN,
-                address(0), // uniswap router
-                address(0)  // revenue distributor
+                ADMIN
             )
         );
 
@@ -134,9 +132,8 @@ contract DeployReceiver is Script {
 
         VotingEscrowVesting(address(vestingProxy)).setVotingEscrowContract(address(veRWAProxy));
 
-        RWAToken(payable(address(rwaTokenProxy))).grantRole(MINTER_ROLE, address(veRWAProxy)); // for RWAVotingEscrow:migrate
-        RWAToken(payable(address(rwaTokenProxy))).grantRole(MINTER_ROLE, address(realReceiverProxy)); // for RWAVotingEscrow:migrate
-        RWAToken(payable(address(rwaTokenProxy))).grantRole(BURNER_ROLE, address(veRWAProxy)); // for RWAVotingEscrow:migrate
+        RWAToken(address(rwaTokenProxy)).setVotingEscrowRWA(address(veRWAProxy)); // for RWAVotingEscrow:migrate
+        RWAToken(address(rwaTokenProxy)).setReceiver(address(realReceiverProxy)); // for RWAVotingEscrow:migrate
 
 
         // ~ Logs ~

@@ -265,17 +265,14 @@ contract MainDeploymentTest is Utility {
         // (17) RWAToken config
         vm.startPrank(ADMIN);
         // (17a) set uniswap pair
-        rwaToken.setUniswapV2Pair(pair);
+        //rwaToken.setUniswapV2Pair(pair);
         // (17b) Grant roles
-        rwaToken.grantRole(MINTER_ROLE, address(this)); // note for testing
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(this)); // note for testing
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow early burn fee
+        rwaToken.setVotingEscrowRWA(address(veRWA));
         // (17c) whitelist
         rwaToken.excludeFromFees(address(veRWA), true);
         rwaToken.excludeFromFees(address(revDistributor), true);
         // (17d) set revenue distributor
-        rwaToken.setRevenueDistributor(address(revDistributor));
+        //rwaToken.setRevenueDistributor(address(revDistributor));
         vm.stopPrank();
 
         // ~ RWA/WETH Pool creation ~
@@ -283,7 +280,8 @@ contract MainDeploymentTest is Utility {
         uint256 ETH_DEPOSIT = 15 ether;
         uint256 TOKEN_DEPOSIT = 16_500 ether;
 
-        rwaToken.mint(TOKEN_DEPOSIT);
+        //rwaToken.mint(TOKEN_DEPOSIT);
+        deal(address(rwaToken), address(this), TOKEN_DEPOSIT);
         rwaToken.approve(address(UNREAL_UNIV2_ROUTER), TOKEN_DEPOSIT);
 
         // (18) Create liquidity pool. TODO: Figure out desired ratio
@@ -300,9 +298,9 @@ contract MainDeploymentTest is Utility {
         emit log_named_uint("RWA Init Reserves", reserve0);
         emit log_named_uint("ETH Init Reserves", reserve1);
 
-        vm.prank(address(rwaToken));
-        rwaToken.approve(address(this), TOKEN_DEPOSIT - reserve0);
-        rwaToken.burnFrom(address(rwaToken), TOKEN_DEPOSIT - reserve0);
+        // vm.prank(address(rwaToken));
+        // rwaToken.approve(address(this), TOKEN_DEPOSIT - reserve0);
+        // rwaToken.burnFrom(address(rwaToken), TOKEN_DEPOSIT - reserve0);
 
         // ~ note For testing, make USTB/WETH pool ~
 

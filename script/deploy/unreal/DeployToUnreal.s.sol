@@ -106,9 +106,7 @@ contract DeployToUnreal is Script {
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
-                adminAddress,             // admin address
-                address(uniswapV2Router), // uniswap v2 router
-                address(0)  // TODO: set RevenueDistributor post-deploy
+                adminAddress
             )
         );
         console2.log("RWA", address(rwaTokenProxy));
@@ -241,14 +239,13 @@ contract DeployToUnreal is Script {
         // (17) RWAToken config
         // (17a) TODO: set uniswap pair
         // rwaToken.setUniswapV2Pair(pair);
-        // (17b) Grant roles
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow early burn fee
+        // (17b) set veRWA
+        rwaToken.setVotingEscrowRWA(address(veRWA)); // for RWAVotingEscrow:migrate
         // (17c) whitelist
         rwaToken.excludeFromFees(address(veRWA), true);
         rwaToken.excludeFromFees(address(revDistributor), true);
         // (17d) set revenue distributor
-        rwaToken.setRevenueDistributor(address(revDistributor));
+        //rwaToken.setRevenueDistributor(address(revDistributor));
 
         // (18) TODO: create the RWA/WETH pool
 

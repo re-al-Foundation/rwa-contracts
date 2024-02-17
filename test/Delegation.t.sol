@@ -148,15 +148,15 @@ contract DelegationTest is Utility {
 
         // Grant minter role to address(this) & veRWA
         vm.startPrank(ADMIN);
-        //rwaToken.grantRole(MINTER_ROLE, address(this)); // for testing
         rwaToken.setVotingEscrowRWA(address(veRWA));
+        rwaToken.setReceiver(address(this)); // for testing
         vm.stopPrank();
 
         tngblToken.grantRole(MINTER_ROLE, address(this));
         tngblToken.grantRole(MINTER_ROLE, address(passiveIncomeNFTV1));
 
         // Mint Admin $RWA tokens
-        deal(address(rwaToken), ADMIN, 1_000 ether);
+        rwaToken.mintFor(ADMIN, 1_000 ether);
     }
 
 

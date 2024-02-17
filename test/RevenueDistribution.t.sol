@@ -173,6 +173,7 @@ contract RevenueDistributorTest is Utility {
         // Grant minter role to address(this) & veRWA
         vm.startPrank(ADMIN);
         rwaToken.setVotingEscrowRWA(address(veRWA));
+        rwaToken.setReceiver(address(this)); // for testing
         vm.stopPrank();
 
         // Exclude necessary addresses from RWA fees.
@@ -183,7 +184,7 @@ contract RevenueDistributorTest is Utility {
         vm.stopPrank();
 
         // Mint Joe $RWA tokens
-        deal(address(rwaToken), JOE, 1_000 ether);
+        rwaToken.mintFor(JOE, 1_000 ether);
 
         // ~ Create Pools ~
 
@@ -232,7 +233,7 @@ contract RevenueDistributorTest is Utility {
         ETH_DEPOSIT = 10 ether;
         uint256 RWA_DEPOSIT = 100_000 ether;
 
-        rwaToken.mint(RWA_DEPOSIT);
+        rwaToken.mintFor(address(this), RWA_DEPOSIT);
         rwaToken.approve(address(MUMBAI_UNIV2_ROUTER), RWA_DEPOSIT);
 
         IUniswapV2Router02(MUMBAI_UNIV2_ROUTER).addLiquidityETH{value: ETH_DEPOSIT}(

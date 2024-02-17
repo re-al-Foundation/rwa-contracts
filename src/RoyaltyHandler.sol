@@ -110,7 +110,9 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     // -------
 
     /// @dev Allows address(this) to receive ETH.
-    receive() external payable {} // TODO
+    receive() external payable {
+        require(msg.sender == address(uniswapV2Router), "not authorized ETH sender");
+    }
 
     /**
      * @notice This method allows a permissioned admin to update the fees

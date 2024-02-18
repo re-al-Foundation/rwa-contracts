@@ -82,6 +82,7 @@ contract DeployReceiver is Script {
         RWAToken(address(rwaToken)).setVotingEscrowRWA(address(veRWA)); // for RWAVotingEscrow:migrate
         RWAToken(address(rwaToken)).setReceiver(address(realReceiverProxy)); // for RWAVotingEscrow:migrate
 
+        // TODO: Set Receiver on RWAToken
         // TODO: Set trusted remote address via CrossChainMigrator.setTrustedRemoteAddress(remoteEndpointId, abi.encodePacked(address(receiver)));
         // TODO: Also set trusted remote on receiver
         RealReceiver(address(realReceiverProxy)).setTrustedRemoteAddress(sourceEndpointId, abi.encodePacked(0x7b480d219F68dA5c630534de8bFD0219Bd7BCFaB));

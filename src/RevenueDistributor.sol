@@ -7,7 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 
 // oz upgradeable imports
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 
 // local imports
 import { IRevenueStream } from "./interfaces/IRevenueStream.sol";
@@ -22,17 +22,17 @@ import { RevenueStreamETH } from "./RevenueStreamETH.sol";
  *         These methods will convert any revenue tokens to ETH then distribute that ETH to the `revStreamETH` contract where
  *         a checkpoint will be hit and the assets will become claimable to RWA stakeholders.
  */
-contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
+contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     // ---------------
     // State Variables
     // ---------------
 
-    /// @dev Role identifier for restricing access to distributing mechanisms.
-    bytes32 public constant DISTRIBUTOR_ROLE = keccak256("DISTRIBUTOR");
     /// @dev Stores all ERC-20 tokens used for revenue streams.
     address[] public revenueTokens;
+    /// @dev If true, address key is allowed to distribute revenue from this contract.
+    mapping(address => bool) public canDistribute;
     /// @dev Mapping used to fetch whether a `revenueToken` address is a supported revenue token.
     mapping(address revenueToken => bool) public isRevToken;
     /// @dev Stores a supported selector, given the `target` address. Prevents misuse.
@@ -41,8 +41,20 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
     RevenueStreamETH public revStreamETH;
     /// @dev Destination contract address for veRWA NFT contract on REAL.
     address public veRwaNFT;
-    /// @dev Admin address.
-    address public admin;
+
+    
+    // ---------
+    // Modifiers
+    // ---------
+
+    /**
+     * @notice Modifier for verifying msg.sender is allowed to distribute revenue.
+     */
+    modifier isDistributor {
+        require(canDistribute[msg.sender] || msg.sender == owner(), "RevenueDistributor: Not authorized");
+        _;
+    }
+
 
     // ------
     // Events
@@ -100,13 +112,11 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
         address _revStreamETH,
         address _veRwa
     ) external initializer {
+        __Ownable_init(_admin);
+        __UUPSUpgradeable_init();
+
         revStreamETH = RevenueStreamETH(payable(_revStreamETH));
-
         veRwaNFT = _veRwa;
-        admin = _admin;
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(DISTRIBUTOR_ROLE, _admin);
     }
 
 
@@ -133,7 +143,7 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
         uint256 _amount,
         address _target,
         bytes calldata _data
-    ) external onlyRole(DISTRIBUTOR_ROLE) returns (uint256 _amountOut) {
+    ) external isDistributor returns (uint256 _amountOut) {
         require(isRevToken[_token], "invalid revenue token");
         require(_amount != 0, "amount cannot be 0");
 
@@ -163,7 +173,7 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
         uint256[] memory _amounts,
         address[] memory _targets,
         bytes[] calldata _data
-    ) external onlyRole(DISTRIBUTOR_ROLE) returns (uint256[] memory _amountsOut) {
+    ) external isDistributor returns (uint256[] memory _amountsOut) {
         uint256 len = _tokens.length;
         require(
             (len == _amounts.length) == (_targets.length == _data.length),
@@ -204,8 +214,17 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
     /**
      * @notice Permisioned method for distributing ETH to a designated RevenueStreamETH contract.
      */
-    function distributeETH() external onlyRole(DISTRIBUTOR_ROLE) {
+    function distributeETH() external isDistributor {
         _distributeETH();
+    }
+
+    /**
+     * @notice Permissiond method to assign whether a `_distributor` address can distribute revenue from this contract.
+     * @param _distributor Address being granted (or revoked) permission to distribute revenue.
+     * @param _canDistribute If true, `_distributor` can distribute revenue.
+     */
+    function setDistributor(address _distributor, bool _canDistribute) external onlyOwner {
+        canDistribute[_distributor] = _canDistribute;
     }
 
     /**
@@ -213,7 +232,7 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
      * @dev Should only be used in the event we're updating the distribution destination address.
      * @param _newRevStream Contract address of new RevenueStreamETH contract.
      */
-    function updateRevenueStream(address payable _newRevStream) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function updateRevenueStream(address payable _newRevStream) external onlyOwner {
         require(_newRevStream != address(0), "Cannot be address(0)");
         revStreamETH = RevenueStreamETH(_newRevStream);
     }
@@ -222,7 +241,7 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
      * @notice This method is used to add a new supported revenue token.
      * @param _revToken New ERC-20 revenue token to be added.
      */
-    function addRevenueToken(address _revToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addRevenueToken(address _revToken) external onlyOwner {
         require(!isRevToken[_revToken], "already added");
 
         isRevToken[_revToken] = true;
@@ -235,7 +254,7 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
      * @notice This method is used to remove an existing revenue token.
      * @param _revToken ERC-20 revenue token to be removed.
      */
-    function removeRevenueToken(address _revToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function removeRevenueToken(address _revToken) external onlyOwner {
         require(isRevToken[_revToken], "token not added");
 
         isRevToken[_revToken] = false;
@@ -267,20 +286,8 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
      *        _target == address(uniswapV2Router)
      *        _selector == bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"))
      */
-    function setSelectorForTarget(address _target, bytes4 _selector) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setSelectorForTarget(address _target, bytes4 _selector) external onlyOwner {
         fetchSelector[_target] = _selector;
-    }
-
-    /**
-     * @notice This method is used to update the primary admin that will be assigned to future revenue stream contracts
-     * @param _newAdmin New default admin address
-     */
-    function updateAdmin(address _newAdmin) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_newAdmin != address(0), "cannot be address(0)");
-        admin = _newAdmin;
-
-        _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(DISTRIBUTOR_ROLE, admin);
     }
 
     /**
@@ -349,5 +356,5 @@ contract RevenueDistributor is AccessControlUpgradeable, UUPSUpgradeable {
      * @notice Overriden from UUPSUpgradeable
      * @dev Restricts ability to upgrade contract to `DEFAULT_ADMIN_ROLE`
      */
-    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

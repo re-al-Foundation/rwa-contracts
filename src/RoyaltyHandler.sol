@@ -93,7 +93,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         address _rwaToken,
         address _router
     ) external initializer {
-        _transferOwnership(_admin);
+        __Ownable_init(_admin);
+        __UUPSUpgradeable_init();
 
         revDistributor = _revDist;
         rwaToken = IERC20(_rwaToken);
@@ -105,9 +106,9 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     }
 
 
-    // -------
-    // Methods
-    // -------
+    // ----------------
+    // External Methods
+    // ----------------
 
     /// @dev Allows address(this) to receive ETH.
     receive() external payable {

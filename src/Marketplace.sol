@@ -7,7 +7,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // oz upgradeable imports
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
@@ -23,7 +23,7 @@ import "./utils/SafeCollection.sol";
  * @author @chasebrownn
  * @notice This marketplace contract facilitates the listing and purchase of RWAVotingEscrow Tokens.
  */
-contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
+contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
     using SafeCollection for Collection;
     using SafeCollection for mapping(address => Collection);
@@ -109,7 +109,7 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
         address _admin
     ) external initializer {
         __UUPSUpgradeable_init();
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
+        __Ownable_init(_admin);
 
         fee = 25; // 2.5%
 
@@ -119,6 +119,7 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
         nftContract = RWAVotingEscrow(_nftContractAddress);
         _listedItems = new Collection();
         revDistributor = _revDist;
+
     } 
 
 
@@ -239,7 +240,7 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
     /**
      * @dev Adds a new token as payment option.
      */
-    function addPaymentToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function addPaymentToken(address tokenAddress) external onlyOwner {
         // require(
         //     (tokenAddress == address(USDC) && routerPath.length == 0) ||
         //         (tokenAddress != address(USDC) &&
@@ -257,7 +258,7 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
     /**
      * @dev Removes a token from payment options.
      */
-    function removePaymentToken(address tokenAddress) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function removePaymentToken(address tokenAddress) external onlyOwner {
         require(isPaymentToken[tokenAddress], "payment token does not exist");
         delete isPaymentToken[tokenAddress];
 
@@ -276,7 +277,7 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
     /**
      * @dev Sets the TX fee that is applied to each purchase.
      */
-    function setFee(uint256 fee_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setFee(uint256 fee_) external onlyOwner {
         require(revDistributor != address(0), "fee collector not set");
         require(fee_ <= 10000, "invalid fee");
         fee = fee_;
@@ -285,7 +286,7 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
     /**
      * @dev Sets the address where TX fees are being sent to.
      */
-    function setRevDistributor(address revDistributor_) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setRevDistributor(address revDistributor_) external onlyOwner {
         require(
             revDistributor_ != address(0) || fee == 0,
             "invalid fee collector"
@@ -459,5 +460,5 @@ contract Marketplace is AccessControlUpgradeable, ReentrancyGuardUpgradeable, UU
      * @notice Overriden from UUPSUpgradeable
      * @dev Restricts ability to upgrade contract to `DEFAULT_ADMIN_ROLE`
      */
-    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

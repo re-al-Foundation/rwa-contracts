@@ -186,8 +186,8 @@ contract RWARevenueStreamETHTest is Utility {
     /// @dev Verifies initial state of RevenueStreamETH contract.
     function test_revStreamETH_init_state() public {
         assertEq(address(revStream.votingEscrow()), address(veRWA));
-        assertEq(revStream.hasRole(0x00, ADMIN), true);
-        assertEq(revStream.hasRole(DEPOSITOR_ROLE, address(revDistributor)), true);
+        assertEq(revStream.owner(), ADMIN);
+        assertEq(revStream.revenueDistributor(), address(revDistributor));
         assertEq(revStream.getCyclesArray().length, 1);
     }
 

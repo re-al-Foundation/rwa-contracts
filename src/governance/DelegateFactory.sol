@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
-import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 
@@ -19,14 +19,14 @@ import { FetchableBeaconProxy } from "../proxy/FetchableBeaconProxy.sol";
  *         A permissioned admin can create delegator contracts to deposit Voting Escrow tokens to delegate voting power
  *         to a delegatee.
  */
-contract DelegateFactory is UUPSUpgradeable, AccessControlUpgradeable {
+contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable {
 
     // ---------------
     // State Variables
     // ---------------
 
-    /// @notice Hashed identifier for `DELEGATOR` role.
-    bytes32 public constant DELEGATOR_ROLE = keccak256("DELEGATOR");
+    /// @notice If true, key address can deploy delegators, delegating voting power.
+    mapping(address => bool) public canDelegate;
     /// @notice Mapping that stores whether a specified address is a delegator.
     mapping(address => bool) public isDelegator;
     /// @notice Maps contract address of Delegator to it's expiration date.
@@ -80,12 +80,11 @@ contract DelegateFactory is UUPSUpgradeable, AccessControlUpgradeable {
         address _initDelegatorBase,
         address _admin
     ) external initializer {
+        __Ownable_init(_admin);
+        __UUPSUpgradeable_init();
 
         veRWA = IERC721Enumerable(_veRWA);
         beacon = new UpgradeableBeacon(_initDelegatorBase, address(this));
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);        
-        _grantRole(DELEGATOR_ROLE, _admin);
     }
 
 
@@ -100,7 +99,9 @@ contract DelegateFactory is UUPSUpgradeable, AccessControlUpgradeable {
      * @param _duration Amount of time to delegate voting power. Will be the expiration date for the new Delegator.
      * @return newDelegator -> Contract address of new Delegator beacon proxy.
      */
-    function deployDelegator(uint256 _tokenId, address _delegatee, uint256 _duration) external onlyRole(DELEGATOR_ROLE) returns (address newDelegator) {
+    function deployDelegator(uint256 _tokenId, address _delegatee, uint256 _duration) external returns (address newDelegator) {
+        require(canDelegate[msg.sender] || msg.sender == owner(), "DelegateFactory: Not authorized");
+
         // take token
         veRWA.safeTransferFrom(msg.sender, address(this), _tokenId);
 
@@ -126,14 +127,6 @@ contract DelegateFactory is UUPSUpgradeable, AccessControlUpgradeable {
         require(success, "deposit unsuccessful");
 
         emit DelegatorCreated(newDelegator);
-    }
-
-    /**
-     * @notice This function allows the factory owner to update the Delegator implementation.
-     * @param _newDelegatorImp Address of new Delegator contract implementation.
-     */
-    function updateDelegatorImplementation(address _newDelegatorImp) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        beacon.upgradeTo(_newDelegatorImp);
     }
 
     /**
@@ -166,6 +159,23 @@ contract DelegateFactory is UUPSUpgradeable, AccessControlUpgradeable {
                 }
             }
         }
+    }
+
+    /**
+     * @notice Permissiond method to assign whether a `_delegatingEOA` address can deploy delegators.
+     * @param _delegatingEOA Address being granted (or revoked) permission to delegate.
+     * @param _canDelegate If true, `_delegatingEOA` can delegate.
+     */
+    function setCanDelegate(address _delegatingEOA, bool _canDelegate) external onlyOwner {
+        canDelegate[_delegatingEOA] = _canDelegate;
+    }
+
+    /**
+     * @notice This function allows the factory owner to update the Delegator implementation.
+     * @param _newDelegatorImp Address of new Delegator contract implementation.
+     */
+    function updateDelegatorImplementation(address _newDelegatorImp) external onlyOwner {
+        beacon.upgradeTo(_newDelegatorImp);
     }
 
     /**
@@ -217,5 +227,5 @@ contract DelegateFactory is UUPSUpgradeable, AccessControlUpgradeable {
     /**
      * @notice Inherited from UUPSUpgradeable. Allows us to authorize the DEFAULT_ADMIN_ROLE role to upgrade this contract's implementation.
      */
-    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

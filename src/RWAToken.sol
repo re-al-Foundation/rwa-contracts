@@ -113,8 +113,8 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
         address _admin
     ) external initializer {
         __ERC20_init("re.al", "RWA");
-
-        _transferOwnership(_admin);
+        __Ownable_init(_admin);
+        __UUPSUpgradeable_init();
 
         isExcludedFromFees[address(this)] = true;
         isExcludedFromFees[_admin] = true;

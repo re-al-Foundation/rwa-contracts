@@ -8,6 +8,7 @@ import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
 
 // oz upgradeable imports
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // local imports
@@ -19,18 +20,12 @@ import { IRevenueStreamETH } from "./interfaces/IRevenueStreamETH.sol";
  * @notice This contract facilitates the distribution of claimable revenue to veRWA shareholders.
  *         This contract will facilitate the distribution of ETH.
  */
-contract RevenueStreamETH is IRevenueStreamETH, UUPSUpgradeable, AccessControlUpgradeable {
+contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradeable {
 
     // ---------------
     // State Variables
     // ---------------
 
-    /// @dev Role identifier for restricing access to claiming mechanisms.
-    bytes32 public constant CLAIMER_ROLE = keccak256("CLAIMER");
-    /// @dev Role identifier for restricing access to deposit mechanisms.
-    bytes32 public constant DEPOSITOR_ROLE = keccak256("DEPOSITOR");
-    /// @dev Role identifier for restricing access to expired revenue skim mechanisms.
-    bytes32 public constant SKIM_ROLE = keccak256("SKIM");
     /// @dev Array used to track all deposits by timestamp.
     uint256[] public cycles;
     /// @dev The duration between deposit and when the revenue in the cycle becomes expired.
@@ -112,16 +107,14 @@ contract RevenueStreamETH is IRevenueStreamETH, UUPSUpgradeable, AccessControlUp
         address _votingEscrow,
         address _admin
     ) external initializer {
+        __Ownable_init(_admin);
+        __UUPSUpgradeable_init();
+
         votingEscrow = _votingEscrow;
         revenueDistributor = _distributor;
 
         timeUntilExpired = 6 * (30 days); // 6 months to claim before expired
-
         cycles.push(block.timestamp);
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
-        _grantRole(SKIM_ROLE, _admin);
-        _grantRole(DEPOSITOR_ROLE, _distributor);
     }
 
 
@@ -138,7 +131,9 @@ contract RevenueStreamETH is IRevenueStreamETH, UUPSUpgradeable, AccessControlUp
      * @notice This method is used to deposit ETH into the contract to be claimed by shareholders.
      * @dev Can only be called by an address granted the `DEPOSITOR_ROLE`.
      */
-    function depositETH() payable external onlyRole(DEPOSITOR_ROLE) {
+    function depositETH() payable external {
+        require(msg.sender == revenueDistributor, "RevenueStreamETH: Not authorized");
+
         if (revenue[block.timestamp] == 0) {
             cycles.push(block.timestamp);
             revenue[currentCycle()] = msg.value;
@@ -157,7 +152,7 @@ contract RevenueStreamETH is IRevenueStreamETH, UUPSUpgradeable, AccessControlUp
      * @param account Address of shareholder that is claiming rewards.
      */
     function claimETH(address account) external returns (uint256 amount) {
-        require(account == msg.sender || hasRole(CLAIMER_ROLE, msg.sender), "unauthorized");
+        require(account == msg.sender, "RevenueStreamETH: Not authorized");
 
         uint256 cycle = currentCycle();
 
@@ -190,7 +185,7 @@ contract RevenueStreamETH is IRevenueStreamETH, UUPSUpgradeable, AccessControlUp
      *      `timeUntilExpired` duration. If skimmed, it is sent back to the RevenueDistributor contract.
      * @return amount -> Amount of expired revenue that was skimmed.
      */
-    function skimExpiredRevenue() external onlyRole(SKIM_ROLE) returns (uint256 amount) {
+    function skimExpiredRevenue() external onlyOwner returns (uint256 amount) {
         uint256[] memory expiredCycles;
         uint256 num;
         // fetch any expired cycles.
@@ -216,7 +211,7 @@ contract RevenueStreamETH is IRevenueStreamETH, UUPSUpgradeable, AccessControlUp
      * @notice This method allows a permissioned admin to update the `timeUntilExpired` variable.
      * @param _duration New duration until revenue is deemed "expired".
      */
-    function setExpirationForRevenue(uint256 _duration) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setExpirationForRevenue(uint256 _duration) external onlyOwner {
         timeUntilExpired = _duration;
     }
 
@@ -355,5 +350,5 @@ contract RevenueStreamETH is IRevenueStreamETH, UUPSUpgradeable, AccessControlUp
      * @notice Overriden from UUPSUpgradeable
      * @dev Restricts ability to upgrade contract to `DEFAULT_ADMIN_ROLE`
      */
-    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

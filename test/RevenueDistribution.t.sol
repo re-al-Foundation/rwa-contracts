@@ -158,7 +158,7 @@ contract RevenueDistributorTest is Utility {
 
         // RevenueDistributor config
         vm.startPrank(ADMIN);
-        revDistributor.grantRole(DISTRIBUTOR_ROLE, GELATO); // for gelato functions to distribute
+        revDistributor.setDistributor(GELATO, true);
         revDistributor.updateRevenueStream(payable(address(revStreamETH)));
         revDistributor.addRevenueToken(address(mockRevToken1));
         revDistributor.addRevenueToken(address(mockRevToken2));
@@ -271,8 +271,7 @@ contract RevenueDistributorTest is Utility {
 
     /// @dev Verifies initial state of RevenueDistributor contract.
     function test_revDist_init_state() public {
-        assertEq(revDistributor.hasRole(0x00, ADMIN), true);
-        assertEq(revDistributor.hasRole(DISTRIBUTOR_ROLE, ADMIN), true);
+        assertEq(revDistributor.owner(), ADMIN);
     }
 
 

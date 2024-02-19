@@ -37,6 +37,7 @@ import { IUniswapV2Router02 } from "../src/interfaces/IUniswapV2Router02.sol";
 import { IUniswapV3Factory } from "../src/interfaces/IUniswapV3Factory.sol";
 import { IUniswapV2Factory } from "../src/interfaces/IUniswapV2Factory.sol";
 import { IUniswapV2Pair } from "../src/interfaces/IUniswapV2Pair.sol";
+import { IPearlV2PoolFactory } from "../src/interfaces/IPearlV2PoolFactory.sol";
 import { ISwapRouter } from "./interfaces/ISwapRouter.sol";
 import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
 
@@ -279,6 +280,11 @@ contract MainDeploymentTest is Utility {
         // (16) pair manager must create RWA/WETH pair
         vm.startPrank(UNREAL_PAIR_MANAGER);
         pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(rwaToken), WETH);
+        vm.stopPrank();
+
+        // TODO: Call createPool on UniV3 Factory
+        vm.prank(UNREAL_PAIR_MANAGER);
+        IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 1000);
         vm.stopPrank();
 
         // (17) RWAToken config

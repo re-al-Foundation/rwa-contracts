@@ -41,6 +41,8 @@ import { IPearlV2PoolFactory } from "../src/interfaces/IPearlV2PoolFactory.sol";
 import { ISwapRouter } from "./interfaces/ISwapRouter.sol";
 import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
 
+import { INonfungiblePositionManager } from "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
+
 // helper
 import { ExactInputWrapper } from "../src/helpers/ExactInputWrapper.sol";
 
@@ -97,6 +99,9 @@ contract MainDeploymentTest is Utility {
     IUniswapV2Router02 public uniswapV2Router = IUniswapV2Router02(UNREAL_UNIV2_ROUTER);
     IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2);
     ISwapRouter public router = ISwapRouter(UNREAL_SWAP_ROUTER);
+
+    IQuoterV2 public quoter_2 = IQuoterV2(UNREAL_QUOTERV2_NEW);
+    ISwapRouter public router_2 = ISwapRouter(UNREAL_SWAP_ROUTER_NEW);
 
     address public UNREAL_ENDPOINT = address(bytes20(bytes("UNREAL ENDPOINT"))); // TODO: Replace
 
@@ -306,23 +311,54 @@ contract MainDeploymentTest is Utility {
         uint256 ETH_DEPOSIT = 15 ether;
         uint256 TOKEN_DEPOSIT = 16_500 ether;
 
+        /// @dev https://blog.uniswap.org/uniswap-v3-math-primer
+
+        uint256 initPrice = 2**96; // Q notation
+        emit log_named_uint("init price", initPrice);
+
+        // (address token0, address token1) = address(rwaToken) < WETH ? (address(rwaToken), WETH) : (WETH, address(rwaToken));
+        // emit log_named_address("token0", token0);
+        // emit log_named_address("token1", token1);
+
+        IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).initializePoolPrice(pair, uint160(initPrice));
+
+        deal(WETH, address(this), ETH_DEPOSIT);
+        IERC20(WETH).approve(UNREAL_NFTMANAGER, ETH_DEPOSIT);
+
         //rwaToken.mint(TOKEN_DEPOSIT);
         rwaToken.mintFor(address(this), TOKEN_DEPOSIT);
-        rwaToken.approve(address(UNREAL_UNIV2_ROUTER), TOKEN_DEPOSIT);
+        rwaToken.approve(UNREAL_NFTMANAGER, TOKEN_DEPOSIT);
+
+        // create params for LP mint
+        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
+            token0: address(rwaToken),
+            token1: WETH,
+            fee: 100,
+            tickLower: -100,
+            tickUpper: 100,
+            amount0Desired: TOKEN_DEPOSIT,
+            amount1Desired: ETH_DEPOSIT,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: address(this),
+            deadline: block.timestamp
+        });
+
+        INonfungiblePositionManager(UNREAL_NFTMANAGER).mint(params);
 
         // (18) Create liquidity pool. TODO: Figure out desired ratio
-        uniswapV2Router.addLiquidityETH{value: ETH_DEPOSIT}(
-            address(rwaToken),
-            TOKEN_DEPOSIT,
-            TOKEN_DEPOSIT,
-            ETH_DEPOSIT,
-            address(this),
-            block.timestamp + 300
-        );
+        // uniswapV2Router.addLiquidityETH{value: ETH_DEPOSIT}(
+        //     address(rwaToken),
+        //     TOKEN_DEPOSIT,
+        //     TOKEN_DEPOSIT,
+        //     ETH_DEPOSIT,
+        //     address(this),
+        //     block.timestamp + 300
+        // );
 
-        (uint256 reserve0, uint256 reserve1,) = IUniswapV2Pair(pair).getReserves();
-        emit log_named_uint("RWA Init Reserves", reserve0);
-        emit log_named_uint("ETH Init Reserves", reserve1);
+        // (uint256 reserve0, uint256 reserve1,) = IUniswapV2Pair(pair).getReserves();
+        // emit log_named_uint("RWA Init Reserves", reserve0);
+        // emit log_named_uint("ETH Init Reserves", reserve1);
 
         // vm.prank(address(rwaToken));
         // rwaToken.approve(address(this), TOKEN_DEPOSIT - reserve0);
@@ -363,60 +399,78 @@ contract MainDeploymentTest is Utility {
 
     /// @dev Returns the amount of $RWA tokens quoted for `amount` ETH.
     function _getQuoteBuy(uint256 amount) internal returns (uint256) {
-        address[] memory path = new address[](2);
+        IQuoterV2.QuoteExactInputSingleParams memory params = IQuoterV2.QuoteExactInputSingleParams({
+            tokenIn: WETH,
+            tokenOut: address(rwaToken),
+            amountIn: amount,
+            fee: 100,
+            sqrtPriceLimitX96: 0
+        });
 
-        path[0] = WETH;
-        path[1] = address(rwaToken);
-
-        uint256[] memory amounts = uniswapV2Router.getAmountsOut(amount, path);
-        return amounts[1];
+        (uint256 amountOut,,,) = quoter_2.quoteExactInputSingle(params);
+        return amountOut;
     }
 
     /// @dev Perform a buy
     function _buy(address actor, uint256 amount) internal {
-        address[] memory path = new address[](2);
+        vm.prank(actor);
+        WETH.call{value:amount}(abi.encodeWithSignature("deposit()"));
 
-        path[0] = WETH;
-        path[1] = address(rwaToken);
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+            tokenIn: WETH,
+            tokenOut: address(rwaToken),
+            fee: 100,
+            recipient: actor,
+            deadline: block.timestamp,
+            amountIn: amount,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
 
         vm.startPrank(actor);
-        uniswapV2Router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
-            0,
-            path,
-            actor,
-            block.timestamp + 300
-        );
+        IERC20(WETH).approve(address(router_2), amount);
+        router_2.exactInputSingle(swapParams);
         vm.stopPrank();
     }
 
     /// @dev Returns the amount of ETH quoted for `amount` $RWA.
     function _getQuoteSell(uint256 amount) internal returns (uint256) {
-        address[] memory path = new address[](2);
+        IQuoterV2.QuoteExactInputSingleParams memory params = IQuoterV2.QuoteExactInputSingleParams({
+            tokenIn: address(rwaToken),
+            tokenOut: WETH,
+            amountIn: amount,
+            fee: 100,
+            sqrtPriceLimitX96: 0
+        });
 
-        path[0] = address(rwaToken);
-        path[1] = WETH;
-
-        uint256[] memory amounts = uniswapV2Router.getAmountsOut(amount, path);
-        return amounts[1];
+        (uint256 amountOut,,,) = quoter_2.quoteExactInputSingle(params);
+        return amountOut;
     }
 
     /// @dev Perform a sell
     function _sell(address actor, uint256 amount) internal {
-        address[] memory path = new address[](2);
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(rwaToken),
+            tokenOut: WETH,
+            fee: 100,
+            recipient: actor,
+            deadline: block.timestamp,
+            amountIn: amount,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
 
-        path[0] = address(rwaToken);
-        path[1] = WETH;
+        uint256 preBal = IERC20(WETH).balanceOf(actor);
 
         vm.startPrank(actor);
-        rwaToken.approve(address(uniswapV2Router), amount);
-        uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            amount,
-            0,
-            path,
-            actor,
-            block.timestamp + 300
-        );
+        rwaToken.approve(address(router_2), amount);
+        router_2.exactInputSingle(swapParams);
         vm.stopPrank();
+
+        uint256 postBal = IERC20(WETH).balanceOf(actor);
+
+        vm.prank(actor);
+        WETH.call(abi.encodeWithSignature("withdraw(amount)", postBal - preBal));
     }
 
     /// @dev Helper method for calculate early-burn fees.
@@ -515,11 +569,11 @@ contract MainDeploymentTest is Utility {
     }
 
     /// @dev Verifies proper state changes when a user sells $RWA tokens into a UniV2Pool.
-    function test_mainDeployment_rwaToken_sell() public {
+    function test_mainDeployment_rwaToken_sell_single() public {
 
         // ~ Config ~
 
-        uint256 amountTokens = 100 ether;
+        uint256 amountTokens = 1 ether;
         rwaToken.mintFor(JOE, amountTokens);
 
         // get quote for buy
@@ -556,7 +610,7 @@ contract MainDeploymentTest is Utility {
         vm.prank(ADMIN);
         rwaToken.excludeFromFees(JOE, true);
 
-        uint256 amountTokens = 100 ether;
+        uint256 amountTokens = 5 ether;
         rwaToken.mintFor(JOE, amountTokens);
 
         // get quote for buy

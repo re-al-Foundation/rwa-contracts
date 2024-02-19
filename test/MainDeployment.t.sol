@@ -278,14 +278,13 @@ contract MainDeploymentTest is Utility {
         vm.stopPrank();
 
         // (16) pair manager must create RWA/WETH pair
-        vm.startPrank(UNREAL_PAIR_MANAGER);
-        pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(rwaToken), WETH);
-        vm.stopPrank();
+        // vm.startPrank(UNREAL_PAIR_MANAGER);
+        // pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(rwaToken), WETH);
+        // vm.stopPrank();
 
         // TODO: Call createPool on UniV3 Factory
         vm.prank(UNREAL_PAIR_MANAGER);
-        IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 1000);
-        vm.stopPrank();
+        pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
 
         // (17) RWAToken config
         vm.startPrank(ADMIN);

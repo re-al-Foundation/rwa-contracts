@@ -280,14 +280,10 @@ contract MainDeploymentTest is Utility {
         revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
         revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInput); // for V3 swaps with swapRouter
         revDistributor.setSelectorForTarget(address(exactInputWrapper), selector_exactInputWrapper);
+        revDistributor.setSelectorForTarget(address(router_2), selector_exactInput);
         vm.stopPrank();
 
         // (16) pair manager must create RWA/WETH pair
-        // vm.startPrank(UNREAL_PAIR_MANAGER);
-        // pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(rwaToken), WETH);
-        // vm.stopPrank();
-
-        // TODO: Call createPool on UniV3 Factory
         vm.prank(UNREAL_PAIR_MANAGER);
         pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
 
@@ -453,24 +449,41 @@ contract MainDeploymentTest is Utility {
             tokenIn: address(rwaToken),
             tokenOut: WETH,
             fee: 100,
-            recipient: actor,
+            recipient: address(router_2),
             deadline: block.timestamp,
             amountIn: amount,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
-        uint256 preBal = IERC20(WETH).balanceOf(actor);
+        bytes memory data1 = 
+            abi.encodeWithSignature(
+                "exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+                swapParams.tokenIn,
+                swapParams.tokenOut,
+                swapParams.fee,
+                swapParams.recipient,
+                swapParams.deadline,
+                swapParams.amountIn,
+                swapParams.amountOutMinimum,
+                swapParams.sqrtPriceLimitX96
+            );
+
+        bytes memory data2 =
+            abi.encodeWithSignature(
+                "unwrapWETH9(uint256,address)",
+                0, // minimum out
+                actor
+            );
+        
+        bytes[] memory multicallData = new bytes[](2);
+        multicallData[0] = data1;
+        multicallData[1] = data2;
 
         vm.startPrank(actor);
         rwaToken.approve(address(router_2), amount);
-        router_2.exactInputSingle(swapParams);
+        address(router_2).call(abi.encodeWithSignature("multicall(bytes[])", multicallData));
         vm.stopPrank();
-
-        uint256 postBal = IERC20(WETH).balanceOf(actor);
-
-        vm.prank(actor);
-        WETH.call(abi.encodeWithSignature("withdraw(amount)", postBal - preBal));
     }
 
     /// @dev Helper method for calculate early-burn fees.
@@ -573,7 +586,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Config ~
 
-        uint256 amountTokens = 1 ether;
+        uint256 amountTokens = 5 ether;
         rwaToken.mintFor(JOE, amountTokens);
 
         // get quote for buy
@@ -621,6 +634,7 @@ contract MainDeploymentTest is Utility {
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), amountTokens);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute sell ~
 
@@ -631,6 +645,7 @@ contract MainDeploymentTest is Utility {
         assertEq(JOE.balance, quote); // no tax taken.
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
     }
 
     /// @dev Verifies proper state changes when a user transfer tokens to another user.
@@ -3068,52 +3083,6 @@ contract MainDeploymentTest is Utility {
     // ~ Revenue Distributor ~
 
     /// @dev This unit test verifies proper state changes when RevenueDistributor::convertRewardToken is executed.
-    function test_mainDeployment_revDist_convertRewardToken_single_UniV2() public {
-
-        // ~ Config ~
-
-        uint256 amountIn = 100 ether;
-        rwaToken.mintFor(address(revDistributor), amountIn);
-
-        uint256 quoteOut = _getQuoteSell(amountIn);
-        uint256 preBal = address(revStreamETH).balance;
-
-        address[] memory path = new address[](2);
-        path[0] = address(rwaToken);
-        path[1] = WETH;
-
-        // ~ Pre-state check ~
-
-        assertEq(rwaToken.balanceOf(address(revDistributor)), amountIn);
-        assertEq(address(revStreamETH).balance, preBal);
-
-        // ~ Execute RevenueDistributor::convertRewardToken ~
-
-        vm.startPrank(ADMIN);
-        uint256 amountOut = revDistributor.convertRewardToken(
-            address(rwaToken),
-            amountIn,
-            UNREAL_UNIV2_ROUTER,
-            abi.encodeWithSignature(
-                "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
-                amountIn,
-                quoteOut,
-                path,
-                address(revDistributor),
-                block.timestamp + 100
-            )
-        );
-        vm.stopPrank();
-
-        // ~ Post-state check ~
-
-        assertEq(amountOut, quoteOut);
-
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-        assertEq(address(revStreamETH).balance, preBal + quoteOut);
-    }
-
-    /// @dev This unit test verifies proper state changes when RevenueDistributor::convertRewardToken is executed.
     function test_mainDeployment_revDist_convertRewardToken_single_UniV3() public {
 
         // ~ Config ~
@@ -3186,7 +3155,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Config ~
 
-        uint256 amountIn = 50 ether;
+        uint256 amountIn = 5 ether;
 
         rwaToken.mintFor(JOE, amountIn);
         // mint Joe veRWA token
@@ -3205,16 +3174,14 @@ contract MainDeploymentTest is Utility {
         IERC20(address(UNREAL_USTB)).transfer(address(revDistributor), amountIn);
         deal(address(UNREAL_DAI), address(revDistributor), amountIn);
 
-        // uint256 quoteOut1 = _getQuoteETH(address(mockRevToken1), amountIn);
-        // uint256 quoteOut2 = _getQuoteETH(address(mockRevToken2), amountIn);
-        // uint256 quoteOut3 = _getQuoteETH(address(rwaToken), amountIn);
+        // DAI -> WETH using UniV3
 
-        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+        ISwapRouter.ExactInputSingleParams memory swapParamsDAI = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(UNREAL_DAI),
             tokenOut: WETH,
             fee: 1000,
             recipient: address(UNREAL_SWAP_ROUTER),
-            deadline: block.timestamp + 100,
+            deadline: block.timestamp,
             amountIn: amountIn,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
@@ -3223,14 +3190,14 @@ contract MainDeploymentTest is Utility {
         bytes memory data1 = 
             abi.encodeWithSignature(
                 "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
-                swapParams.tokenIn,
-                swapParams.tokenOut,
-                swapParams.fee,
-                swapParams.recipient,
-                swapParams.deadline,
-                swapParams.amountIn,
-                swapParams.amountOutMinimum,
-                swapParams.sqrtPriceLimitX96
+                swapParamsDAI.tokenIn,
+                swapParamsDAI.tokenOut,
+                swapParamsDAI.fee,
+                swapParamsDAI.recipient,
+                swapParamsDAI.deadline,
+                swapParamsDAI.amountIn,
+                swapParamsDAI.amountOutMinimum,
+                swapParamsDAI.sqrtPriceLimitX96
             );
 
         bytes memory data2 =
@@ -3240,16 +3207,50 @@ contract MainDeploymentTest is Utility {
                 address(revDistributor)
             );
         
-        bytes[] memory multicallData = new bytes[](2);
-        multicallData[0] = data1;
-        multicallData[1] = data2;
+        bytes[] memory multicallDataDAI = new bytes[](2);
+        multicallDataDAI[0] = data1;
+        multicallDataDAI[1] = data2;
 
-        address[] memory path1 = new address[](2);
-        path1[0] = address(rwaToken);
-        path1[1] = WETH;
-        address[] memory path2 = new address[](2);
-        path2[0] = address(UNREAL_USTB);
-        path2[1] = WETH;
+        // RWA -> WETH using UniV3
+
+        ISwapRouter.ExactInputSingleParams memory swapParamsRWA = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(rwaToken),
+            tokenOut: WETH,
+            fee: 100,
+            recipient: address(router_2),
+            deadline: block.timestamp,
+            amountIn: amountIn,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
+
+        data1 = abi.encodeWithSignature(
+                "exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+                swapParamsRWA.tokenIn,
+                swapParamsRWA.tokenOut,
+                swapParamsRWA.fee,
+                swapParamsRWA.recipient,
+                swapParamsRWA.deadline,
+                swapParamsRWA.amountIn,
+                swapParamsRWA.amountOutMinimum,
+                swapParamsRWA.sqrtPriceLimitX96
+            );
+
+        data2 = abi.encodeWithSignature(
+                "unwrapWETH9(uint256,address)",
+                0, // minimum out
+                address(revDistributor)
+            );
+        
+        bytes[] memory multicallDataRWA = new bytes[](2);
+        multicallDataRWA[0] = data1;
+        multicallDataRWA[1] = data2;
+
+        // USTB -> WETH using UniV2 & config
+
+        address[] memory pathUSTB = new address[](2);
+        pathUSTB[0] = address(UNREAL_USTB);
+        pathUSTB[1] = WETH;
 
         address[] memory tokens = new address[](3);
         tokens[0] = address(rwaToken);
@@ -3262,31 +3263,24 @@ contract MainDeploymentTest is Utility {
         amounts[2] = amountIn;
 
         address[] memory targets = new address[](3);
-        targets[0] = UNREAL_UNIV2_ROUTER;
+        targets[0] = address(router_2);
         targets[1] = UNREAL_UNIV2_ROUTER;
         targets[2] = UNREAL_SWAP_ROUTER;
 
         bytes[] memory data = new bytes[](3);
         data[0] = 
-            abi.encodeWithSignature(
-                "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
-                amountIn,
-                0,
-                path1,
-                address(revDistributor),
-                block.timestamp + 100
-            );
+            abi.encodeWithSignature("multicall(bytes[])", multicallDataRWA);
         data[1] = 
             abi.encodeWithSignature(
                 "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
                 amountIn,
                 0,
-                path2,
+                pathUSTB,
                 address(revDistributor),
                 block.timestamp + 100
             );
         data[2] = 
-            abi.encodeWithSignature("multicall(bytes[])", multicallData);
+            abi.encodeWithSignature("multicall(bytes[])", multicallDataDAI);
 
         // ~ Pre-state check ~
 

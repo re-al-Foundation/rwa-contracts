@@ -147,7 +147,9 @@ contract RWATokenTest is Utility {
                 ADMIN,
                 address(revDistributor),
                 address(rwaToken),
-                MUMBAI_UNIV2_ROUTER
+                WETH,
+                MUMBAI_UNIV2_ROUTER,
+                address(0)
             )
         );
         royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));

@@ -11,8 +11,8 @@ import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC2
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // local imports
-import { IUniswapV2Router02 } from "./interfaces/IUniswapV2Router02.sol";
-import { IUniswapV2Factory } from "./interfaces/IUniswapV2Factory.sol";
+import { ISwapRouter } from "./interfaces/ISwapRouter.sol";
+import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
 
 /**
  * @title RoyaltyHandler
@@ -25,21 +25,21 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     // ---------------
     // State Variables
     // ---------------
-
-    IUniswapV2Router02 public uniswapV2Router;
     
     /// @notice Stores the address of RWAToken contract.
     IERC20 public rwaToken;
-
+    /// @notice Stores the address of the SwapRouter contract.
+    ISwapRouter public swapRouter;
+    /// @notice Stores the address of the QuoterV2 contract.
+    IQuoterV2 public quoter;
+    /// @notice Stores the address of the local WETH token contract.
+    address public WETH;
     /// @notice Stores the address to the veRWA RevenueDistributor.
     address public revDistributor;
-
     /// @notice Fee taken for burning $RWA.
     uint16 public burnPortion;
-
     /// @notice Fee taken for veRWA revenue share.
     uint16 public revSharePortion;
-
     /// @notice Fee taken for adding liquidity.
     uint16 public lpPortion;
 
@@ -91,18 +91,22 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         address _admin,
         address _revDist,
         address _rwaToken,
-        address _router
+        address _weth,
+        address _router,
+        address _quoter
     ) external initializer {
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
 
         revDistributor = _revDist;
         rwaToken = IERC20(_rwaToken);
-        uniswapV2Router = IUniswapV2Router02(_router);
+        WETH = _weth;
+        swapRouter = ISwapRouter(_router);
+        quoter = IQuoterV2(_quoter);
 
-        burnPortion = 2; // 2%
-        revSharePortion = 2; // 2%
-        lpPortion = 1; // 1%
+        burnPortion = 2; // 2/5
+        revSharePortion = 2; // 2/5
+        lpPortion = 1; // 1/5
     }
 
 
@@ -112,7 +116,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
 
     /// @dev Allows address(this) to receive ETH.
     receive() external payable {
-        require(msg.sender == address(uniswapV2Router), "not authorized ETH sender");
+        require(msg.sender == address(swapRouter), "RoyaltyHandler: unauthorized ETH sender");
     }
 
     /**
@@ -137,7 +141,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      */
     function distributeRoyalties() external {
         uint256 amount = rwaToken.balanceOf(address(this));
-        require(amount != 0, "insufficient balance");
+        require(amount != 0, "RoyaltyHandler: insufficient balance");
         _handleRoyalties(amount);
     }
 
@@ -159,7 +163,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
 
         // burn
         (bool success,) = address(rwaToken).call(abi.encodeWithSignature("burn(uint256)", amountToBurn));
-        require(success, "burn unsuccessful");
+        require(success, "RoyaltyHandler: burn unsuccessful");
 
         // rev share
         rwaToken.safeTransfer(revDistributor, amountForRevShare);
@@ -179,22 +183,57 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param tokenAmount Amount of $RWA tokens being swapped/sold for ETH.
      */
     function _swapTokensForETH(uint256 tokenAmount) internal {
-        // generate the uniswap pair path of token -> weth
-        address[] memory path = new address[](2);
-        path[0] = address(rwaToken);
-        path[1] = uniswapV2Router.WETH();
 
-        rwaToken.approve(address(uniswapV2Router), tokenAmount);
-        uint256[] memory amounts = uniswapV2Router.getAmountsOut(tokenAmount, path);
+        // a. Get quote
+        IQuoterV2.QuoteExactInputSingleParams memory quoteParams = IQuoterV2.QuoteExactInputSingleParams({
+            tokenIn: address(rwaToken),
+            tokenOut: WETH,
+            amountIn: tokenAmount,
+            fee: 100,
+            sqrtPriceLimitX96: 0
+        });
+        (uint256 amountOut,,,) = quoter.quoteExactInputSingle(quoteParams);
 
-        // make the swap
-        uniswapV2Router.swapExactTokensForETH(
-            tokenAmount,
-            amounts[1],
-            path,
-            address(this),
-            block.timestamp
-        );
+        // b. build swap params
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(rwaToken),
+            tokenOut: WETH,
+            fee: 100,
+            recipient: address(swapRouter),
+            deadline: block.timestamp,
+            amountIn: tokenAmount,
+            amountOutMinimum: amountOut,
+            sqrtPriceLimitX96: 0
+        });
+
+        bytes memory swap = 
+            abi.encodeWithSignature(
+                "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+                swapParams.tokenIn,
+                swapParams.tokenOut,
+                swapParams.fee,
+                swapParams.recipient,
+                swapParams.deadline,
+                swapParams.amountIn,
+                swapParams.amountOutMinimum,
+                swapParams.sqrtPriceLimitX96
+            );
+
+        bytes memory unwrap =
+            abi.encodeWithSignature(
+                "unwrapWETH9(uint256,address)",
+                amountOut,
+                address(this)
+            );
+        
+        bytes[] memory multicallData = new bytes[](2);
+        multicallData[0] = swap;
+        multicallData[1] = unwrap;
+
+        // c. swap
+        rwaToken.approve(address(swapRouter), tokenAmount);
+        (bool success,) = address(swapRouter).call(abi.encodeWithSignature("multicall(bytes[])", multicallData));
+        require(success, "RoyaltyHandler: swap failed");
     }
 
     /**
@@ -203,16 +242,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param amountETH Desired amount of ETH to add to pool.
      */
     function _addLiquidity(uint256 tokensForLp, uint256 amountETH) internal {
-        rwaToken.approve(address(uniswapV2Router), tokensForLp);
-        // add liquidity to LP
-        uniswapV2Router.addLiquidityETH{value: amountETH}(
-            address(rwaToken),
-            tokensForLp,
-            0, // since ratio will be unknown, assign 0 RWA minimum
-            0, // since ratio will be unknown, assign 0 ETH minimum
-            owner(),
-            block.timestamp
-        );
+        // TODO
     }
 
     /**

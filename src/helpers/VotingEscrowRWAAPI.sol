@@ -23,6 +23,18 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     /// @dev Contract reference for RevenueStreamETH.
     RevenueStreamETH public revStream;
 
+    /// @dev Object used to return veRWA token data.
+    struct TokenData {
+        /// @dev Token identifier.
+        uint256 tokenId;
+        /// @dev Amount of RWA locked in token.
+        uint256 lockedAmount;
+        /// @dev Remaining duration left to vest until lock expired.
+        uint256 remainingDuration;
+        /// @dev Voting power of token.
+        uint256 votingPower;
+    }
+
 
     // -----------
     // Constructor
@@ -100,27 +112,17 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     /**
      * @notice Returns an array of tokenIds owned by an address. It also returns the locked amount of RWA and remaining duration of each NFT.
      * @param account Address of account we wish to fetch array of NFTs in custody of.
-     * @return tokenIds Array of tokenIds owned by `account`.
-     * @return lockedAmount Array of locked amount of RWA in lock. Indexes correspond with `tokenIds`.
-     * @return remainingDuration Array of remaining duration of each lock. Indexes correspond with `tokenIds`.
+     * @return tokenData Array of token data.
      */
-    function getNFTsOfOwnerWithData(address account) external view returns (
-        uint256[] memory tokenIds,
-        uint256[] memory lockedAmount, 
-        uint256[] memory remainingDuration
-    ) {
+    function getNFTsOfOwnerWithData(address account) external view returns (TokenData[] memory tokenData) {
         uint256 amount = veRWA.balanceOf(account);
-
-        tokenIds = new uint256[](amount);
-        lockedAmount = new uint256[](amount);
-        remainingDuration = new uint256[](amount);
+        tokenData = new TokenData[](amount);
 
         for (uint256 i; i < amount;) {
-
-            tokenIds[i] = veRWA.tokenOfOwnerByIndex(account, i);
-            lockedAmount[i] = veRWA.getLockedAmount(tokenIds[i]);
-            remainingDuration[i] = veRWA.getRemainingVestingDuration(tokenIds[i]);
-
+            tokenData[i].tokenId = veRWA.tokenOfOwnerByIndex(account, i);
+            tokenData[i].lockedAmount = veRWA.getLockedAmount(tokenData[i].tokenId);
+            tokenData[i].remainingDuration = veRWA.getRemainingVestingDuration(tokenData[i].tokenId);
+            tokenData[i].votingPower = veRWA.getPastVotingPower(tokenData[i].tokenId, block.timestamp);
             unchecked {
                 ++i;
             }

@@ -25,8 +25,8 @@ import { ExactInputWrapper } from "../../../src/helpers/ExactInputWrapper.sol";
 // uniswap
 import { IUniswapV2Router02 } from "../../../src/interfaces/IUniswapV2Router02.sol";
 
-import { ISwapRouter } from "../../../test/interfaces/ISwapRouter.sol";
-import { IQuoterV2 } from "../../../test/interfaces/IQuoterV2.sol";
+import { ISwapRouter } from "../../../src/interfaces/ISwapRouter.sol";
+import { IQuoterV2 } from "../../../src/interfaces/IQuoterV2.sol";
 
 //helper contracts
 import "../../../test/utils/Constants.sol";

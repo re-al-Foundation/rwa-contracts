@@ -122,7 +122,7 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
             tokenData[i].tokenId = veRWA.tokenOfOwnerByIndex(account, i);
             tokenData[i].lockedAmount = veRWA.getLockedAmount(tokenData[i].tokenId);
             tokenData[i].remainingDuration = veRWA.getRemainingVestingDuration(tokenData[i].tokenId);
-            tokenData[i].votingPower = veRWA.getPastVotingPower(tokenData[i].tokenId, block.timestamp);
+            tokenData[i].votingPower = veRWA.getPastVotingPower(tokenData[i].tokenId, block.timestamp-1);
             unchecked {
                 ++i;
             }

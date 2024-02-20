@@ -17,7 +17,8 @@ import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
 /**
  * @title RoyaltyHandler
  * @author @chasebrownn
- * @notice TODO
+ * @notice This contract accrues royalties from RWAToken swap taxes and when triggered, will distribute royalties
+ *         to burn, RevenueDistributor, and to ALM.
  */
 contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     using SafeERC20 for IERC20;
@@ -36,6 +37,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     address public WETH;
     /// @notice Stores the address to the veRWA RevenueDistributor.
     address public revDistributor;
+    /// @notice Fee of the RWA/WETH pool this contract uses for swapping/liquidity.
+    uint24 public poolFee;
     /// @notice Fee taken for burning $RWA.
     uint16 public burnPortion;
     /// @notice Fee taken for veRWA revenue share.
@@ -107,6 +110,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         burnPortion = 2; // 2/5
         revSharePortion = 2; // 2/5
         lpPortion = 1; // 1/5
+
+        poolFee = 100;
     }
 
 
@@ -134,6 +139,15 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         lpPortion = _lpPortion;
 
         emit DistributionUpdated(_burnPortion, _revSharePortion, _lpPortion);
+    }
+
+    /**
+     * @notice This method allows a permissioned admin to update the pool fee on the RWA/WETH pool it uses to swap RWA->WETH.
+     * @param _fee pool fee.
+     */
+    function updateFee(uint24 _fee) external onlyOwner {
+        require(_fee == 100 || _fee == 500 || _fee == 3000 || _fee == 10000, "RoyaltyHandler: Invalid fee");
+        poolFee = _fee;
     }
 
     /**
@@ -189,7 +203,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
             tokenIn: address(rwaToken),
             tokenOut: WETH,
             amountIn: tokenAmount,
-            fee: 100,
+            fee: poolFee,
             sqrtPriceLimitX96: 0
         });
         (uint256 amountOut,,,) = quoter.quoteExactInputSingle(quoteParams);
@@ -198,7 +212,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(rwaToken),
             tokenOut: WETH,
-            fee: 100,
+            fee: poolFee,
             recipient: address(swapRouter),
             deadline: block.timestamp,
             amountIn: tokenAmount,
@@ -242,7 +256,12 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param amountETH Desired amount of ETH to add to pool.
      */
     function _addLiquidity(uint256 tokensForLp, uint256 amountETH) internal {
-        // TODO
+        // TODO send to Automatic Liquidity Manager
+        // Liquidity Box
+
+        // 1. Add liquidity via LiquidBoxManager.deposit
+        // 2. Stake LP tokens on GaugeV2ALM
+        // 3. Receive Pearl emissions
     }
 
     /**

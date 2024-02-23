@@ -149,6 +149,8 @@ contract RWATokenTest is Utility {
                 address(rwaToken),
                 WETH,
                 MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0),
                 address(0)
             )
         );

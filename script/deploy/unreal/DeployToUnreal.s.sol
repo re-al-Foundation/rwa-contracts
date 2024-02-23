@@ -9,6 +9,7 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 // local imports
 // token
 import { RWAToken } from "../../../src/RWAToken.sol";
+import { RoyaltyHandler } from "../../../src/RoyaltyHandler.sol";
 import { RWAVotingEscrow } from "../../../src/governance/RWAVotingEscrow.sol";
 // governance
 import { VotingEscrowVesting } from "../../../src/governance/VotingEscrowVesting.sol";
@@ -31,7 +32,7 @@ import { IUniswapV2Router02 } from "../../../src/interfaces/IUniswapV2Router02.s
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
-/// @dev To run: forge script script/deploy/unreal/DeployToUnreal.s.sol:DeployToUnreal --broadcast --verify --legacy -vvvv
+/// @dev To run: forge script script/deploy/unreal/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 /// @dev To verify: forge verify-contract <CONTRACT_ADDRESS> --chain-id 18231 --watch src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api
 
 /**
@@ -46,6 +47,7 @@ contract DeployToUnreal is Script {
     // core contracts
     RWAVotingEscrow public veRWA;
     RWAToken public rwaToken;
+    RoyaltyHandler public royaltyHandler;
 
     VotingEscrowVesting public vesting;
     DelegateFactory public delegateFactory;
@@ -59,6 +61,7 @@ contract DeployToUnreal is Script {
     // proxies
     ERC1967Proxy public veRWAProxy;
     ERC1967Proxy public rwaTokenProxy;
+    ERC1967Proxy public royaltyHandlerProxy;
 
     ERC1967Proxy public vestingProxy;
     ERC1967Proxy public delegateFactoryProxy;
@@ -176,11 +179,30 @@ contract DeployToUnreal is Script {
         console2.log("revDistributor", address(revDistributorProxy));
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));
 
-        // (11) Deploy revStreamETH contract
+        // (11) Deploy royaltyHandler base
+        royaltyHandler = new RoyaltyHandler();
+        console2.log("royaltyHandler Implementation", address(royaltyHandler));
+
+        // (12) Deploy proxy for royaltyHandler
+        royaltyHandlerProxy = new ERC1967Proxy(
+            address(royaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                adminAddress,
+                address(revDistributor),
+                address(rwaToken),
+                UNREAL_WETH,
+                UNREAL_SWAP_ROUTER_NEW,
+                UNREAL_QUOTERV2_NEW
+            )
+        );
+        console2.log("royaltyHandler", address(royaltyHandlerProxy));
+        royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
+
+        // (13) Deploy revStreamETH contract
         revStreamETH = new RevenueStreamETH();
         console2.log("revStreamETH Implementation", address(revStreamETH));
 
-        // (12) Deploy proxy for revStreamETH
+        // (14) Deploy proxy for revStreamETH
         revStreamETHProxy = new ERC1967Proxy(
             address(revStreamETH),
             abi.encodeWithSelector(RevenueStreamETH.initialize.selector,
@@ -192,15 +214,15 @@ contract DeployToUnreal is Script {
         console2.log("revStreamETH", address(revStreamETHProxy));
         revStreamETH = RevenueStreamETH(payable(address(revStreamETHProxy)));
 
-        // (13) Deploy Delegator implementation
+        // (15) Deploy Delegator implementation
         delegator = new Delegator();
         console2.log("delegator Implementation", address(delegator));
 
-        // (14) Deploy DelegateFactory
+        // (16) Deploy DelegateFactory
         delegateFactory = new DelegateFactory();
         console2.log("delegateFactory Implementation", address(delegateFactory));
 
-        // (15) Deploy DelegateFactory proxy
+        // (17) Deploy DelegateFactory proxy
         delegateFactoryProxy = new ERC1967Proxy(
             address(delegateFactory),
             abi.encodeWithSelector(DelegateFactory.initialize.selector,
@@ -214,71 +236,77 @@ contract DeployToUnreal is Script {
         
         // ~ Config ~
 
-        // (14) set votingEscrow on vesting contract
+        // (18) set votingEscrow on vesting contract
         vesting.setVotingEscrowContract(address(veRWA));
 
-        // (15) RevenueDistributor config
-        // (15a) grant DISTRIBUTOR_ROLE to Gelato functions
+        // (19) RevenueDistributor config
+        // (19a) grant DISTRIBUTOR_ROLE to Gelato functions
         //revDistributor.grantRole(DISTRIBUTOR_ROLE, GELATO); // for gelato functions to distribute TODO
-        // (15b) add revStream contract
+        // (19b) add revStream contract
         revDistributor.updateRevenueStream(payable(address(revStreamETH)));
-        // (15c) add revenue streams
+        // (19c) add revenue streams
         revDistributor.addRevenueToken(address(rwaToken)); // from RWA buy/sell taxes
         revDistributor.addRevenueToken(UNREAL_DAI); // DAI - bridge yield (ETH too)
         //revDistributor.addRevenueToken(address(0)); // MORE - Borrowing fees (note not deployed) TODO
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
-        // (15d) add necessary selectors for swaps
-        revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
-        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInput); // for V3 swaps with swapRouter
+        // (19d) add necessary selectors for swaps
+        //revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
+        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER_NEW, selector_exactInput); // for V3 swaps with swapRouter
 
-        // (16) pair manager must create RWA/WETH pair
-        //      TODO: Have pearl UniV2 pair manager create the RWA/WETH pair
+        // (20) pair manager must create RWA/WETH pair
+        //      TODO: Have pearlV2 pair manager create the RWA/WETH pair
         //vm.startPrank(UNREAL_PAIR_MANAGER);
-        //address pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(rwaToken), WETH);
+        //address pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
 
-        // (17) RWAToken config
-        // (17a) TODO: set uniswap pair
-        // rwaToken.setUniswapV2Pair(pair);
-        // (17b) set veRWA
+        // (21) RWAToken config
+        // (21a) TODO: set pair
+        // rwaToken.setAutomatedMarketMakerPair(pair);
+        // (21b) set veRWA
         rwaToken.setVotingEscrowRWA(address(veRWA)); // for RWAVotingEscrow:migrate
-        // (17c) whitelist
-        rwaToken.excludeFromFees(address(veRWA), true);
+        // set RealReceiver
+        // rwaToken.setReceiver(address(this)); // for testing TODO
+        // (21c) whitelist
         rwaToken.excludeFromFees(address(revDistributor), true);
-        // (17d) set revenue distributor
-        //rwaToken.setRevenueDistributor(address(revDistributor));
+        // (21d) set royalty handler
+        rwaToken.setRoyaltyHandler(address(royaltyHandler));
 
-        // (18) TODO: create the RWA/WETH pool
+        rwaToken.mint(1_000_000 ether); // for testnet testing
+
+        // (22) TODO: create the RWA/WETH pool
 
         vm.stopBroadcast();
     }
 }
 
 // == Logs ==
-//   RWA Implementation 0xfA609181778B8494c680544A14De4eDa35F51D72 ✅
-//   RWA 0xC9f2381e3f22e912e34033734977B58544518BFA ✅
-//   vesting Implementation 0x3132BD707C017B7EC1Ff9f4C99C2ca0033747F35 ✅
-//   vesting 0xC176C092BE752E1193E48Ac6B0bBA69Ff30ab201 ✅
-//   veRWA Implementation 0xC556F5307D57163478EF56dB64C658D8879E4aa2 ✅
-//   veRWA 0x7c501F5f0A23Dc39Ac43d4927ff9f7887A01869B ✅
-//   revDistributor Implementation 0x6a2EA328DE836222BFC7bEA20C348856d2770a99 ✅
-//   revDistributor 0xd0A610E26732aA01960BE87598106240a93b6595 ✅
-//   revStreamETH Implementation 0x4a18685C617eac56EDF5F62227f2E8223E45Ff38 ✅
-//   revStreamETH 0x541c058d0D7Ab8474Ea10fb090677FaD992256d9 ✅
-//   delegator Implementation 0xBebe0cF3b3C881265803018fF211aBfc96FB3B61 ✅
-//   delegateFactory Implementation 0x95A3Af3e65A669792d5AbD2e058C4EcC34A98eBb ✅
-//   delegateFactory 0xAf960b9B057f59c68e55Ff9aC29966d9bf62b71B ✅
+//   RWA 0xC9f2381e3f22e912e34033734977B58544518BFA
+//   vesting 0xC176C092BE752E1193E48Ac6B0bBA69Ff30ab201
+//   veRWA 0x7c501F5f0A23Dc39Ac43d4927ff9f7887A01869B
+//   revDistributor 0xd0A610E26732aA01960BE87598106240a93b6595
+//   revStreamETH 0x541c058d0D7Ab8474Ea10fb090677FaD992256d9
+//   delegateFactory 0xAf960b9B057f59c68e55Ff9aC29966d9bf62b71B
 
 // == Logs ==
-//   RWA Implementation 0xbDcCE39CF7bCB69Fbd716c894439f52217Eb5e40 ✅
-//   RWA 0x909Fd75Ce23a7e61787FE2763652935F92116461 ✅
-//   vesting Implementation 0xBe1d3320E1020910Cd3eb385ADc220e39E355640 ✅
-//   vesting 0xEE1643c7ED4e195893025df09E757Cc526F757F9 ✅
-//   veRWA Implementation 0x345D4dA62A1670891d697C2be5ADC38F625dE037 ✅
-//   veRWA 0x6fa3d2CB3dEBE19e10778F3C3b95A6cDF911fC5B ✅
-//   revDistributor Implementation 0xD06c6091f3c29c989172A64ce30AF84981c59D48 ✅
-//   revDistributor 0xa443Bf2fCA2119bFDb97Bc01096fBC4F1546c8Ae ✅
-//   revStreamETH Implementation 0xC781b3c9402DfEf5c94b57FC2c4741eb3E606193 ✅
-//   revStreamETH 0x4f233dbA3E21D762AeAf7c81103A15A8980706B3 ✅
-//   delegator Implementation 0xCfAEc6bBB31C69a1CF0108aF8936d9fC76B4D9E0 ✅
-//   delegateFactory Implementation 0x3D476cF33307c3407A72399a10CA633480E0BdaE ✅
-//   delegateFactory 0x6Ca53fe01D1007Ae89Ad730F5c66515819fD5145 ✅
+//   RWA 0x909Fd75Ce23a7e61787FE2763652935F92116461
+//   vesting 0xEE1643c7ED4e195893025df09E757Cc526F757F9
+//   veRWA 0x6fa3d2CB3dEBE19e10778F3C3b95A6cDF911fC5B
+//   revDistributor 0xa443Bf2fCA2119bFDb97Bc01096fBC4F1546c8Ae
+//   revStreamETH 0x4f233dbA3E21D762AeAf7c81103A15A8980706B3
+//   delegateFactory 0x6Ca53fe01D1007Ae89Ad730F5c66515819fD5145
+
+// == Logs ==
+//   RWA Implementation 0x8203bC5734B2d70287419F41eEd24878c9c006Fc
+//   RWA 0xdb2664cc9C9a16a8e0608f6867bD67158AF59397
+//   vesting Implementation 0xFd502b52B5B5b6ED097b307F168d296C4F7189b1
+//   vesting 0x0f3be26c5eF6451823BD816B68E9106C8B65A5DA
+//   veRWA Implementation 0x524BB37efDFcD2015fee2b41236579237db4CceE
+//   veRWA 0x2afD4dC7649c2545Ab1c97ABBD98487B6006f7Ae
+//   revDistributor Implementation 0xECB70e89638b42a5e9eC7a51E5FD229c4b40ed2A
+//   revDistributor 0x56843df02d5A230929B3A572ACEf5048d5dB76db
+//   royaltyHandler Implementation 0x5100990DC69Bc2A41e5C3409B3e41B40F606089a
+//   royaltyHandler 0x138A0c41f9a8b99a07cA3B4cABc711422B7d8EAB
+//   revStreamETH Implementation 0xB6C3f7dE6bf3137F30c64c77C691BC0CA889B3da
+//   revStreamETH 0x5d79976Be5814FDC8d5199f0ba7fC3764082D635
+//   delegator Implementation 0x8f9d60D80EE3F6c7e47b3a937823F28B75AB75ab
+//   delegateFactory Implementation 0x6aA4A24Dd0624f24A6deD6435351bcb4Beb3CD20
+//   delegateFactory 0xe988F47f227c7118aeB0E2954Ce6eed8822303d0

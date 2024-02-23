@@ -13,6 +13,8 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 // local imports
 import { ISwapRouter } from "./interfaces/ISwapRouter.sol";
 import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
+import { ILiquidBoxManager } from "./interfaces/ILiquidBoxManager.sol";
+import { IGaugeV2ALM } from "./interfaces/IGaugeV2ALM.sol";
 
 /**
  * @title RoyaltyHandler
@@ -34,7 +36,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     /// @notice Stores the address of the QuoterV2 contract.
     IQuoterV2 public quoter;
     /// @notice Stores the address of the local WETH token contract.
-    address public WETH;
+    IERC20 public WETH;
     /// @notice Stores the address to the veRWA RevenueDistributor.
     address public revDistributor;
     /// @notice Fee of the RWA/WETH pool this contract uses for swapping/liquidity.
@@ -45,6 +47,12 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     uint16 public revSharePortion;
     /// @notice Fee taken for adding liquidity.
     uint16 public lpPortion;
+    /// @notice Stores contract reference of LiquidBoxManager contract.
+    ILiquidBoxManager public boxManager;
+    /// @notice Stores address of ERC20 ALM LP tokens.
+    address public box;
+    /// @notice Stores contract reference to GaugeV2ALM for staking `box` tokens.
+    IGaugeV2ALM public gaugeV2ALM;
 
 
     // ------
@@ -96,16 +104,20 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         address _rwaToken,
         address _weth,
         address _router,
-        address _quoter
+        address _quoter,
+        address _boxManager,
+        address _gaugeV2
     ) external initializer {
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
 
         revDistributor = _revDist;
         rwaToken = IERC20(_rwaToken);
-        WETH = _weth;
+        WETH = IERC20(_weth);
         swapRouter = ISwapRouter(_router);
         quoter = IQuoterV2(_quoter);
+        boxManager = ILiquidBoxManager(_boxManager);
+        gaugeV2ALM = IGaugeV2ALM(_gaugeV2);
 
         burnPortion = 2; // 2/5
         revSharePortion = 2; // 2/5
@@ -119,9 +131,13 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     // External Methods
     // ----------------
 
-    /// @dev Allows address(this) to receive ETH.
-    receive() external payable {
-        require(msg.sender == address(swapRouter), "RoyaltyHandler: unauthorized ETH sender");
+    /**
+     * @notice This method allows a permissioned admin to distribute all $RWA royalties collected in this contract.
+     */
+    function distributeRoyalties() external {
+        uint256 amount = rwaToken.balanceOf(address(this));
+        require(amount != 0, "RoyaltyHandler: insufficient balance");
+        _handleRoyalties(amount);
     }
 
     /**
@@ -142,6 +158,27 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     /**
+     * @notice This method is used to update the `box` variable.
+     */
+    function setALMBox(address _box) external onlyOwner {
+        box = _box;
+    }
+    
+    /**
+     * @notice This method is used to update the `boxManager` variable.
+     */
+    function setALMBoxManager(address _boxManager) external onlyOwner {
+        boxManager = ILiquidBoxManager(_boxManager);
+    }
+
+    /**
+     * @notice This method is used to update the `gaugeV2ALM` variable.
+     */
+    function setGaugeV2ALM(address _gaugeV2) external onlyOwner {
+        gaugeV2ALM = IGaugeV2ALM(_gaugeV2);
+    }
+
+    /**
      * @notice This method allows a permissioned admin to update the pool fee on the RWA/WETH pool it uses to swap RWA->WETH.
      * @param _fee pool fee.
      */
@@ -150,13 +187,16 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         poolFee = _fee;
     }
 
-    /**
-     * @notice This method allows a permissioned admin to distribute all $RWA royalties collected in this contract.
-     */
-    function distributeRoyalties() external {
-        uint256 amount = rwaToken.balanceOf(address(this));
-        require(amount != 0, "RoyaltyHandler: insufficient balance");
-        _handleRoyalties(amount);
+    function withdrawPearl() external onlyOwner {
+        // TODO
+    }
+
+    function harvestPearlRewards() external onlyOwner {
+        // TODO Harvest pearl emissions
+    }
+
+    function earnedPearlRewards() external view returns (uint256) {
+        // TODO query earned rewards from staked LP tokens
     }
 
     
@@ -187,7 +227,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         amountForLp -= tokensForEth;
 
         _swapTokensForETH(tokensForEth);
-        _addLiquidity(amountForLp, address(this).balance);
+        _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
 
         emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
     }
@@ -201,7 +241,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         // a. Get quote
         IQuoterV2.QuoteExactInputSingleParams memory quoteParams = IQuoterV2.QuoteExactInputSingleParams({
             tokenIn: address(rwaToken),
-            tokenOut: WETH,
+            tokenOut: address(WETH),
             amountIn: tokenAmount,
             fee: poolFee,
             sqrtPriceLimitX96: 0
@@ -211,57 +251,51 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         // b. build swap params
         ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(rwaToken),
-            tokenOut: WETH,
+            tokenOut: address(WETH),
             fee: poolFee,
-            recipient: address(swapRouter),
+            recipient: address(this),
             deadline: block.timestamp,
             amountIn: tokenAmount,
             amountOutMinimum: amountOut,
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory swap = 
-            abi.encodeWithSignature(
-                "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
-                swapParams.tokenIn,
-                swapParams.tokenOut,
-                swapParams.fee,
-                swapParams.recipient,
-                swapParams.deadline,
-                swapParams.amountIn,
-                swapParams.amountOutMinimum,
-                swapParams.sqrtPriceLimitX96
-            );
-
-        bytes memory unwrap =
-            abi.encodeWithSignature(
-                "unwrapWETH9(uint256,address)",
-                amountOut,
-                address(this)
-            );
-        
-        bytes[] memory multicallData = new bytes[](2);
-        multicallData[0] = swap;
-        multicallData[1] = unwrap;
-
         // c. swap
         rwaToken.approve(address(swapRouter), tokenAmount);
-        (bool success,) = address(swapRouter).call(abi.encodeWithSignature("multicall(bytes[])", multicallData));
-        require(success, "RoyaltyHandler: swap failed");
+
+        uint256 preBal = WETH.balanceOf(address(this));
+        swapRouter.exactInputSingle(swapParams);
+
+        require(preBal + amountOut == WETH.balanceOf(address(this)), "RoyaltyHandler: Insufficient WETH received");
     }
 
     /**
-     * @notice This internal method adds liquidity to the $RWA/ETH pool.
-     * @param tokensForLp Desired amount of $RWA tokens to add to pool.
-     * @param amountETH Desired amount of ETH to add to pool.
+     * @notice This internal method adds liquidity to the $RWA/WETH pool via an ALM.
+     * @dev amount0Min and amount1Min arguments are set to 0 to ensure the liquidity goes through to the ALM.
+     *      The amount added to the pool is minimal so front running isn't a worry.
+     * @param amountRWA Desired amount of $RWA tokens to add to pool.
+     * @param amountWETH Desired amount of WETH to add to pool.
      */
-    function _addLiquidity(uint256 tokensForLp, uint256 amountETH) internal {
-        // TODO send to Automatic Liquidity Manager
-        // Liquidity Box
+    function _addLiquidity(uint256 amountRWA, uint256 amountWETH) internal {
+        // a. Add liquidity via LiquidBoxManager.deposit
+        IERC20(address(rwaToken)).approve(address(boxManager), amountRWA);
+        IERC20(address(WETH)).approve(address(boxManager), amountWETH);
+        uint256 shares = boxManager.deposit(
+            box,
+            amountRWA,
+            amountWETH,
+            0, // amount0Min
+            0  // amount1Min
+        );
 
-        // 1. Add liquidity via LiquidBoxManager.deposit
-        // 2. Stake LP tokens on GaugeV2ALM
-        // 3. Receive Pearl emissions
+        require(shares != 0, "RoyaltyHandler: Insufficient LP Tokens");
+        uint256 preBal = IERC20(box).balanceOf(address(this));
+
+        // b. Stake LP tokens on GaugeV2ALM
+        IERC20(box).approve(address(gaugeV2ALM), shares);
+        gaugeV2ALM.deposit(shares);
+
+        require(preBal - shares == IERC20(box).balanceOf(address(this)), "RoyaltyHandler: Failed to deposit shares");
     }
 
     /**

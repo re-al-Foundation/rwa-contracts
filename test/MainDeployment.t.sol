@@ -41,6 +41,9 @@ import { IUniswapV2Pair } from "../src/interfaces/IUniswapV2Pair.sol";
 import { IPearlV2PoolFactory } from "../src/interfaces/IPearlV2PoolFactory.sol";
 import { ISwapRouter } from "../src/interfaces/ISwapRouter.sol";
 import { IQuoterV2 } from "../src/interfaces/IQuoterV2.sol";
+import { ILiquidBoxFactory } from "../src/interfaces/ILiquidBoxFactory.sol";
+import { IGaugeV2Factory } from "../src/interfaces/IGaugeV2Factory.sol";
+import { IVoter } from "../src/interfaces/IVoter.sol";
 
 // helpers
 import { ExactInputWrapper } from "../src/helpers/ExactInputWrapper.sol";
@@ -201,7 +204,9 @@ contract MainDeploymentTest is Utility {
                 address(rwaToken),
                 UNREAL_WETH,
                 address(router_2),
-                address(quoter_2)
+                address(quoter_2),
+                UNREAL_BOX_MANAGER,
+                UNREAL_GAUGEV2ALM
             )
         );
         royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
@@ -270,7 +275,7 @@ contract MainDeploymentTest is Utility {
         // (22c) add revenue streams
         revDistributor.addRevenueToken(address(rwaToken)); // from RWA buy/sell taxes
         revDistributor.addRevenueToken(UNREAL_DAI); // DAI - bridge yield (ETH too)
-        revDistributor.addRevenueToken(address(0)); // MORE - Borrowing fees (note not deployed)
+        //revDistributor.addRevenueToken(address(0)); // MORE - Borrowing fees (note not deployed)
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
         // (22d) add necessary selectors for swaps
         revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
@@ -282,6 +287,22 @@ contract MainDeploymentTest is Utility {
         // (23) pair manager must create RWA/WETH pair
         vm.prank(UNREAL_PAIR_MANAGER);
         pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
+        // (23a) create ALM box for lp
+        vm.prank(UNREAL_BOX_FAC_MANAGER);
+        address box = ILiquidBoxFactory(UNREAL_BOX_FACTORY).createLiquidBox(address(rwaToken), WETH, address(this), 100, "RWA Box", "RWABOX");
+        // (23b) create GaugeV2ALM
+        //vm.prank(IVoter(UNREAL_VOTER).governor());
+        //(address gauge) = IVoter(UNREAL_VOTER).createGauge(pair, abi.encodePacked(uint16(1), uint256(200000)));
+        (,address gALM) = IGaugeV2Factory(UNREAL_GAUGEV2_FACTORY).createGauge(
+            18231,
+            18231,
+            UNREAL_PEARLV2_FACTORY,
+            pair,
+            UNREAL_PEARL,
+            address(this),
+            address(this),
+            true
+        );
 
         // (24) RWAToken config
         vm.startPrank(ADMIN);
@@ -292,8 +313,12 @@ contract MainDeploymentTest is Utility {
         rwaToken.setVotingEscrowRWA(address(veRWA));
         rwaToken.setReceiver(address(this)); // for testing
         // (24c) whitelist
-        rwaToken.excludeFromFees(address(veRWA), true);
         rwaToken.excludeFromFees(address(revDistributor), true);
+        vm.stopPrank();
+
+        vm.startPrank(ADMIN);
+        royaltyHandler.setALMBox(box);
+        royaltyHandler.setGaugeV2ALM(gALM);
         vm.stopPrank();
 
         // ~ RWA/WETH Pool creation ~

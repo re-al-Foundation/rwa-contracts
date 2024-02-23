@@ -25,9 +25,9 @@ contract DeployAPI is Script {
     // ~ Contracts ~
 
     // core contracts
-    address public veRWA = payable(0x6fa3d2CB3dEBE19e10778F3C3b95A6cDF911fC5B);
-    address public vesting = payable(0xEE1643c7ED4e195893025df09E757Cc526F757F9);
-    address public revStream = payable(0xeDfe244aBf03999DdAEE52E2D3E61d27517708a8);
+    address public veRWA = payable(0x2afD4dC7649c2545Ab1c97ABBD98487B6006f7Ae);
+    address public vesting = payable(0x0f3be26c5eF6451823BD816B68E9106C8B65A5DA);
+    address public revStream = payable(0x5d79976Be5814FDC8d5199f0ba7fC3764082D635);
 
     VotingEscrowRWAAPI public api;
     ERC1967Proxy public apiProxy;
@@ -72,4 +72,4 @@ contract DeployAPI is Script {
 }
 
 // == Logs ==
-//   API = 0x70805d3Fa831608eED291Be797f726231f15316a
+//   API = 0xEE08C27028409669534d2D7c990D3b9B13DF03c5

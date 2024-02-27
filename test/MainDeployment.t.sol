@@ -291,7 +291,7 @@ contract MainDeploymentTest is Utility {
         pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
         // (23a) create ALM box for lp
         vm.prank(UNREAL_BOX_FAC_MANAGER);
-        box = ILiquidBoxFactory(UNREAL_BOX_FACTORY).createLiquidBox(address(rwaToken), WETH, address(this), 100, "RWA Box", "RWABOX");
+        box = ILiquidBoxFactory(UNREAL_BOX_FACTORY).createLiquidBox(address(rwaToken), WETH, 100, "RWA Box", "RWABOX");
         // (23b) create GaugeV2ALM
         //vm.prank(IVoter(UNREAL_VOTER).governor());
         //(address gauge) = IVoter(UNREAL_VOTER).createGauge(pair, abi.encodePacked(uint16(1), uint256(200000)));
@@ -449,41 +449,26 @@ contract MainDeploymentTest is Utility {
             tokenIn: address(rwaToken),
             tokenOut: WETH,
             fee: 100,
-            recipient: address(router_2),
+            recipient: address(this),
             deadline: block.timestamp,
             amountIn: amount,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory data1 = 
-            abi.encodeWithSignature(
-                "exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))",
-                swapParams.tokenIn,
-                swapParams.tokenOut,
-                swapParams.fee,
-                swapParams.recipient,
-                swapParams.deadline,
-                swapParams.amountIn,
-                swapParams.amountOutMinimum,
-                swapParams.sqrtPriceLimitX96
-            );
-
-        bytes memory data2 =
-            abi.encodeWithSignature(
-                "unwrapWETH9(uint256,address)",
-                0, // minimum out
-                actor
-            );
-        
-        bytes[] memory multicallData = new bytes[](2);
-        multicallData[0] = data1;
-        multicallData[1] = data2;
+        uint256 WETHPreBal = IERC20(WETH).balanceOf(address(this));
 
         vm.startPrank(actor);
         rwaToken.approve(address(router_2), amount);
-        address(router_2).call(abi.encodeWithSignature("multicall(bytes[])", multicallData));
+        router_2.exactInputSingleFeeOnTransfer(swapParams);
         vm.stopPrank();
+
+        uint256 amountETH = IERC20(WETH).balanceOf(address(this)) - WETHPreBal;
+        require (amountETH != 0, "0 ETH");
+
+        WETH.call(abi.encodeWithSignature("withdraw(uint256)", amountETH));
+        (bool success,) = actor.call{value: amountETH}("");
+        require(success, "ETH unsuccessful");
     }
 
     /// @dev Helper method for calculate early-burn fees.
@@ -3241,10 +3226,7 @@ contract MainDeploymentTest is Utility {
         vm.stopPrank();
 
         rwaToken.mintFor(address(revDistributor), amountIn);
-
-        emit log_named_uint("USTB bal of revDist", IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor)));
         _dealUSTB(address(revDistributor), amountIn);
-
         deal(address(UNREAL_DAI), address(revDistributor), amountIn);
 
         // DAI -> WETH using UniV3

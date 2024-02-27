@@ -15,7 +15,6 @@ interface ILiquidBoxFactory {
   function createLiquidBox(
     address tokenA,
     address tokenB,
-    address owner,
     uint24 fee,
     string memory name,
     string memory symbol

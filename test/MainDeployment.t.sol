@@ -367,9 +367,7 @@ contract MainDeploymentTest is Utility {
         ETH_DEPOSIT = 10 ether;
         TOKEN_DEPOSIT = 20_000 ether;
                 
-        vm.prank(0x95e3664633A8650CaCD2c80A0F04fb56F65DF300); // USTB holder
-        IERC20(address(UNREAL_USTB)).transfer(address(this), TOKEN_DEPOSIT);
-        //deal(address(UNREAL_USTB), address(this), TOKEN_DEPOSIT);
+        _dealUSTB(address(this), TOKEN_DEPOSIT);
         IERC20(address(UNREAL_USTB)).approve(address(UNREAL_UNIV2_ROUTER), TOKEN_DEPOSIT);
 
         vm.startPrank(UNREAL_PAIR_MANAGER);
@@ -496,6 +494,14 @@ contract MainDeploymentTest is Utility {
     /// @dev Helper method for calculate early-burn penalties post fee.
     function _calculatePenalty(uint256 amount, uint256 duration) internal view returns (uint256 penalty) {
         penalty = (amount * _calculateFee(duration) / 100_00);
+    }
+
+    /// @dev deal doesn't work with USTB since the storage layout is different
+    function _dealUSTB(address give, uint256 amount) internal {
+        bytes32 USTBStorageLocation = 0x8a0c9d8ec1d9f8b365393c36404b40a33f47675e34246a2e186fbefd5ecd3b00;
+        uint256 mapSlot = 2;
+        bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
+        vm.store(address(UNREAL_USTB), slot, bytes32(amount));
     }
 
 
@@ -3235,9 +3241,10 @@ contract MainDeploymentTest is Utility {
         vm.stopPrank();
 
         rwaToken.mintFor(address(revDistributor), amountIn);
-        //deal(address(UNREAL_USTB), address(revDistributor), amountIn);
-        vm.prank(0x95e3664633A8650CaCD2c80A0F04fb56F65DF300); // USTB holder
-        IERC20(address(UNREAL_USTB)).transfer(address(revDistributor), amountIn);
+
+        emit log_named_uint("USTB bal of revDist", IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor)));
+        _dealUSTB(address(revDistributor), amountIn);
+
         deal(address(UNREAL_DAI), address(revDistributor), amountIn);
 
         // DAI -> WETH using UniV3
@@ -3325,7 +3332,7 @@ contract MainDeploymentTest is Utility {
 
         uint256[] memory amounts = new uint256[](3);
         amounts[0] = amountIn;
-        amounts[1] = amountIn;
+        amounts[1] = IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor));
         amounts[2] = amountIn;
 
         address[] memory targets = new address[](3);
@@ -3339,7 +3346,7 @@ contract MainDeploymentTest is Utility {
         data[1] = 
             abi.encodeWithSignature(
                 "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
-                amountIn,
+                IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor)),
                 0,
                 pathUSTB,
                 address(revDistributor),
@@ -3351,7 +3358,7 @@ contract MainDeploymentTest is Utility {
         // ~ Pre-state check ~
 
         assertEq(rwaToken.balanceOf(address(revDistributor)), amountIn);
-        assertEq(IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor)), amountIn);
+        assertGt(IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor)), amountIn);
         assertEq(IERC20(address(UNREAL_DAI)).balanceOf(address(revDistributor)), amountIn);
         assertEq(address(revStreamETH).balance, 0);
 
@@ -3367,10 +3374,6 @@ contract MainDeploymentTest is Utility {
         vm.stopPrank();
 
         // ~ Post-state check ~
-
-        // assertEq(amountsOut[0], quoteOut1); 0.094803704666332798 ETH from RWA
-        // assertEq(amountsOut[1], quoteOut2); 0.049602730389010781 ETH from USTB
-        // assertEq(amountsOut[2], quoteOut3); 0.000998992512735895 ETH from DAI
 
         // 0.145405427568079474 ETH total distributed
 

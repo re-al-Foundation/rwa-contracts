@@ -5,6 +5,7 @@ import {Script, console2} from "forge-std/Script.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 // local imports
 // token
@@ -23,6 +24,8 @@ import { TangibleERC20Mock } from "../../../test/utils/TangibleERC20Mock.sol";
 // uniswap
 import { IUniswapV2Router02 } from "../../../src/interfaces/IUniswapV2Router02.sol";
 
+import { IQuoterV2 } from "../../../src/interfaces/IQuoterV2.sol";
+
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
@@ -37,53 +40,73 @@ contract DistributeRevenue is Script {
 
     // ~ Contracts ~
 
-    RWAToken public rwaToken = RWAToken(payable(0x909Fd75Ce23a7e61787FE2763652935F92116461));
-    RevenueDistributor public revDistributor = RevenueDistributor(payable(0xa443Bf2fCA2119bFDb97Bc01096fBC4F1546c8Ae));
-    RevenueStreamETH public revStreamETH = RevenueStreamETH(payable(0xeDfe244aBf03999DdAEE52E2D3E61d27517708a8));
+    RWAToken public rwaToken = RWAToken(payable(UNREAL_RWA_TOKEN));
+    RevenueDistributor public revDistributor = RevenueDistributor(payable(UNREAL_REV_DISTRIBUTOR));
+    RevenueStreamETH public revStreamETH = RevenueStreamETH(payable(UNREAL_REV_STREAM));
+    IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2_NEW);
+
 
     // ~ Variables ~
 
-    address public WETH;
-    IUniswapV2Router02 public uniswapV2Router = IUniswapV2Router02(UNREAL_UNIV2_ROUTER);
+    address public WETH = UNREAL_WETH;
+    address public USTB = UNREAL_USTB;
+    IERC20 public DAI = IERC20(UNREAL_DAI);
 
-    uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
-    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+    address public token = address(DAI);
+
+    address public wrapper = payable(UNREAL_EXACTINPUTWRAPPER);
+
 
     bytes4 public selector_swapExactTokensForETH =
         bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"));
 
+    bytes4 public selector_exactInputWrapper = 
+        bytes4(keccak256("exactInputForETH(bytes,address,address,uint256,uint256,uint256)"));
+
+
+    uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
+    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
-        WETH = uniswapV2Router.WETH();
     }
 
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        uint256 amount = rwaToken.balanceOf(address(revDistributor));
-        //uint256 amount = 50 ether;
+        uint256 amount = DAI.balanceOf(address(revDistributor));
+        amount = 1 ether;
 
-        address[] memory path = new address[](2);
-        path[0] = address(rwaToken);
-        path[1] = WETH;
+        uint256 getBal = IERC20(USTB).balanceOf(0xF639D205aE5Ab1a8473B9fe2091B6cDfe09dAa1B);
 
-        uint256 amountOut = revDistributor.convertRewardToken(
-            address(rwaToken),
-            amount,
-            UNREAL_UNIV2_ROUTER,
-            abi.encodeWithSignature(
-                "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
-                amount,
-                0,
-                path,
-                address(revDistributor),
-                block.timestamp + 300
-            )
+        revDistributor.setSelectorForTarget(wrapper, selector_exactInputWrapper);
+
+        (uint256 quoteWETHFromDAI,,,) = quoter.quoteExactInput(
+            abi.encodePacked(DAI, uint24(100), USTB, uint24(3000), WETH),
+            amount
         );
 
-        console2.log("amount ETH", amountOut);
+        console2.log("quote", quoteWETHFromDAI);
 
-        console2.log("total ETH bal in RevDist", address(revStreamETH).balance);
+        uint256 amountOut;
+        if (token == address(DAI)) {
+            amountOut = revDistributor.convertRewardToken(
+                address(DAI),
+                amount,
+                address(wrapper),
+                abi.encodeWithSignature(
+                    "exactInputForETH(bytes,address,address,uint256,uint256,uint256)",
+                    abi.encodePacked(DAI, uint24(100), USTB, uint24(3000), WETH),
+                    address(DAI),
+                    address(revDistributor),
+                    block.timestamp + 100,
+                    amount,
+                    0
+                )
+            );
+        }
+
+        console2.log("amount ETH", amountOut);
 
         vm.stopBroadcast();
     }

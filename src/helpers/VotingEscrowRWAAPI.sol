@@ -35,6 +35,18 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
         uint256 votingPower;
     }
 
+    /// @dev Object used to return veRWA vesting data.
+    struct VestingData {
+        /// @dev Token identifier.
+        uint256 tokenId;
+        /// @dev lock epoch start time.
+        uint256 startTime;
+        /// @dev lock epoch end time.
+        uint256 endTime;
+        ///@dev amount of tokens locked.
+        uint256 amount;
+    }
+
 
     // -----------
     // Constructor
@@ -206,21 +218,24 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     /**
      * @notice Returns an array of tokenIds owned by an address that are being vested. It also returns the locked amount of RWA and remaining duration of each NFT.
      * @param account Address of account we wish to fetch array of NFTs being vested.
-     * @return tokenIds Array of tokenIds being vested by `account`.
-     * @return vestingSchedules Array of vesting schedules for each token in `tokenIds`.
-     * @dev `vestingSchedules` is of struct type VotingEscrowVesting.VestingSchedule.
+     * @return vestingSchedules Array of vesting schedules with tokenIds.
      */
-    function getVestedTokensByOwnerWithData(address account) external view returns (
-        uint256[] memory tokenIds,
-        VotingEscrowVesting.VestingSchedule[] memory vestingSchedules
-    ) {
+    function getVestedTokensByOwnerWithData(address account) external view returns (VestingData[] memory vestingSchedules) {
         uint256 amount = veVesting.balanceOf(account);
         
-        tokenIds = veVesting.getDepositedTokens(account);
-        vestingSchedules = new VotingEscrowVesting.VestingSchedule[](amount);
+        uint256[] memory tokenIds = veVesting.getDepositedTokens(account);
+        VotingEscrowVesting.VestingSchedule memory vestingObj;
+
+        vestingSchedules = new VestingData[](amount);
 
         for (uint256 i; i < amount;) {
-            vestingSchedules[i] = veVesting.getSchedule(tokenIds[i]);
+            vestingObj = veVesting.getSchedule(tokenIds[i]);
+
+            vestingSchedules[i].tokenId = tokenIds[i];
+            vestingSchedules[i].startTime = vestingObj.startTime;
+            vestingSchedules[i].endTime = vestingObj.endTime;
+            vestingSchedules[i].amount = vestingObj.amount;
+
             unchecked {
                 ++i;
             }

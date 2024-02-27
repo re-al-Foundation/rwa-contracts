@@ -54,6 +54,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     /// @notice Stores contract reference to GaugeV2ALM for staking `box` tokens.
     IGaugeV2ALM public gaugeV2ALM;
 
+    IERC20 public pearl;
+
 
     // ------
     // Events
@@ -179,6 +181,13 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     /**
+     * @notice This method is used to update the `pearl` variable.
+     */
+    function setPearl(address _pearl) external onlyOwner {
+        pearl = IERC20(_pearl);
+    }
+
+    /**
      * @notice This method allows a permissioned admin to update the pool fee on the RWA/WETH pool it uses to swap RWA->WETH.
      * @param _fee pool fee.
      */
@@ -187,16 +196,29 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         poolFee = _fee;
     }
 
-    function withdrawPearl() external onlyOwner {
-        // TODO
+    /**
+     * @notice This method allows a permissioned admin to withdraw Pearl from this contract.
+     */
+    function withdrawPearl(uint256 amount) external onlyOwner {
+        uint256 bal = pearl.balanceOf(address(this));
+        require(bal != 0 && bal >= amount, "RoyaltyHandler: Insufficient ERC20");
+        pearl.safeTransfer(msg.sender, amount);
     }
 
-    function harvestPearlRewards() external onlyOwner {
-        // TODO Harvest pearl emissions
+    /**
+     * @notice This method allows a permissioned admin to harvest Pearl rewards from staked LP tokens.
+     */
+    function harvestPearlRewards() external onlyOwner returns (uint256) {
+        uint256 preBal = IERC20(pearl).balanceOf(address(this));
+        gaugeV2ALM.collectReward();
+        return IERC20(pearl).balanceOf(address(this)) - preBal;
     }
 
+    /**
+     * @notice This view method returns the amount of Pearl rewards that are harvestable.
+     */
     function earnedPearlRewards() external view returns (uint256) {
-        // TODO query earned rewards from staked LP tokens
+        return gaugeV2ALM.earnedReward(address(this));
     }
 
     
@@ -277,7 +299,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param amountWETH Desired amount of WETH to add to pool.
      */
     function _addLiquidity(uint256 amountRWA, uint256 amountWETH) internal {
-        // a. Add liquidity via LiquidBoxManager.deposit
+        // Add liquidity via LiquidBoxManager.deposit
         IERC20(address(rwaToken)).approve(address(boxManager), amountRWA);
         IERC20(address(WETH)).approve(address(boxManager), amountWETH);
         uint256 shares = boxManager.deposit(
@@ -287,15 +309,18 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
             0, // amount0Min
             0  // amount1Min
         );
-
         require(shares != 0, "RoyaltyHandler: Insufficient LP Tokens");
+        _depositLPTokens(shares);
+    }
+
+    function _depositLPTokens(uint256 amount) internal {
         uint256 preBal = IERC20(box).balanceOf(address(this));
 
-        // b. Stake LP tokens on GaugeV2ALM
-        IERC20(box).approve(address(gaugeV2ALM), shares);
-        gaugeV2ALM.deposit(shares);
+        // Stake LP tokens on GaugeV2ALM
+        IERC20(box).approve(address(gaugeV2ALM), amount);
+        gaugeV2ALM.deposit(amount);
 
-        require(preBal - shares == IERC20(box).balanceOf(address(this)), "RoyaltyHandler: Failed to deposit shares");
+        require(preBal - amount == IERC20(box).balanceOf(address(this)), "RoyaltyHandler: Failed to deposit shares");
     }
 
     /**

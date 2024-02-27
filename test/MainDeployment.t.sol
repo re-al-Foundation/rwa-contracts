@@ -96,6 +96,8 @@ contract MainDeploymentTest is Utility {
     address public UNREAL_PAIR_MANAGER = 0x63Cd04630E9C6eCa572Fd39863B63ce6117eC86b;
 
     address public pair;
+    address public box;
+    address public gALM;
 
     IUniswapV2Router02 public uniswapV2Router = IUniswapV2Router02(UNREAL_UNIV2_ROUTER);
     IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2);
@@ -289,11 +291,11 @@ contract MainDeploymentTest is Utility {
         pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
         // (23a) create ALM box for lp
         vm.prank(UNREAL_BOX_FAC_MANAGER);
-        address box = ILiquidBoxFactory(UNREAL_BOX_FACTORY).createLiquidBox(address(rwaToken), WETH, address(this), 100, "RWA Box", "RWABOX");
+        box = ILiquidBoxFactory(UNREAL_BOX_FACTORY).createLiquidBox(address(rwaToken), WETH, address(this), 100, "RWA Box", "RWABOX");
         // (23b) create GaugeV2ALM
         //vm.prank(IVoter(UNREAL_VOTER).governor());
         //(address gauge) = IVoter(UNREAL_VOTER).createGauge(pair, abi.encodePacked(uint16(1), uint256(200000)));
-        (,address gALM) = IGaugeV2Factory(UNREAL_GAUGEV2_FACTORY).createGauge(
+        (,gALM) = IGaugeV2Factory(UNREAL_GAUGEV2_FACTORY).createGauge(
             18231,
             18231,
             UNREAL_PEARLV2_FACTORY,
@@ -820,10 +822,13 @@ contract MainDeploymentTest is Utility {
         
         assertEq(rwaToken.totalSupply(), preSupply);
         assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
+        
+        // check boxALM balance/state
+        assertEq(rwaToken.balanceOf(box), 0);
+        assertEq(IERC20(WETH).balanceOf(box), 0);
 
-        // (uint256 preReserve0, uint256 preReserve1,) = IUniswapV2Pair(pair).getReserves();
-        // emit log_named_uint("RWA PRE TRANSFER Reserves", preReserve0);
-        // emit log_named_uint("ETH PRE TRANSFER Reserves", preReserve1);
+        // check GaugeV2ALM balance/state
+        assertEq(IERC20(box).balanceOf(gALM), 0);
 
         // ~ Execute transfer -> distribute ~
 
@@ -835,11 +840,12 @@ contract MainDeploymentTest is Utility {
         assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
         assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
 
-        // (uint256 postReserve0, uint256 postReserve1,) = IUniswapV2Pair(pair).getReserves();
-        // emit log_named_uint("RWA POST TRANSFER Reserves", postReserve0);
-        // emit log_named_uint("ETH POST TRANSFER Reserves", postReserve1);
+        // check boxALM balance/state
+        assertGt(rwaToken.balanceOf(box), 0);
+        assertGt(IERC20(WETH).balanceOf(box), 0);
 
-        //assertGt(postReserve0, preReserve0);
+        // check GaugeV2ALM balance/state
+        assertGt(IERC20(box).balanceOf(gALM), 0);
     }
 
 

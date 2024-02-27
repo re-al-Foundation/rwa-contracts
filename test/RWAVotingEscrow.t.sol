@@ -653,7 +653,8 @@ contract RWAVotingEscrowTest is Utility {
         // check depositors mapping
         assertEq(vesting.depositors(tokenId), JOE);
 
-        (,VotingEscrowVesting.VestingSchedule[] memory schedule) = api.getVestedTokensByOwnerWithData(JOE);
+        (VotingEscrowRWAAPI.VestingData[] memory schedule) = api.getVestedTokensByOwnerWithData(JOE);
+        assertEq(schedule[0].tokenId, tokenId);
         assertEq(schedule[0].startTime, block.timestamp);
         assertEq(schedule[0].endTime, block.timestamp + (36 * 30 days));
         assertEq(schedule[0].amount, amountTokens);

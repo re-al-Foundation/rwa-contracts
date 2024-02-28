@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -36,15 +37,14 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script converts and distributes revenue from the revenue distributor.
  */
-contract DistributeRevenue is Script {
+contract DistributeRevenue is DeployUtility {
 
     // ~ Contracts ~
 
-    RWAToken public rwaToken = RWAToken(payable(UNREAL_RWA_TOKEN));
-    RevenueDistributor public revDistributor = RevenueDistributor(payable(UNREAL_REV_DISTRIBUTOR));
-    RevenueStreamETH public revStreamETH = RevenueStreamETH(payable(UNREAL_REV_STREAM));
+    RWAToken public rwaToken;
+    RevenueDistributor public revDistributor;
+    RevenueStreamETH public revStreamETH;
     IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2);
-
 
     // ~ Variables ~
 
@@ -69,13 +69,18 @@ contract DistributeRevenue is Script {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
+        _setUp("unreal");
+
+        rwaToken = RWAToken(payable(_loadDeploymentAddress("RWAToken")));
+        revDistributor = RevenueDistributor(payable(_loadDeploymentAddress("RevenueDistributor")));
+        revStreamETH = RevenueStreamETH(payable(_loadDeploymentAddress("RevenueStreamETH")));
     }
 
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
         uint256 amount = DAI.balanceOf(address(revDistributor));
-        amount = 100 ether;
+        amount = 1 ether;
 
         uint256 amountOut;
         if (token == address(DAI)) {

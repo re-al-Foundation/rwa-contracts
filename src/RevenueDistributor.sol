@@ -87,6 +87,12 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      */
     event RevTokenRemoved(address indexed token);
 
+    /**
+     * @notice This event is emitted when address(this) receives ETH.
+     * @dev Needed for off-chain tracking of ETH input.
+     * @param sender Sender of ETH.
+     * @param amount Amount of ETH received.
+     */
     event ETHReceived(address sender, uint256 amount);
 
 

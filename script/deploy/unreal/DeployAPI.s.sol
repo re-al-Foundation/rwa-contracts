@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -20,17 +21,14 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script deploys VotingEscrowRWAAPI to UNREAL Testnet.
  */
-contract DeployAPI is Script {
+contract DeployAPI is DeployUtility {
 
     // ~ Contracts ~
 
     // core contracts
-    address public veRWA = payable(0x2afD4dC7649c2545Ab1c97ABBD98487B6006f7Ae);
-    address public vesting = payable(0x0f3be26c5eF6451823BD816B68E9106C8B65A5DA);
-    address public revStream = payable(0x5d79976Be5814FDC8d5199f0ba7fC3764082D635);
-
-    VotingEscrowRWAAPI public api;
-    ERC1967Proxy public apiProxy;
+    address public veRWA;
+    address public vesting;
+    address public revStream;
 
     address public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -38,6 +36,11 @@ contract DeployAPI is Script {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
+        _setUp("unreal");
+
+        veRWA = payable(_loadDeploymentAddress("RWAVotingEscrow"));
+        vesting = payable(_loadDeploymentAddress("VotingEscrowVesting"));
+        revStream = payable(_loadDeploymentAddress("RevenueStreamETH"));
     }
 
     function run() public {
@@ -46,10 +49,10 @@ contract DeployAPI is Script {
         // ~ Deploy VotingEscrowRWAAPI ~
 
         // Deploy api
-        api = new VotingEscrowRWAAPI();
+        VotingEscrowRWAAPI api = new VotingEscrowRWAAPI();
 
         // Deploy proxy for api
-        apiProxy = new ERC1967Proxy(
+        ERC1967Proxy apiProxy = new ERC1967Proxy(
             address(api),
             abi.encodeWithSelector(VotingEscrowRWAAPI.initialize.selector,
                 DEPLOYER_ADDRESS, // admin
@@ -59,9 +62,7 @@ contract DeployAPI is Script {
             )
         );
         api = VotingEscrowRWAAPI(address(apiProxy));
-
-
-        // ~ Config ~
+        _saveDeploymentAddress("API", address(api));
 
         // ~ Logs ~
 

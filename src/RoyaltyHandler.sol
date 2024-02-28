@@ -153,8 +153,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param _lpPortion New fee taken for adding liquidity.
      */
     function updateDistribution(uint8 _burnPortion, uint8 _revSharePortion, uint8 _lpPortion) external onlyOwner {   
-        uint256 totalFee = _burnPortion + _burnPortion + _lpPortion;
-
         burnPortion = _burnPortion;
         revSharePortion = _burnPortion;
         lpPortion = _lpPortion;

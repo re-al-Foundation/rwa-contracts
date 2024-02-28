@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -23,17 +24,13 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script deploys RealReceiver to UNREAL Testnet.
  */
-contract DeployReceiver is Script {
+contract DeployReceiver is DeployUtility {
 
     // ~ Contracts ~
 
-    // core contracts
-    RWAVotingEscrow public veRWA = RWAVotingEscrow(payable(0x6fa3d2CB3dEBE19e10778F3C3b95A6cDF911fC5B));
-    VotingEscrowVesting public vesting = VotingEscrowVesting(payable(0xEE1643c7ED4e195893025df09E757Cc526F757F9));
-    RWAToken public rwaToken = RWAToken(payable(0x909Fd75Ce23a7e61787FE2763652935F92116461));
-
-    RealReceiver public realReceiver;
-    ERC1967Proxy public realReceiverProxy;
+    RWAVotingEscrow public veRWA;
+    VotingEscrowVesting public vesting;
+    RWAToken public rwaToken;
 
     // ~ Variables ~
 
@@ -43,16 +40,17 @@ contract DeployReceiver is Script {
     address public localEndpoint = UNREAL_LZ_ENDPOINT_V1;
     uint16 public sourceEndpointId = MUMBAI_CHAINID;
 
-    address public ADMIN = 0x1F834C1a259AC590D61fd668fCb5E333E08614CE;
-
+    address public ADMIN = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER");
-    bytes32 public constant BURNER_ROLE = keccak256("BURNER");
-
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
+        _setUp("unreal");
+
+        veRWA = RWAVotingEscrow(payable(_loadDeploymentAddress("RWAVotingEscrow")));
+        vesting = VotingEscrowVesting(payable(_loadDeploymentAddress("VotingEscrowVesting")));
+        rwaToken = RWAToken(payable(_loadDeploymentAddress("RWAToken")));
     }
 
     function run() public {
@@ -61,10 +59,10 @@ contract DeployReceiver is Script {
         // ~ Deploy RealReceiver ~
 
         // Deploy RealReceiver
-        realReceiver = new RealReceiver(address(localEndpoint));
+        RealReceiver realReceiver = new RealReceiver(address(localEndpoint));
 
         // Deploy proxy for realReceiver
-        realReceiverProxy = new ERC1967Proxy(
+        ERC1967Proxy realReceiverProxy = new ERC1967Proxy(
             address(realReceiver),
             abi.encodeWithSelector(RealReceiver.initialize.selector,
                 uint16(sourceEndpointId),
@@ -73,25 +71,26 @@ contract DeployReceiver is Script {
                 ADMIN
             )
         );
+        realReceiver = RealReceiver(address(realReceiverProxy));
+        _saveDeploymentAddress("RealReceiver", address(realReceiver));
 
 
         // ~ Config ~
 
-        RWAVotingEscrow(address(veRWA)).updateEndpointReceiver(address(realReceiverProxy));
+        RWAVotingEscrow(address(veRWA)).updateEndpointReceiver(address(realReceiver));
 
         RWAToken(address(rwaToken)).setVotingEscrowRWA(address(veRWA)); // for RWAVotingEscrow:migrate
-        RWAToken(address(rwaToken)).setReceiver(address(realReceiverProxy)); // for RWAVotingEscrow:migrate
+        RWAToken(address(rwaToken)).setReceiver(address(realReceiver)); // for RWAVotingEscrow:migrate
 
         // TODO: Set Receiver on RWAToken
         // TODO: Set trusted remote address via CrossChainMigrator.setTrustedRemoteAddress(remoteEndpointId, abi.encodePacked(address(receiver)));
         // TODO: Also set trusted remote on receiver
-        RealReceiver(address(realReceiverProxy)).setTrustedRemoteAddress(sourceEndpointId, abi.encodePacked(0x7b480d219F68dA5c630534de8bFD0219Bd7BCFaB));
+        RealReceiver(address(realReceiver)).setTrustedRemoteAddress(sourceEndpointId, abi.encodePacked(0x7b480d219F68dA5c630534de8bFD0219Bd7BCFaB));
 
 
         // ~ Logs ~
 
-        console2.log("1a. Real Receiver  =", address(realReceiverProxy));
-        console2.log("1b. Implementation =", address(realReceiver));
+        console2.log("1a. Real Receiver  =", address(realReceiver));
 
         vm.stopBroadcast();
     }

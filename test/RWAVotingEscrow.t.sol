@@ -2413,7 +2413,7 @@ contract RWAVotingEscrowTest is Utility {
         uint256 maxVotingPower = amountTokens.calculateVotingPower(duration);
 
         Checkpoints.Trace208 memory votingPowerCheckpoints;
-        Checkpoints.Trace208 memory totalVotingPowerCheckpoints;
+        //Checkpoints.Trace208 memory totalVotingPowerCheckpoints;
 
         // ~ Skip ~
 

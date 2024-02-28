@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -20,11 +21,11 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script deploys a new RevenueStreamETH contract with a new proxy and updates the RevenueDistributor.
  */
-contract DeployRevStreamETH is Script {
+contract DeployRevStreamETH is DeployUtility {
 
     // ~ Contracts ~
 
-    RevenueDistributor public revDistributor = RevenueDistributor(payable(0xa443Bf2fCA2119bFDb97Bc01096fBC4F1546c8Ae));
+    RevenueDistributor public revDistributor;
 
     address public veRWA = 0x6fa3d2CB3dEBE19e10778F3C3b95A6cDF911fC5B;
 
@@ -40,6 +41,8 @@ contract DeployRevStreamETH is Script {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
+        _setUp("unreal");
+        revDistributor = RevenueDistributor(payable(_loadDeploymentAddress("RevenueDistributor")));
     }
 
     function run() public {

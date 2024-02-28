@@ -249,7 +249,7 @@ contract RWATokenTest is Utility {
     }
 
     /// @dev Returns the amount of $RWA tokens quoted for `amount` ETH.
-    function _getQuoteBuy(uint256 amount) internal returns (uint256) {
+    function _getQuoteBuy(uint256 amount) internal view returns (uint256) {
         address[] memory path = new address[](2);
 
         path[0] = IUniswapV2Router02(MUMBAI_UNIV2_ROUTER).WETH();
@@ -277,7 +277,7 @@ contract RWATokenTest is Utility {
     }
 
     /// @dev Returns the amount of ETH quoted for `amount` $RWA.
-    function _getQuoteSell(uint256 amount) internal returns (uint256) {
+    function _getQuoteSell(uint256 amount) internal view returns (uint256) {
         address[] memory path = new address[](2);
 
         path[0] = address(rwaToken);

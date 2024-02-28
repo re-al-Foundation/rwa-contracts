@@ -389,7 +389,7 @@ contract MigrationTest is Utility {
         (uint256 startTime,
         uint256 endTime,
         uint256 lockedAmount,
-        uint256 multiplier,
+        /** multiplier */,
         /** claimed */,
         uint256 maxPayout) = passiveIncomeNFTV1.locks(tokenId);
 
@@ -405,18 +405,12 @@ contract MigrationTest is Utility {
             false,
             adapterParams
         );
-
-        uint256 votingPower = (lockedAmount + maxPayout).calculateVotingPower(totalDuration);
+        //uint256 votingPower = (lockedAmount + maxPayout).calculateVotingPower(totalDuration);
 
         vm.deal(JOE, amountETH);
 
-        Checkpoints.Trace208 memory votingPowerCheckpoints;
-        Checkpoints.Trace208 memory totalVotingPowerCheckpoints;
-
         uint256 veRWATokenId = veRWA.getTokenId();
         ++veRWATokenId;
-
-        uint256 preSupply = rwaToken.totalSupply();
 
         // ~ Skip to expiration ~
 
@@ -587,7 +581,7 @@ contract MigrationTest is Utility {
         vm.deal(JOE, amountETH);
 
         uint256 preBal = rwaToken.balanceOf(JOE);
-        uint256 preSupplyTngbl = tngblToken.totalSupply();
+        //uint256 preSupplyTngbl = tngblToken.totalSupply();
 
         // ~ Pre-state check ~
 
@@ -835,7 +829,7 @@ contract MigrationTest is Utility {
         vm.deal(JOE, amountETH);
 
         uint256 preBal = rwaToken.balanceOf(JOE);
-        uint256 preSupplyTngbl = tngblToken.totalSupply();
+        //uint256 preSupplyTngbl = tngblToken.totalSupply();
 
         // ~ Pre-state check ~
 
@@ -890,26 +884,6 @@ contract MigrationTest is Utility {
 
         assertEq(tngblToken.balanceOf(address(migrator)), 0);
         assertEq(tngblToken.totalSupply(), preSupplyTngbl - amountTokens);
-    }
-
-    function test_math() public {
-
-        uint256 startTime = 1667828012;
-        uint256 endTime = 1792244012;
-        uint256 lockedAmount = 10000000000000000000; // 10
-        uint256 multiplier = 13468618518518518518; // 13.47
-        uint256 claimed = 0;
-        uint256 maxPayout = 124686185185185185180; // 124.69
-
-        uint256 OGmultiplier = piCalculator.determineMultiplier(
-            1649203200,
-            1649203200 + (1440 days),
-            startTime,
-            uint8((endTime - startTime) / 30 days)
-        );
-
-        emit log_named_uint("OG Mul", OGmultiplier);
-        
     }
 }
 

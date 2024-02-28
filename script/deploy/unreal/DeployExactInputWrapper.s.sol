@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -21,7 +22,7 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script deploys ExactInputWrapper to UNREAL Testnet.
  */
-contract DeployExactInputWrapper is Script {
+contract DeployExactInputWrapper is DeployUtility {
 
     // ~ Contracts ~
 
@@ -29,7 +30,7 @@ contract DeployExactInputWrapper is Script {
     address public router = payable(UNREAL_SWAP_ROUTER);
     address public WETH = payable(UNREAL_WETH);
 
-    RevenueDistributor public revDistributor = RevenueDistributor(payable(UNREAL_REV_DISTRIBUTOR));
+    RevenueDistributor public revDistributor;
 
     address public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -40,6 +41,8 @@ contract DeployExactInputWrapper is Script {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
+        _setUp("unreal");
+        revDistributor = RevenueDistributor(payable(_loadDeploymentAddress("RevenueDistributor")));
     }
 
     function run() public {

@@ -673,9 +673,6 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         if (!$._defaultDelegateSet[account]) {
             $._defaultDelegateSet[account] = true;
         }
-        address oldDelegate = delegates(account);
-        uint256 amount = _getVotingUnits(oldDelegate);
-
         super._delegate(account, delegatee);
     }
 

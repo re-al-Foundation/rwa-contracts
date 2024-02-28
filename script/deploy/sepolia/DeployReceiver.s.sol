@@ -54,9 +54,6 @@ contract DeployReceiver is Script {
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public SEPOLIA_RPC_URL = vm.envString("SEPOLIA_RPC_URL");
 
-    bytes32 public constant MINTER_ROLE = keccak256("MINTER");
-    bytes32 public constant BURNER_ROLE = keccak256("BURNER");
-
     function setUp() public {
         vm.createSelectFork(SEPOLIA_RPC_URL);
     }

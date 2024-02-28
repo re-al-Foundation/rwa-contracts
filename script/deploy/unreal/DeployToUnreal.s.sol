@@ -99,11 +99,9 @@ contract DeployToUnreal is DeployUtility {
 
         // ~ Deploy Contracts ~
 
-        // (1) Deploy $RWA Token implementation
+        // Deploy $RWA Token implementation
         rwaToken = new RWAToken();
-        console2.log("RWA Implementation", address(rwaToken));
-
-        // (2) Deploy proxy for $RWA Token
+        // Deploy proxy for $RWA Token
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
@@ -112,12 +110,13 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("RWA", address(rwaTokenProxy));
         rwaToken = RWAToken(payable(address(rwaTokenProxy)));
+        _saveDeploymentAddress("RWAToken", address(rwaToken));
+        require(_loadDeploymentAddress("RWAToken") == address(rwaToken), "Save address failed");
 
-        // (3) Deploy vesting contract
+
+        // Deploy vesting contract
         vesting = new VotingEscrowVesting();
-        console2.log("vesting Implementation", address(vesting));
-
-        // (4) Deploy proxy for vesting contract
+        // Deploy proxy for vesting contract
         vestingProxy = new ERC1967Proxy(
             address(vesting),
             abi.encodeWithSelector(VotingEscrowVesting.initialize.selector,
@@ -126,12 +125,13 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("vesting", address(vestingProxy));
         vesting = VotingEscrowVesting(address(vestingProxy));
+        _saveDeploymentAddress("VotingEscrowVesting", address(vesting));
+        require(_loadDeploymentAddress("VotingEscrowVesting") == address(vesting), "Save address failed");
 
-        // (5) Deploy veRWA implementation
+
+        // Deploy veRWA implementation
         veRWA = new RWAVotingEscrow();
-        console2.log("veRWA Implementation", address(veRWA));
-
-        // (6) Deploy proxy for veRWA
+        // Deploy proxy for veRWA
         veRWAProxy = new ERC1967Proxy(
             address(veRWA),
             abi.encodeWithSelector(RWAVotingEscrow.initialize.selector,
@@ -143,29 +143,31 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("veRWA", address(veRWAProxy));
         veRWA = RWAVotingEscrow(address(veRWAProxy));
+        _saveDeploymentAddress("RWAVotingEscrow", address(veRWA));
+        require(_loadDeploymentAddress("RWAVotingEscrow") == address(veRWA), "Save address failed");
 
-        // // (7) Deploy RealReceiver
-        // receiver = new RealReceiver(address(endpoint));
-        // console2.log("receiver Implementation", address(receiver));
 
-        // // (8) Deploy proxy for receiver
-        // receiverProxy = new ERC1967Proxy(
-        //     address(receiver),
-        //     abi.encodeWithSelector(RealReceiver.initialize.selector,
-        //         uint16(block.chainid),
-        //         address(veRWA),
-        //         address(rwaToken),
-        //         ADMIN
-        //     )
-        // );
-        // console2.log("receiver", address(receiverProxy));
-        // receiver = RealReceiver(address(receiverProxy));
+        // Deploy RealReceiver
+        receiver = new RealReceiver(layerZeroUnrealEndpoint);
+        // Deploy proxy for receiver
+        receiverProxy = new ERC1967Proxy(
+            address(receiver),
+            abi.encodeWithSelector(RealReceiver.initialize.selector,
+                uint16(block.chainid),
+                address(veRWA),
+                address(rwaToken),
+                adminAddress
+            )
+        );
+        console2.log("receiver", address(receiverProxy));
+        receiver = RealReceiver(address(receiverProxy));
+        _saveDeploymentAddress("RealReceiver", address(receiver));
+        require(_loadDeploymentAddress("RealReceiver") == address(receiver), "Save address failed");
 
-        // (9) Deploy revDistributor contract
+
+        // Deploy revDistributor contract
         revDistributor = new RevenueDistributor();
-        console2.log("revDistributor Implementation", address(revDistributor));
-
-        // (10) Deploy proxy for revDistributor
+        // Deploy proxy for revDistributor
         revDistributorProxy = new ERC1967Proxy(
             address(revDistributor),
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
@@ -176,12 +178,13 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("revDistributor", address(revDistributorProxy));
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));
+        _saveDeploymentAddress("RevenueDistributor", address(revDistributor));
+        require(_loadDeploymentAddress("RevenueDistributor") == address(revDistributor), "Save address failed");
 
-        // (11) Deploy royaltyHandler base
+
+        // Deploy royaltyHandler base
         royaltyHandler = new RoyaltyHandler();
-        console2.log("royaltyHandler Implementation", address(royaltyHandler));
-
-        // (12) Deploy proxy for royaltyHandler
+        // Deploy proxy for royaltyHandler
         royaltyHandlerProxy = new ERC1967Proxy(
             address(royaltyHandler),
             abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
@@ -195,12 +198,13 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("royaltyHandler", address(royaltyHandlerProxy));
         royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
+        _saveDeploymentAddress("RoyaltyHandler", address(royaltyHandler));
+        require(_loadDeploymentAddress("RoyaltyHandler") == address(royaltyHandler), "Save address failed");
 
-        // (13) Deploy revStreamETH contract
+
+        // Deploy revStreamETH contract
         revStreamETH = new RevenueStreamETH();
-        console2.log("revStreamETH Implementation", address(revStreamETH));
-
-        // (14) Deploy proxy for revStreamETH
+        // Deploy proxy for revStreamETH
         revStreamETHProxy = new ERC1967Proxy(
             address(revStreamETH),
             abi.encodeWithSelector(RevenueStreamETH.initialize.selector,
@@ -211,16 +215,15 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("revStreamETH", address(revStreamETHProxy));
         revStreamETH = RevenueStreamETH(payable(address(revStreamETHProxy)));
+        _saveDeploymentAddress("RevenueStreamETH", address(revStreamETH));
+        require(_loadDeploymentAddress("RevenueStreamETH") == address(revStreamETH), "Save address failed");
 
-        // (15) Deploy Delegator implementation
+
+        // Deploy Delegator implementation
         delegator = new Delegator();
-        console2.log("delegator Implementation", address(delegator));
-
-        // (16) Deploy DelegateFactory
+        // Deploy DelegateFactory
         delegateFactory = new DelegateFactory();
-        console2.log("delegateFactory Implementation", address(delegateFactory));
-
-        // (17) Deploy DelegateFactory proxy
+        // Deploy DelegateFactory proxy
         delegateFactoryProxy = new ERC1967Proxy(
             address(delegateFactory),
             abi.encodeWithSelector(DelegateFactory.initialize.selector,
@@ -231,80 +234,45 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("delegateFactory", address(delegateFactoryProxy));
         delegateFactory = DelegateFactory(address(delegateFactoryProxy));
+        _saveDeploymentAddress("DelegateFactory", address(delegateFactory));
+        require(_loadDeploymentAddress("DelegateFactory") == address(delegateFactory), "Save address failed");
         
         // ~ Config ~
 
-        // (18) set votingEscrow on vesting contract
+        // veVesting config
         vesting.setVotingEscrowContract(address(veRWA));
 
-        // (19) RevenueDistributor config
-        // (19a) grant DISTRIBUTOR_ROLE to Gelato functions
-        //revDistributor.grantRole(DISTRIBUTOR_ROLE, GELATO); // for gelato functions to distribute TODO
-        // (19b) add revStream contract
+        // veRWA config
+        veRWA.updateEndpointReceiver(address(receiver));
+
+        // RevenueDistributor config
         revDistributor.updateRevenueStream(payable(address(revStreamETH)));
-        // (19c) add revenue streams
+        // add revenue streams
         revDistributor.addRevenueToken(address(rwaToken)); // from RWA buy/sell taxes
         revDistributor.addRevenueToken(UNREAL_DAI); // DAI - bridge yield (ETH too)
-        //revDistributor.addRevenueToken(address(0)); // MORE - Borrowing fees (note not deployed) TODO
+        revDistributor.addRevenueToken(UNREAL_MORE); // MORE - Borrowing fees
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
-        // (19d) add necessary selectors for swaps
-        //revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
+        // add necessary selectors for swaps
         revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInput); // for V3 swaps with swapRouter
 
-        // (20) pair manager must create RWA/WETH pair
-        //      TODO: Have pearlV2 pair manager create the RWA/WETH pair
-        //vm.startPrank(UNREAL_PAIR_MANAGER);
-        //address pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
-
-        // (21) RWAToken config
-        // (21a) TODO: set pair
-        // rwaToken.setAutomatedMarketMakerPair(pair);
-        // (21b) set veRWA
-        rwaToken.setVotingEscrowRWA(address(veRWA)); // for RWAVotingEscrow:migrate
-        // set RealReceiver
-        // rwaToken.setReceiver(address(this)); // for testing TODO
-        // (21c) whitelist
+        // RWAToken config
+        rwaToken.setVotingEscrowRWA(address(veRWA));
+        rwaToken.setReceiver(address(receiver));
         rwaToken.excludeFromFees(address(revDistributor), true);
-        // (21d) set royalty handler
         rwaToken.setRoyaltyHandler(address(royaltyHandler));
 
         rwaToken.mint(1_000_000 ether); // for testnet testing
 
-        // (22) TODO: create the RWA/WETH pool
+        // ~ Post-Deployment TODOs ~
+
+        // TODO: Create the RWA/WETH pair, initialize, and add liquidity
+        // TODO: Set RWA/WETH pair on RWAToken as automatedMarketMakerPair via RwaToken.setAutomatedMarketMakerPair(pair, true);
+        // TODO: Create LiquidBox and GaugeV2ALM for RWA/WETH pair -> Set on RoyaltyHandler
+        // TODO: Set trusted remote address via CrossChainMigrator.setTrustedRemoteAddress(remoteEndpointId, abi.encodePacked(address(receiver)));
+        // TODO: Set trusted remote on receiver via RealReceiver.setTrustedRemoteAddress(sourceEndpointId, abi.encodePacked(address(crossChainMigrator)));
+        // TODO: Deploy and set ExactInputWrapper if needed
+        // TODO: Set any permissions on any necessary Gelato Function callers
 
         vm.stopBroadcast();
     }
 }
-
-// == Logs ==
-//   RWA 0xC9f2381e3f22e912e34033734977B58544518BFA
-//   vesting 0xC176C092BE752E1193E48Ac6B0bBA69Ff30ab201
-//   veRWA 0x7c501F5f0A23Dc39Ac43d4927ff9f7887A01869B
-//   revDistributor 0xd0A610E26732aA01960BE87598106240a93b6595
-//   revStreamETH 0x541c058d0D7Ab8474Ea10fb090677FaD992256d9
-//   delegateFactory 0xAf960b9B057f59c68e55Ff9aC29966d9bf62b71B
-
-// == Logs ==
-//   RWA 0x909Fd75Ce23a7e61787FE2763652935F92116461
-//   vesting 0xEE1643c7ED4e195893025df09E757Cc526F757F9
-//   veRWA 0x6fa3d2CB3dEBE19e10778F3C3b95A6cDF911fC5B
-//   revDistributor 0xa443Bf2fCA2119bFDb97Bc01096fBC4F1546c8Ae
-//   revStreamETH 0x4f233dbA3E21D762AeAf7c81103A15A8980706B3
-//   delegateFactory 0x6Ca53fe01D1007Ae89Ad730F5c66515819fD5145
-
-// == Logs ==
-//   RWA Implementation 0x8203bC5734B2d70287419F41eEd24878c9c006Fc
-//   RWA 0xdb2664cc9C9a16a8e0608f6867bD67158AF59397
-//   vesting Implementation 0xFd502b52B5B5b6ED097b307F168d296C4F7189b1
-//   vesting 0x0f3be26c5eF6451823BD816B68E9106C8B65A5DA
-//   veRWA Implementation 0x524BB37efDFcD2015fee2b41236579237db4CceE
-//   veRWA 0x2afD4dC7649c2545Ab1c97ABBD98487B6006f7Ae
-//   revDistributor Implementation 0xECB70e89638b42a5e9eC7a51E5FD229c4b40ed2A
-//   revDistributor 0x56843df02d5A230929B3A572ACEf5048d5dB76db
-//   royaltyHandler Implementation 0x5100990DC69Bc2A41e5C3409B3e41B40F606089a
-//   royaltyHandler 0x138A0c41f9a8b99a07cA3B4cABc711422B7d8EAB
-//   revStreamETH Implementation 0xB6C3f7dE6bf3137F30c64c77C691BC0CA889B3da
-//   revStreamETH 0x5d79976Be5814FDC8d5199f0ba7fC3764082D635
-//   delegator Implementation 0x8f9d60D80EE3F6c7e47b3a937823F28B75AB75ab
-//   delegateFactory Implementation 0x6aA4A24Dd0624f24A6deD6435351bcb4Beb3CD20
-//   delegateFactory 0xe988F47f227c7118aeB0E2954Ce6eed8822303d0

@@ -507,7 +507,7 @@ contract MirgationIntegrationTest is Utility {
         vm.deal(JOE, amountETH);
 
         uint256 preBal = rwaToken.balanceOf(JOE);
-        uint256 preSupplyTngbl = tngblToken.totalSupply();
+        //uint256 preSupplyTngbl = tngblToken.totalSupply();
 
         // ~ Pre-state check ~
 
@@ -754,7 +754,7 @@ contract MirgationIntegrationTest is Utility {
         vm.deal(JOE, amountETH);
 
         uint256 preBal = rwaToken.balanceOf(JOE);
-        uint256 preSupplyTngbl = tngblToken.totalSupply();
+        //uint256 preSupplyTngbl = tngblToken.totalSupply();
 
         // ~ Pre-state check ~
 

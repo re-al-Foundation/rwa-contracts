@@ -134,15 +134,12 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
      * @notice Handles incoming cross-chain messages and executes corresponding actions.
      * @dev This function is an override of the `_nonblockingLzReceive` function from the NonblockingLzAppUpgradeable contract. 
      * It processes incoming messages from LayerZero's cross-chain communication.
-     * @param srcChainId The source chain ID from which the message is sent.
-     * @param srcAddress The source address in the originating chain, encoded in bytes.
-     * @param nonce A unique identifier for the message.
      * @param payload The payload of the message, containing the data necessary for processing.
      */
     function _nonblockingLzReceive(
-        uint16 srcChainId,
-        bytes memory srcAddress,
-        uint64 nonce,
+        uint16 /**  srcChainId */,
+        bytes memory /** srcAddress */,
+        uint64 /** nonce */,
         bytes memory payload
     ) internal virtual override {
         uint16 packetType;

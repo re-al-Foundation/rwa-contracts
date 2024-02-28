@@ -123,10 +123,10 @@ contract MainDeploymentTest is Utility {
 
         // ~ Deploy Contracts ~
 
-        // (1) Deploy $RWA Token implementation
+        // Deploy $RWA Token implementation
         rwaToken = new RWAToken();
 
-        // (2) Deploy proxy for $RWA Token
+        // Deploy proxy for $RWA Token
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
@@ -135,10 +135,10 @@ contract MainDeploymentTest is Utility {
         );
         rwaToken = RWAToken(payable(address(rwaTokenProxy)));
 
-        // (3) Deploy vesting contract
+        // Deploy vesting contract
         vesting = new VotingEscrowVesting();
 
-        // (4) Deploy proxy for vesting contract
+        // Deploy proxy for vesting contract
         vestingProxy = new ERC1967Proxy(
             address(vesting),
             abi.encodeWithSelector(VotingEscrowVesting.initialize.selector,
@@ -147,10 +147,10 @@ contract MainDeploymentTest is Utility {
         );
         vesting = VotingEscrowVesting(address(vestingProxy));
 
-        // (5) Deploy veRWA implementation
+        // Deploy veRWA implementation
         veRWA = new RWAVotingEscrow();
 
-        // (6) Deploy proxy for veRWA
+        // Deploy proxy for veRWA
         veRWAProxy = new ERC1967Proxy(
             address(veRWA),
             abi.encodeWithSelector(RWAVotingEscrow.initialize.selector,
@@ -162,10 +162,10 @@ contract MainDeploymentTest is Utility {
         );
         veRWA = RWAVotingEscrow(address(veRWAProxy));
 
-        // (7) Deploy RealReceiver
+        // Deploy RealReceiver
         receiver = new RealReceiver(address(endpoint));
 
-        // (8) Deploy proxy for receiver
+        // Deploy proxy for receiver
         receiverProxy = new ERC1967Proxy(
             address(receiver),
             abi.encodeWithSelector(RealReceiver.initialize.selector,
@@ -177,10 +177,10 @@ contract MainDeploymentTest is Utility {
         );
         receiver = RealReceiver(address(receiverProxy));
 
-        // (9) Deploy revDistributor contract
+        // Deploy revDistributor contract
         revDistributor = new RevenueDistributor();
 
-        // (10) Deploy proxy for revDistributor
+        // Deploy proxy for revDistributor
         revDistributorProxy = new ERC1967Proxy(
             address(revDistributor),
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
@@ -191,10 +191,10 @@ contract MainDeploymentTest is Utility {
         );
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));
 
-        // (11) Deploy royaltyHandler base
+        // Deploy royaltyHandler base
         royaltyHandler = new RoyaltyHandler();
 
-        // (12) Deploy proxy for royaltyHandler
+        // Deploy proxy for royaltyHandler
         royaltyHandlerProxy = new ERC1967Proxy(
             address(royaltyHandler),
             abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
@@ -209,10 +209,10 @@ contract MainDeploymentTest is Utility {
         );
         royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
 
-        // (13) Deploy revStreamETH contract
+        // Deploy revStreamETH contract
         revStreamETH = new RevenueStreamETH();
 
-        // (14) Deploy proxy for revStreamETH
+        // Deploy proxy for revStreamETH
         revStreamETHProxy = new ERC1967Proxy(
             address(revStreamETH),
             abi.encodeWithSelector(RevenueStreamETH.initialize.selector,
@@ -223,13 +223,13 @@ contract MainDeploymentTest is Utility {
         );
         revStreamETH = RevenueStreamETH(payable(address(revStreamETHProxy)));
 
-        // (15) Deploy Delegator implementation
+        // Deploy Delegator implementation
         delegator = new Delegator();
 
-        // (16) Deploy DelegateFactory
+        // Deploy DelegateFactory
         delegateFactory = new DelegateFactory();
 
-        // (17) Deploy DelegateFactory proxy
+        // Deploy DelegateFactory proxy
         delegateFactoryProxy = new ERC1967Proxy(
             address(delegateFactory),
             abi.encodeWithSelector(DelegateFactory.initialize.selector,
@@ -240,10 +240,10 @@ contract MainDeploymentTest is Utility {
         );
         delegateFactory = DelegateFactory(address(delegateFactoryProxy));
 
-        // (18) Deploy API
+        // Deploy API
         api = new VotingEscrowRWAAPI();
 
-        // (19) Deploy api proxy
+        // Deploy api proxy
         apiProxy = new ERC1967Proxy(
             address(api),
             abi.encodeWithSelector(VotingEscrowRWAAPI.initialize.selector,
@@ -255,39 +255,39 @@ contract MainDeploymentTest is Utility {
         );
         api = VotingEscrowRWAAPI(address(apiProxy));
 
-        // (20) Deploy wrapper
+        // Deploy wrapper
         exactInputWrapper = new ExactInputWrapper(address(swapRouter), WETH);
 
         // ~ Config ~
 
-        // (21) set votingEscrow on vesting contract
+        // set votingEscrow on vesting contract
         vm.prank(ADMIN);
         vesting.setVotingEscrowContract(address(veRWA));
 
-        // (22) RevenueDistributor config
+        // RevenueDistributor config
         vm.startPrank(ADMIN);
-        // (22a) grant DISTRIBUTOR_ROLE to Gelato functions
+        // grant DISTRIBUTOR_ROLE to Gelato functions
         revDistributor.setDistributor(GELATO, true);
-        // (22b) add revStream contract
+        // add revStream contract
         revDistributor.updateRevenueStream(payable(address(revStreamETH)));
-        // (22c) add revenue streams
+        // add revenue streams
         revDistributor.addRevenueToken(address(rwaToken)); // from RWA buy/sell taxes
         revDistributor.addRevenueToken(UNREAL_DAI); // DAI - bridge yield (ETH too)
-        //revDistributor.addRevenueToken(address(0)); // MORE - Borrowing fees (note not deployed)
+        revDistributor.addRevenueToken(UNREAL_MORE); // MORE - Borrowing fees
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
-        // (22d) add necessary selectors for swaps
+        // add necessary selectors for swaps
         revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
         revDistributor.setSelectorForTarget(address(exactInputWrapper), selector_exactInputWrapper);
         revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInput);
         vm.stopPrank();
 
-        // (23) pair manager must create RWA/WETH pair
+        // pair manager must create RWA/WETH pair
         vm.prank(UNREAL_PAIR_MANAGER);
         pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
-        // (23a) create ALM box for lp
+        // create ALM box for lp
         vm.prank(UNREAL_BOX_FAC_MANAGER);
         box = ILiquidBoxFactory(UNREAL_BOX_FACTORY).createLiquidBox(address(rwaToken), WETH, 100, "RWA Box", "RWABOX");
-        // (23b) create GaugeV2ALM
+        // create GaugeV2ALM
         //vm.prank(IVoter(UNREAL_VOTER).governor());
         //(address gauge) = IVoter(UNREAL_VOTER).createGauge(pair, abi.encodePacked(uint16(1), uint256(200000)));
         (,gALM) = IGaugeV2Factory(UNREAL_GAUGEV2_FACTORY).createGauge(
@@ -301,15 +301,15 @@ contract MainDeploymentTest is Utility {
             true
         );
 
-        // (24) RWAToken config
+        // RWAToken config
         vm.startPrank(ADMIN);
         rwaToken.setRoyaltyHandler(address(royaltyHandler));
-        // (24a) set uniswap pair
+        // set uniswap pair
         rwaToken.setAutomatedMarketMakerPair(pair, true);
-        // (24b) Grant roles
+        // Grant roles
         rwaToken.setVotingEscrowRWA(address(veRWA));
         rwaToken.setReceiver(address(this)); // for testing
-        // (24c) whitelist
+        // whitelist
         rwaToken.excludeFromFees(address(revDistributor), true);
         vm.stopPrank();
 
@@ -463,7 +463,8 @@ contract MainDeploymentTest is Utility {
     /// @dev Perform a buy
     function _buy(address actor, uint256 amount) internal {
         vm.prank(actor);
-        WETH.call{value:amount}(abi.encodeWithSignature("deposit()"));
+        (bool success,) = WETH.call{value:amount}(abi.encodeWithSignature("deposit()"));
+        require(success, "deposit unsuccessful");
 
         ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: WETH,
@@ -519,8 +520,10 @@ contract MainDeploymentTest is Utility {
         uint256 amountETH = IERC20(WETH).balanceOf(address(this)) - WETHPreBal;
         require (amountETH != 0, "0 ETH");
 
-        WETH.call(abi.encodeWithSignature("withdraw(uint256)", amountETH));
-        (bool success,) = actor.call{value: amountETH}("");
+        (bool success,) = WETH.call(abi.encodeWithSignature("withdraw(uint256)", amountETH));
+        require(success, "withdraw unsuccessful");
+
+        (success,) = actor.call{value: amountETH}("");
         require(success, "ETH unsuccessful");
     }
 
@@ -2718,7 +2721,7 @@ contract MainDeploymentTest is Utility {
         uint256 maxVotingPower = amountTokens.calculateVotingPower(duration);
 
         Checkpoints.Trace208 memory votingPowerCheckpoints;
-        Checkpoints.Trace208 memory totalVotingPowerCheckpoints;
+        //Checkpoints.Trace208 memory totalVotingPowerCheckpoints;
 
         // ~ Skip ~
 

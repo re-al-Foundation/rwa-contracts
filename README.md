@@ -29,6 +29,7 @@ The CrossChainMigrator will send a message to the LayerZero endpoint on Polygon 
 ## Token
 
 - [RWAToken](./src/RWAToken.sol) - Replaces TNGBL - ERC-20 contract for RWA token. This contract facilitates any minting or transferring of RWA tokens.
+- [RoyaltyHandler](./src/RoyaltyHandler.sol) - Handles any royalties accrued from RWA swaps.
 - [RWAVotingEscrow](./src/governance/RWAVotingEscrow.sol) - Replaces PassiveIncomeNFT - An ERC-721 token contract that inherits VotesUpgradeable and assigns voting power based on the quantity of locked tokens and their vesting duration. It is designed to incentivize long-term holding and participation in governance. Locked token of choice is RWAToken.
 
 ## Governance

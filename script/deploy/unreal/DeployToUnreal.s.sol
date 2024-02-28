@@ -33,8 +33,15 @@ import { IUniswapV2Router02 } from "../../../src/interfaces/IUniswapV2Router02.s
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
-/// @dev To run: forge script script/deploy/unreal/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
-/// @dev To verify: forge verify-contract <CONTRACT_ADDRESS> --chain-id 18231 --watch src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api
+/** 
+    @dev To run: 
+    forge script script/deploy/unreal/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
+    --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+
+    @dev To verify manually: 
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18231 --watch \ 
+    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+*/
 
 /**
  * @title DeployToUnreal
@@ -49,27 +56,19 @@ contract DeployToUnreal is DeployUtility {
     RWAVotingEscrow public veRWA;
     RWAToken public rwaToken;
     RoyaltyHandler public royaltyHandler;
-
     VotingEscrowVesting public vesting;
     DelegateFactory public delegateFactory;
-    Delegator public delegator;
-
     RevenueDistributor public revDistributor;
     RevenueStreamETH public revStreamETH;
-
     RealReceiver public receiver;
-    
     // proxies
     ERC1967Proxy public veRWAProxy;
     ERC1967Proxy public rwaTokenProxy;
     ERC1967Proxy public royaltyHandlerProxy;
-
     ERC1967Proxy public vestingProxy;
     ERC1967Proxy public delegateFactoryProxy;
-
     ERC1967Proxy public revDistributorProxy;
     ERC1967Proxy public revStreamETHProxy;
-
     ERC1967Proxy public receiverProxy;
 
     // ~ Variables ~
@@ -77,12 +76,9 @@ contract DeployToUnreal is DeployUtility {
     address public passiveIncomeNFTV1 = POLYGON_PI_NFT;
     address public tngblToken = POLYGON_TNGBL_TOKEN;
 
-    address public layerZeroUnrealEndpoint = address(0); // TODO
-
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
-
-    address public adminAddress = 0x1F834C1a259AC590D61fd668fCb5E333E08614CE; // TODO
+    address public adminAddress = vm.envAddress("DEPLOYER_ADDRESS");
 
     bytes4 public selector_swapExactTokensForETH =
         bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"));
@@ -97,7 +93,9 @@ contract DeployToUnreal is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        // ~ Deploy Contracts ~
+        // ----------------
+        // Deploy Contracts
+        // ----------------
 
         // Deploy $RWA Token implementation
         rwaToken = new RWAToken();
@@ -110,8 +108,6 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("RWA", address(rwaTokenProxy));
         rwaToken = RWAToken(payable(address(rwaTokenProxy)));
-        _saveDeploymentAddress("RWAToken", address(rwaToken));
-        require(_loadDeploymentAddress("RWAToken") == address(rwaToken), "Save address failed");
 
 
         // Deploy vesting contract
@@ -125,8 +121,6 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("vesting", address(vestingProxy));
         vesting = VotingEscrowVesting(address(vestingProxy));
-        _saveDeploymentAddress("VotingEscrowVesting", address(vesting));
-        require(_loadDeploymentAddress("VotingEscrowVesting") == address(vesting), "Save address failed");
 
 
         // Deploy veRWA implementation
@@ -137,18 +131,16 @@ contract DeployToUnreal is DeployUtility {
             abi.encodeWithSelector(RWAVotingEscrow.initialize.selector,
                 address(rwaToken), // RWA token
                 address(vesting),  // votingEscrowVesting
-                layerZeroUnrealEndpoint, // LZ endpoint
+                UNREAL_LZ_ENDPOINT_V1, // LZ endpoint
                 adminAddress // admin address
             )
         );
         console2.log("veRWA", address(veRWAProxy));
         veRWA = RWAVotingEscrow(address(veRWAProxy));
-        _saveDeploymentAddress("RWAVotingEscrow", address(veRWA));
-        require(_loadDeploymentAddress("RWAVotingEscrow") == address(veRWA), "Save address failed");
 
 
         // Deploy RealReceiver
-        receiver = new RealReceiver(layerZeroUnrealEndpoint);
+        receiver = new RealReceiver(UNREAL_LZ_ENDPOINT_V1);
         // Deploy proxy for receiver
         receiverProxy = new ERC1967Proxy(
             address(receiver),
@@ -161,8 +153,6 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("receiver", address(receiverProxy));
         receiver = RealReceiver(address(receiverProxy));
-        _saveDeploymentAddress("RealReceiver", address(receiver));
-        require(_loadDeploymentAddress("RealReceiver") == address(receiver), "Save address failed");
 
 
         // Deploy revDistributor contract
@@ -178,8 +168,6 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("revDistributor", address(revDistributorProxy));
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));
-        _saveDeploymentAddress("RevenueDistributor", address(revDistributor));
-        require(_loadDeploymentAddress("RevenueDistributor") == address(revDistributor), "Save address failed");
 
 
         // Deploy royaltyHandler base
@@ -193,13 +181,12 @@ contract DeployToUnreal is DeployUtility {
                 address(rwaToken),
                 UNREAL_WETH,
                 UNREAL_SWAP_ROUTER,
-                UNREAL_QUOTERV2
+                UNREAL_QUOTERV2,
+                UNREAL_BOX_MANAGER
             )
         );
         console2.log("royaltyHandler", address(royaltyHandlerProxy));
         royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
-        _saveDeploymentAddress("RoyaltyHandler", address(royaltyHandler));
-        require(_loadDeploymentAddress("RoyaltyHandler") == address(royaltyHandler), "Save address failed");
 
 
         // Deploy revStreamETH contract
@@ -215,12 +202,10 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("revStreamETH", address(revStreamETHProxy));
         revStreamETH = RevenueStreamETH(payable(address(revStreamETHProxy)));
-        _saveDeploymentAddress("RevenueStreamETH", address(revStreamETH));
-        require(_loadDeploymentAddress("RevenueStreamETH") == address(revStreamETH), "Save address failed");
 
 
         // Deploy Delegator implementation
-        delegator = new Delegator();
+        Delegator delegator = new Delegator();
         // Deploy DelegateFactory
         delegateFactory = new DelegateFactory();
         // Deploy DelegateFactory proxy
@@ -234,10 +219,11 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("delegateFactory", address(delegateFactoryProxy));
         delegateFactory = DelegateFactory(address(delegateFactoryProxy));
-        _saveDeploymentAddress("DelegateFactory", address(delegateFactory));
-        require(_loadDeploymentAddress("DelegateFactory") == address(delegateFactory), "Save address failed");
         
-        // ~ Config ~
+
+        // ------
+        // Config
+        // ------
 
         // veVesting config
         vesting.setVotingEscrowContract(address(veRWA));
@@ -263,7 +249,24 @@ contract DeployToUnreal is DeployUtility {
 
         rwaToken.mint(1_000_000 ether); // for testnet testing
 
-        // ~ Post-Deployment TODOs ~
+
+        // --------------
+        // Save Addresses
+        // --------------
+
+        _saveDeploymentAddress("RWAToken", address(rwaToken));
+        _saveDeploymentAddress("VotingEscrowVesting", address(vesting));
+        _saveDeploymentAddress("RWAVotingEscrow", address(veRWA));
+        _saveDeploymentAddress("RealReceiver", address(receiver));
+        _saveDeploymentAddress("RevenueDistributor", address(revDistributor));
+        _saveDeploymentAddress("RoyaltyHandler", address(royaltyHandler));
+        _saveDeploymentAddress("RevenueStreamETH", address(revStreamETH));
+        _saveDeploymentAddress("DelegateFactory", address(delegateFactory));
+
+
+        // -----------------
+        // Post-Deploy TODOs
+        // -----------------
 
         // TODO: Create the RWA/WETH pair, initialize, and add liquidity
         // TODO: Set RWA/WETH pair on RWAToken as automatedMarketMakerPair via RwaToken.setAutomatedMarketMakerPair(pair, true);
@@ -272,6 +275,9 @@ contract DeployToUnreal is DeployUtility {
         // TODO: Set trusted remote on receiver via RealReceiver.setTrustedRemoteAddress(sourceEndpointId, abi.encodePacked(address(crossChainMigrator)));
         // TODO: Deploy and set ExactInputWrapper if needed
         // TODO: Set any permissions on any necessary Gelato Function callers
+
+        // TODO: If mainnet, transfer ownership to multisig
+
 
         vm.stopBroadcast();
     }

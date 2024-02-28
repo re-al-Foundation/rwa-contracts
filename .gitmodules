@@ -7,11 +7,6 @@
 	branch = release-v5.0
 	url = git@github.com:OpenZeppelin/openzeppelin-contracts.git
 
-[submodule "lib/openzeppelin-contracts-upgradeable"]
-	path = lib/openzeppelin-contracts-upgradeable
-	branch = release-v5.0
-	url = git@github.com:OpenZeppelin/openzeppelin-contracts-upgradeable.git
-
 [submodule "lib/tnftv2-audit"]
 	path = lib/tnftv2-audit
 	url = git@github.com:TangibleTNFT/tnftv2-audit.git
@@ -27,3 +22,8 @@
 [submodule "lib/passive-income-nft"]
 	path = lib/passive-income-nft
 	url = git@github.com:TangibleTNFT/passive-income-nft.git
+
+[submodule "lib/v3-periphery"]
+	path = lib/v3-periphery
+	branch = 0.8
+	url = git@github.com:Uniswap/v3-periphery.git

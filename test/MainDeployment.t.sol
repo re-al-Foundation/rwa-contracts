@@ -10,6 +10,9 @@ import { Checkpoints } from "@openzeppelin/contracts/utils/structs/Checkpoints.s
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IAccessControl } from "@openzeppelin/contracts/access/IAccessControl.sol";
 
+// uniswap imports
+import { INonfungiblePositionManager } from "@uniswap/v3-periphery/contracts/interfaces/INonfungiblePositionManager.sol";
+
 // passive income nft imports
 import { PassiveIncomeNFT } from "../src/refs/PassiveIncomeNFT.sol";
 
@@ -25,21 +28,26 @@ import { TangibleERC20Mock } from "./utils/TangibleERC20Mock.sol";
 import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
 import { VotingEscrowVesting } from "../src/governance/VotingEscrowVesting.sol";
 import { RWAToken } from "../src/RWAToken.sol";
+import { RoyaltyHandler } from "../src/RoyaltyHandler.sol";
 import { LZEndpointMock } from "./utils/LZEndpointMock.sol";
 import { VotingMath } from "../src/governance/VotingMath.sol";
 import { DelegateFactory } from "../src/governance/DelegateFactory.sol";
 import { Delegator } from "../src/governance/Delegator.sol";
-
-import { VotingEscrowRWAAPI } from "../src/helpers/VotingEscrowRWAAPI.sol";
-
+// local interfaces
 import { IUniswapV2Router02 } from "../src/interfaces/IUniswapV2Router02.sol";
+import { IUniswapV3Factory } from "../src/interfaces/IUniswapV3Factory.sol";
 import { IUniswapV2Factory } from "../src/interfaces/IUniswapV2Factory.sol";
 import { IUniswapV2Pair } from "../src/interfaces/IUniswapV2Pair.sol";
-import { ISwapRouter } from "./interfaces/ISwapRouter.sol";
-import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
+import { IPearlV2PoolFactory } from "../src/interfaces/IPearlV2PoolFactory.sol";
+import { ISwapRouter } from "../src/interfaces/ISwapRouter.sol";
+import { IQuoterV2 } from "../src/interfaces/IQuoterV2.sol";
+import { ILiquidBoxFactory } from "../src/interfaces/ILiquidBoxFactory.sol";
+import { IGaugeV2Factory } from "../src/interfaces/IGaugeV2Factory.sol";
+import { IVoter } from "../src/interfaces/IVoter.sol";
 
-// helper
+// helpers
 import { ExactInputWrapper } from "../src/helpers/ExactInputWrapper.sol";
+import { VotingEscrowRWAAPI } from "../src/helpers/VotingEscrowRWAAPI.sol";
 
 // local helper imports
 import "./utils/Utility.sol";
@@ -55,14 +63,13 @@ contract MainDeploymentTest is Utility {
 
     // ~ Contracts ~
 
-    // PassiveIncomeNFT public passiveIncomeNFTV1 = PassiveIncomeNFT(POLYGON_PI_NFT);
-    // TangibleERC20Mock public tngblToken = TangibleERC20Mock(POLYGON_TNGBL_TOKEN);
     RevenueDistributor public revDistributor;
     RevenueStreamETH public revStreamETH;
     RealReceiver public receiver;
     RWAVotingEscrow public veRWA;
     VotingEscrowVesting public vesting;
     RWAToken public rwaToken;
+    RoyaltyHandler public royaltyHandler;
     DelegateFactory public delegateFactory;
     Delegator public delegator;
     VotingEscrowRWAAPI public api;
@@ -75,6 +82,7 @@ contract MainDeploymentTest is Utility {
     ERC1967Proxy public veRWAProxy;
     ERC1967Proxy public vestingProxy;
     ERC1967Proxy public rwaTokenProxy;
+    ERC1967Proxy public royaltyHandlerProxy;
     ERC1967Proxy public migratorProxy;
     ERC1967Proxy public revDistributorProxy;
     ERC1967Proxy public receiverProxy;
@@ -87,11 +95,13 @@ contract MainDeploymentTest is Utility {
     address public WETH;
     address public UNREAL_PAIR_MANAGER = 0x63Cd04630E9C6eCa572Fd39863B63ce6117eC86b;
 
+    address public pair;
+    address public box;
+    address public gALM;
+
     IUniswapV2Router02 public uniswapV2Router = IUniswapV2Router02(UNREAL_UNIV2_ROUTER);
     IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2);
-    ISwapRouter public router = ISwapRouter(UNREAL_SWAP_ROUTER);
-
-    address public UNREAL_ENDPOINT = address(bytes20(bytes("UNREAL ENDPOINT"))); // TODO: Replace
+    ISwapRouter public swapRouter = ISwapRouter(UNREAL_SWAP_ROUTER);
 
     bytes4 public selector_swapExactTokensForETH =
         bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"));
@@ -105,13 +115,11 @@ contract MainDeploymentTest is Utility {
     bytes4 public selector_exactInputWrapper = 
         bytes4(keccak256("exactInputForETH(bytes,address,address,uint256,uint256,uint256)"));
 
-    //address public ADMIN; // TODO: Assign address to admin
-
     function setUp() public {
 
         vm.createSelectFork(UNREAL_RPC_URL);
 
-        WETH = uniswapV2Router.WETH();
+        WETH = UNREAL_WETH;
 
         // ~ Deploy Contracts ~
 
@@ -122,9 +130,7 @@ contract MainDeploymentTest is Utility {
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
-                ADMIN,                    // admin address
-                address(uniswapV2Router), // uniswap v2 router
-                address(0)   // RevenueDistributor (set post-deploy)
+                ADMIN
             )
         );
         rwaToken = RWAToken(payable(address(rwaTokenProxy)));
@@ -150,7 +156,7 @@ contract MainDeploymentTest is Utility {
             abi.encodeWithSelector(RWAVotingEscrow.initialize.selector,
                 address(rwaToken), // RWA token
                 address(vesting),  // votingEscrowVesting
-                UNREAL_ENDPOINT, // LZ endpoint
+                UNREAL_LZ_ENDPOINT_V1, // LZ endpoint
                 ADMIN // admin address
             )
         );
@@ -185,10 +191,28 @@ contract MainDeploymentTest is Utility {
         );
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));
 
-        // (11) Deploy revStreamETH contract
+        // (11) Deploy royaltyHandler base
+        royaltyHandler = new RoyaltyHandler();
+
+        // (12) Deploy proxy for royaltyHandler
+        royaltyHandlerProxy = new ERC1967Proxy(
+            address(royaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                ADMIN,
+                address(revDistributor),
+                address(rwaToken),
+                UNREAL_WETH,
+                address(swapRouter),
+                address(quoter),
+                UNREAL_BOX_MANAGER
+            )
+        );
+        royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
+
+        // (13) Deploy revStreamETH contract
         revStreamETH = new RevenueStreamETH();
 
-        // (12) Deploy proxy for revStreamETH
+        // (14) Deploy proxy for revStreamETH
         revStreamETHProxy = new ERC1967Proxy(
             address(revStreamETH),
             abi.encodeWithSelector(RevenueStreamETH.initialize.selector,
@@ -199,13 +223,13 @@ contract MainDeploymentTest is Utility {
         );
         revStreamETH = RevenueStreamETH(payable(address(revStreamETHProxy)));
 
-        // (13) Deploy Delegator implementation
+        // (15) Deploy Delegator implementation
         delegator = new Delegator();
 
-        // (14) Deploy DelegateFactory
+        // (16) Deploy DelegateFactory
         delegateFactory = new DelegateFactory();
 
-        // (15) Deploy DelegateFactory proxy
+        // (17) Deploy DelegateFactory proxy
         delegateFactoryProxy = new ERC1967Proxy(
             address(delegateFactory),
             abi.encodeWithSelector(DelegateFactory.initialize.selector,
@@ -216,10 +240,10 @@ contract MainDeploymentTest is Utility {
         );
         delegateFactory = DelegateFactory(address(delegateFactoryProxy));
 
-        // (16) Deploy API
+        // (18) Deploy API
         api = new VotingEscrowRWAAPI();
 
-        // (17) Deploy api proxy
+        // (19) Deploy api proxy
         apiProxy = new ERC1967Proxy(
             address(api),
             abi.encodeWithSelector(VotingEscrowRWAAPI.initialize.selector,
@@ -231,51 +255,67 @@ contract MainDeploymentTest is Utility {
         );
         api = VotingEscrowRWAAPI(address(apiProxy));
 
-        // (18) Deploy wrapper
-        exactInputWrapper = new ExactInputWrapper(address(UNREAL_SWAP_ROUTER), WETH);
+        // (20) Deploy wrapper
+        exactInputWrapper = new ExactInputWrapper(address(swapRouter), WETH);
 
         // ~ Config ~
 
-        // (14) set votingEscrow on vesting contract
+        // (21) set votingEscrow on vesting contract
         vm.prank(ADMIN);
         vesting.setVotingEscrowContract(address(veRWA));
 
-        // (15) RevenueDistributor config
+        // (22) RevenueDistributor config
         vm.startPrank(ADMIN);
-        // (15a) grant DISTRIBUTOR_ROLE to Gelato functions
-        revDistributor.grantRole(DISTRIBUTOR_ROLE, GELATO); // for gelato functions to distribute
-        // (15b) add revStream contract
+        // (22a) grant DISTRIBUTOR_ROLE to Gelato functions
+        revDistributor.setDistributor(GELATO, true);
+        // (22b) add revStream contract
         revDistributor.updateRevenueStream(payable(address(revStreamETH)));
-        // (15c) add revenue streams
+        // (22c) add revenue streams
         revDistributor.addRevenueToken(address(rwaToken)); // from RWA buy/sell taxes
         revDistributor.addRevenueToken(UNREAL_DAI); // DAI - bridge yield (ETH too)
-        revDistributor.addRevenueToken(address(0)); // MORE - Borrowing fees (note not deployed)
+        //revDistributor.addRevenueToken(address(0)); // MORE - Borrowing fees (note not deployed)
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
-        // (15d) add necessary selectors for swaps
+        // (22d) add necessary selectors for swaps
         revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
-        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInput); // for V3 swaps with swapRouter
         revDistributor.setSelectorForTarget(address(exactInputWrapper), selector_exactInputWrapper);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInput);
         vm.stopPrank();
 
-        // (16) pair manager must create RWA/WETH pair
-        vm.startPrank(UNREAL_PAIR_MANAGER);
-        address pair = IUniswapV2Factory(uniswapV2Router.factory()).createPair(address(rwaToken), WETH);
-        vm.stopPrank();
+        // (23) pair manager must create RWA/WETH pair
+        vm.prank(UNREAL_PAIR_MANAGER);
+        pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(address(rwaToken), WETH, 100);
+        // (23a) create ALM box for lp
+        vm.prank(UNREAL_BOX_FAC_MANAGER);
+        box = ILiquidBoxFactory(UNREAL_BOX_FACTORY).createLiquidBox(address(rwaToken), WETH, 100, "RWA Box", "RWABOX");
+        // (23b) create GaugeV2ALM
+        //vm.prank(IVoter(UNREAL_VOTER).governor());
+        //(address gauge) = IVoter(UNREAL_VOTER).createGauge(pair, abi.encodePacked(uint16(1), uint256(200000)));
+        (,gALM) = IGaugeV2Factory(UNREAL_GAUGEV2_FACTORY).createGauge(
+            18231,
+            18231,
+            UNREAL_PEARLV2_FACTORY,
+            pair,
+            UNREAL_PEARL,
+            address(this),
+            address(this),
+            true
+        );
 
-        // (17) RWAToken config
+        // (24) RWAToken config
         vm.startPrank(ADMIN);
-        // (17a) set uniswap pair
-        rwaToken.setUniswapV2Pair(pair);
-        // (17b) Grant roles
-        rwaToken.grantRole(MINTER_ROLE, address(this)); // note for testing
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(this)); // note for testing
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow early burn fee
-        // (17c) whitelist
-        rwaToken.excludeFromFees(address(veRWA), true);
+        rwaToken.setRoyaltyHandler(address(royaltyHandler));
+        // (24a) set uniswap pair
+        rwaToken.setAutomatedMarketMakerPair(pair, true);
+        // (24b) Grant roles
+        rwaToken.setVotingEscrowRWA(address(veRWA));
+        rwaToken.setReceiver(address(this)); // for testing
+        // (24c) whitelist
         rwaToken.excludeFromFees(address(revDistributor), true);
-        // (17d) set revenue distributor
-        rwaToken.setRevenueDistributor(address(revDistributor));
+        vm.stopPrank();
+
+        vm.startPrank(ADMIN);
+        royaltyHandler.setALMBox(box);
+        royaltyHandler.setGaugeV2ALM(gALM);
         vm.stopPrank();
 
         // ~ RWA/WETH Pool creation ~
@@ -283,35 +323,46 @@ contract MainDeploymentTest is Utility {
         uint256 ETH_DEPOSIT = 15 ether;
         uint256 TOKEN_DEPOSIT = 16_500 ether;
 
-        rwaToken.mint(TOKEN_DEPOSIT);
-        rwaToken.approve(address(UNREAL_UNIV2_ROUTER), TOKEN_DEPOSIT);
+        /// @dev https://blog.uniswap.org/uniswap-v3-math-primer
 
-        // (18) Create liquidity pool. TODO: Figure out desired ratio
-        uniswapV2Router.addLiquidityETH{value: ETH_DEPOSIT}(
-            address(rwaToken),
-            TOKEN_DEPOSIT,
-            TOKEN_DEPOSIT,
-            ETH_DEPOSIT,
-            address(this),
-            block.timestamp + 300
-        );
+        uint256 initPrice = 2**96; // Q notation
+        emit log_named_uint("init price", initPrice);
 
-        (uint256 reserve0, uint256 reserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA Init Reserves", reserve0);
-        emit log_named_uint("ETH Init Reserves", reserve1);
+        // (address token0, address token1) = address(rwaToken) < WETH ? (address(rwaToken), WETH) : (WETH, address(rwaToken));
+        // emit log_named_address("token0", token0);
+        // emit log_named_address("token1", token1);
 
-        vm.prank(address(rwaToken));
-        rwaToken.approve(address(this), TOKEN_DEPOSIT - reserve0);
-        rwaToken.burnFrom(address(rwaToken), TOKEN_DEPOSIT - reserve0);
+        IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).initializePoolPrice(pair, uint160(initPrice));
 
-        // ~ note For testing, make USTB/WETH pool ~
+        deal(WETH, address(this), ETH_DEPOSIT);
+        IERC20(WETH).approve(UNREAL_NFTMANAGER, ETH_DEPOSIT);
+
+        //rwaToken.mint(TOKEN_DEPOSIT);
+        rwaToken.mintFor(address(this), TOKEN_DEPOSIT);
+        rwaToken.approve(UNREAL_NFTMANAGER, TOKEN_DEPOSIT);
+
+        // (25) Create liquidity pool. TODO: Figure out desired ratio
+        INonfungiblePositionManager.MintParams memory params = INonfungiblePositionManager.MintParams({
+            token0: address(rwaToken),
+            token1: WETH,
+            fee: 100,
+            tickLower: -100,
+            tickUpper: 100,
+            amount0Desired: TOKEN_DEPOSIT,
+            amount1Desired: ETH_DEPOSIT,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: address(this),
+            deadline: block.timestamp
+        });
+        INonfungiblePositionManager(UNREAL_NFTMANAGER).mint(params);
+
+        // ~ note For testing, create USTB/WETH pool ~
 
         ETH_DEPOSIT = 10 ether;
         TOKEN_DEPOSIT = 20_000 ether;
                 
-        vm.prank(0x95e3664633A8650CaCD2c80A0F04fb56F65DF300); // USTB holder
-        IERC20(address(UNREAL_USTB)).transfer(address(this), TOKEN_DEPOSIT);
-        //deal(address(UNREAL_USTB), address(this), TOKEN_DEPOSIT);
+        _dealUSTB(address(this), TOKEN_DEPOSIT);
         IERC20(address(UNREAL_USTB)).approve(address(UNREAL_UNIV2_ROUTER), TOKEN_DEPOSIT);
 
         vm.startPrank(UNREAL_PAIR_MANAGER);
@@ -325,6 +376,64 @@ contract MainDeploymentTest is Utility {
             address(this),
             block.timestamp + 300
         );
+        
+        // ~ note For testing, create USDC/DAI pool ~
+
+        vm.prank(UNREAL_PAIR_MANAGER);
+        pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(UNREAL_USDC, UNREAL_DAI, 100);
+        IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).initializePoolPrice(pair, uint160(initPrice));
+
+        uint256 amount0 = 100 * 10**6;
+        uint256 amount1 = 100 * 10**18;
+
+        deal(UNREAL_USDC, address(this), amount0);
+        IERC20(UNREAL_USDC).approve(UNREAL_NFTMANAGER, amount0);
+        deal(UNREAL_DAI, address(this), amount1);
+        IERC20(UNREAL_DAI).approve(UNREAL_NFTMANAGER, amount1);
+
+        params = INonfungiblePositionManager.MintParams({
+            token0: UNREAL_DAI,
+            token1: UNREAL_USDC,
+            fee: 100,
+            tickLower: -10,
+            tickUpper: 10,
+            amount0Desired: amount0,
+            amount1Desired: amount1,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: address(this),
+            deadline: block.timestamp
+        });
+        INonfungiblePositionManager(UNREAL_NFTMANAGER).mint(params);
+
+        // ~ note For testing, create DAI/WETH pool ~
+
+        vm.prank(UNREAL_PAIR_MANAGER);
+        pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(UNREAL_WETH, UNREAL_DAI, 100);
+        IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).initializePoolPrice(pair, uint160(initPrice));
+
+        amount0 = 100 * 10**18;
+        amount1 = 100 * 10**18;
+
+        deal(UNREAL_WETH, address(this), amount0);
+        IERC20(UNREAL_WETH).approve(UNREAL_NFTMANAGER, amount0);
+        deal(UNREAL_DAI, address(this), amount1);
+        IERC20(UNREAL_DAI).approve(UNREAL_NFTMANAGER, amount1);
+
+        params = INonfungiblePositionManager.MintParams({
+            token0: UNREAL_DAI,
+            token1: UNREAL_WETH,
+            fee: 100,
+            tickLower: -100,
+            tickUpper: 100,
+            amount0Desired: amount0,
+            amount1Desired: amount1,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: address(this),
+            deadline: block.timestamp
+        });
+        INonfungiblePositionManager(UNREAL_NFTMANAGER).mint(params);
     }
 
 
@@ -339,60 +448,80 @@ contract MainDeploymentTest is Utility {
 
     /// @dev Returns the amount of $RWA tokens quoted for `amount` ETH.
     function _getQuoteBuy(uint256 amount) internal returns (uint256) {
-        address[] memory path = new address[](2);
+        IQuoterV2.QuoteExactInputSingleParams memory params = IQuoterV2.QuoteExactInputSingleParams({
+            tokenIn: WETH,
+            tokenOut: address(rwaToken),
+            amountIn: amount,
+            fee: 100,
+            sqrtPriceLimitX96: 0
+        });
 
-        path[0] = WETH;
-        path[1] = address(rwaToken);
-
-        uint256[] memory amounts = uniswapV2Router.getAmountsOut(amount, path);
-        return amounts[1];
+        (uint256 amountOut,,,) = quoter.quoteExactInputSingle(params);
+        return amountOut;
     }
 
     /// @dev Perform a buy
     function _buy(address actor, uint256 amount) internal {
-        address[] memory path = new address[](2);
+        vm.prank(actor);
+        WETH.call{value:amount}(abi.encodeWithSignature("deposit()"));
 
-        path[0] = WETH;
-        path[1] = address(rwaToken);
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+            tokenIn: WETH,
+            tokenOut: address(rwaToken),
+            fee: 100,
+            recipient: actor,
+            deadline: block.timestamp,
+            amountIn: amount,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
 
         vm.startPrank(actor);
-        uniswapV2Router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: amount}(
-            0,
-            path,
-            actor,
-            block.timestamp + 300
-        );
+        IERC20(WETH).approve(address(swapRouter), amount);
+        swapRouter.exactInputSingle(swapParams);
         vm.stopPrank();
     }
 
     /// @dev Returns the amount of ETH quoted for `amount` $RWA.
     function _getQuoteSell(uint256 amount) internal returns (uint256) {
-        address[] memory path = new address[](2);
+        IQuoterV2.QuoteExactInputSingleParams memory params = IQuoterV2.QuoteExactInputSingleParams({
+            tokenIn: address(rwaToken),
+            tokenOut: WETH,
+            amountIn: amount,
+            fee: 100,
+            sqrtPriceLimitX96: 0
+        });
 
-        path[0] = address(rwaToken);
-        path[1] = WETH;
-
-        uint256[] memory amounts = uniswapV2Router.getAmountsOut(amount, path);
-        return amounts[1];
+        (uint256 amountOut,,,) = quoter.quoteExactInputSingle(params);
+        return amountOut;
     }
 
     /// @dev Perform a sell
     function _sell(address actor, uint256 amount) internal {
-        address[] memory path = new address[](2);
+        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(rwaToken),
+            tokenOut: WETH,
+            fee: 100,
+            recipient: address(this),
+            deadline: block.timestamp,
+            amountIn: amount,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
 
-        path[0] = address(rwaToken);
-        path[1] = WETH;
+        uint256 WETHPreBal = IERC20(WETH).balanceOf(address(this));
 
         vm.startPrank(actor);
-        rwaToken.approve(address(uniswapV2Router), amount);
-        uniswapV2Router.swapExactTokensForETHSupportingFeeOnTransferTokens(
-            amount,
-            0,
-            path,
-            actor,
-            block.timestamp + 300
-        );
+        rwaToken.approve(address(swapRouter), amount);
+        swapRouter.exactInputSingleFeeOnTransfer(swapParams);
         vm.stopPrank();
+
+        uint256 amountETH = IERC20(WETH).balanceOf(address(this)) - WETHPreBal;
+        require (amountETH != 0, "0 ETH");
+
+        WETH.call(abi.encodeWithSignature("withdraw(uint256)", amountETH));
+        (bool success,) = actor.call{value: amountETH}("");
+        require(success, "ETH unsuccessful");
     }
 
     /// @dev Helper method for calculate early-burn fees.
@@ -403,6 +532,14 @@ contract MainDeploymentTest is Utility {
     /// @dev Helper method for calculate early-burn penalties post fee.
     function _calculatePenalty(uint256 amount, uint256 duration) internal view returns (uint256 penalty) {
         penalty = (amount * _calculateFee(duration) / 100_00);
+    }
+
+    /// @dev deal doesn't work with USTB since the storage layout is different
+    function _dealUSTB(address give, uint256 amount) internal {
+        bytes32 USTBStorageLocation = 0x8a0c9d8ec1d9f8b365393c36404b40a33f47675e34246a2e186fbefd5ecd3b00;
+        uint256 mapSlot = 2;
+        bytes32 slot = keccak256(abi.encode(give, uint256(USTBStorageLocation) + mapSlot));
+        vm.store(address(UNREAL_USTB), slot, bytes32(amount));
     }
 
 
@@ -420,11 +557,6 @@ contract MainDeploymentTest is Utility {
     // Unit Tests
     // ----------
 
-    // RWA buy, sell, transfer ✅
-    // veRWA mint, burn, split, merge, migrate, burn, claim ✅
-    // delegation
-    // rev streams
-
     // ~ RWAToken Tests ~
 
     /// @dev Verifies proper state changes when a user buys $RWA tokens from a UniV2Pool.
@@ -437,7 +569,7 @@ contract MainDeploymentTest is Utility {
 
         // get quote for buy
         uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
+        uint256 taxedAmount = quote * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
         // ~ Pre-state check ~
@@ -445,6 +577,7 @@ contract MainDeploymentTest is Utility {
         assertEq(JOE.balance, amountETH);
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute buy ~
 
@@ -454,7 +587,7 @@ contract MainDeploymentTest is Utility {
 
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
     }
 
     /// @dev Verifies proper state changes when a WHITELISTED user buys $RWA tokens from a UniV2Pool.
@@ -489,17 +622,49 @@ contract MainDeploymentTest is Utility {
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
     }
 
+    /// @dev Uses fuzzing to verify proper state changes when a user buys $RWA tokens from a UniV2Pool.
+    function test_mainDeployment_rwaToken_buy_fuzzing(uint256 amountETH) public {
+        amountETH = bound(amountETH, 100, 10 ether); // Range 0.000000000000001 -> 1,000
+
+        // ~ Config ~
+
+        vm.deal(JOE, amountETH);
+
+        // get quote for buy
+        uint256 quote = _getQuoteBuy(amountETH);
+        uint256 taxedAmount = quote * rwaToken.fee() / 100;
+        assertGt(taxedAmount, 0);
+
+        // ~ Pre-state check ~
+
+        assertEq(JOE.balance, amountETH);
+        assertEq(rwaToken.balanceOf(JOE), 0);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+
+        // ~ Execute buy ~
+
+        _buy(JOE, amountETH);
+
+        // ~ Post-state check ~
+
+        assertEq(JOE.balance, 0);
+        assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
+    }
+
     /// @dev Verifies proper state changes when a user sells $RWA tokens into a UniV2Pool.
     function test_mainDeployment_rwaToken_sell() public {
 
         // ~ Config ~
 
-        uint256 amountTokens = 100 ether;
+        uint256 amountTokens = 5 ether;
         rwaToken.mintFor(JOE, amountTokens);
 
         // get quote for buy
         uint256 quote = _getQuoteSell(amountTokens);
-        uint256 taxedAmount = amountTokens * rwaToken.totalFees() / 100;
+        uint256 taxedAmount = amountTokens * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
         // ~ Pre-state check ~
@@ -507,6 +672,7 @@ contract MainDeploymentTest is Utility {
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), amountTokens);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute sell ~
 
@@ -517,7 +683,8 @@ contract MainDeploymentTest is Utility {
         assertGt(JOE.balance, 0);
         assertLt(JOE.balance, quote);
         assertEq(rwaToken.balanceOf(JOE), 0);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
     }
 
     /// @dev Verifies proper state changes when a WHITELISTED user sells $RWA tokens into a UniV2Pool.
@@ -529,7 +696,7 @@ contract MainDeploymentTest is Utility {
         vm.prank(ADMIN);
         rwaToken.excludeFromFees(JOE, true);
 
-        uint256 amountTokens = 100 ether;
+        uint256 amountTokens = 5 ether;
         rwaToken.mintFor(JOE, amountTokens);
 
         // get quote for buy
@@ -540,6 +707,7 @@ contract MainDeploymentTest is Utility {
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), amountTokens);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute sell ~
 
@@ -550,6 +718,40 @@ contract MainDeploymentTest is Utility {
         assertEq(JOE.balance, quote); // no tax taken.
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+    }
+
+    /// @dev Uses fuzzing to verify proper state changes when a user sells $RWA tokens into a UniV2Pool.
+    function test_mainDeployment_rwaToken_sell_fuzzing(uint256 amountTokens) public {
+        amountTokens = bound(amountTokens, 0.000000001 ether, 10 ether); // Range 0.000000001 -> 500k tokens
+
+        // ~ Config ~
+
+        deal(address(rwaToken), JOE, amountTokens);
+
+        // get quote for buy
+        uint256 quote = _getQuoteSell(amountTokens);
+        uint256 taxedAmount = amountTokens * rwaToken.fee() / 100;
+        assertGt(taxedAmount, 0);
+
+        // ~ Pre-state check ~
+
+        assertEq(JOE.balance, 0);
+        assertEq(rwaToken.balanceOf(JOE), amountTokens);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+
+        // ~ Execute sell ~
+
+        _sell(JOE, amountTokens);
+
+        // ~ Post-state check
+
+        assertGt(JOE.balance, 0);
+        assertLt(JOE.balance, quote);
+        assertEq(rwaToken.balanceOf(JOE), 0);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
     }
 
     /// @dev Verifies proper state changes when a user transfer tokens to another user.
@@ -637,125 +839,20 @@ contract MainDeploymentTest is Utility {
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
     }
 
-    /// @dev Verifies proper state changes when there are accumulated fees on the RWA contract and
-    ///      an admin decides to distributeRoyalties manually.
-    function test_mainDeployment_rwaToken_royaltyDistribution_manual() public {
-
-        // ~ Config ~
-
-        uint256 amountETH = 1 ether;
-        vm.deal(JOE, amountETH);
-
-        uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
-        assertGt(taxedAmount, 0);
-
-        uint256 preSupply = rwaToken.totalSupply();
-
-        // Execute buy to accumulate fees
-        _buy(JOE, amountETH);
-
-        // ~ Pre-state check ~
-
-        uint256 burnPortion = (taxedAmount * rwaToken.burnFee()) / rwaToken.totalFees(); // 2/5
-        emit log_named_uint("burn portion", burnPortion);
-
-        uint256 revSharePortion = (taxedAmount * rwaToken.revShareFee()) / rwaToken.totalFees(); // 2/5
-        emit log_named_uint("revDistributor portion", revSharePortion);
-    
-        uint256 preBal = rwaToken.balanceOf(address(rwaToken));
-
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-        assertEq(rwaToken.totalSupply(), preSupply);
-
-        uint256 lpTokens = IUniswapV2Pair(rwaToken.uniswapV2Pair()).totalSupply();
-
-        // ~ Execute buy -> Royalties do NOT distribute ~
-
-        vm.prank(ADMIN);
-        rwaToken.distributeRoyalties();
-
-        // ~ Post-state check ~
-    
-        assertLt(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
-        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
-
-        assertGt(IUniswapV2Pair(rwaToken.uniswapV2Pair()).totalSupply(), lpTokens);
-    }
-
-    /// @dev Verifies proper state changes when there are accumulated fees on the RWA contract and
-    ///      there is a second buy that occurs without distributing royalties.
-    function test_mainDeployment_rwaToken_royaltyDistribution_onBuy() public {
-
-        // ~ Config ~
-
-        uint256 amountETH = 1 ether;
-        vm.deal(JOE, amountETH);
-
-        uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
-        assertGt(taxedAmount, 0);
-
-        uint256 preSupply = rwaToken.totalSupply();
-
-        // Execute buy to accumulate fees
-        _buy(JOE, amountETH);
-
-        // ~ Pre-state check ~
-    
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-        assertEq(rwaToken.totalSupply(), preSupply);
-
-        (uint256 preReserve0, uint256 preReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA PRE BUY Reserves", preReserve0);
-        emit log_named_uint("ETH PRE BUY Reserves", preReserve1);
-
-        quote = _getQuoteBuy(amountETH);
-
-        // ~ Execute buy -> Royalties do NOT distribute ~
-
-        vm.deal(JOE, amountETH);
-        _buy(JOE, amountETH);
-
-        // ~ Post-state check ~
-    
-        assertGt(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-        assertEq(rwaToken.totalSupply(), preSupply);
-
-        (uint256 postReserve0, uint256 postReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA POST BUY Reserves", postReserve0); // DOWN
-        emit log_named_uint("ETH POST BUY Reserves", postReserve1); // UP
-
-        assertEq(postReserve0, preReserve0 - quote);
-        assertEq(postReserve1, preReserve1 + amountETH);
-    }
-
-    /// @dev Verifies proper state changes when there are accumulated fees on the RWA contract and
-    ///      there is a sequential sell that occurs distributing royalties.
-    function test_mainDeployment_rwaToken_royaltyDistribution_onSell() public {
+    /// @dev Verifies proper taxation and distribution after fees have been modified.
+    function test_mainDeployment_rwaToken_royaltyHandler_distributeRoyalties() public {
 
         // ~ Config ~
 
         uint256 amountETH = 10 ether;
         vm.deal(JOE, amountETH);
 
-        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
-
         uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
+        uint256 taxedAmount = quote * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
-        uint256 burnPortion = (taxedAmount * rwaToken.burnFee()) / rwaToken.totalFees(); // 2/5
-        emit log_named_uint("burn portion", burnPortion);
-
-        uint256 revSharePortion = (taxedAmount * rwaToken.revShareFee()) / rwaToken.totalFees(); // 2/5
-        emit log_named_uint("revDistributor portion", revSharePortion);
-
-        uint256 lpPortion = taxedAmount - burnPortion - revSharePortion; // 1/5
-        emit log_named_uint("lp portion", lpPortion);
+        uint256 burnPortion = (taxedAmount * royaltyHandler.burnPortion()) / rwaToken.fee(); // 2/5
+        uint256 revSharePortion = (taxedAmount * royaltyHandler.revSharePortion()) / rwaToken.fee(); // 2/5
 
         uint256 preSupply = rwaToken.totalSupply();
 
@@ -765,77 +862,34 @@ contract MainDeploymentTest is Utility {
         // ~ Pre-state check ~
     
         assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
         
         assertEq(rwaToken.totalSupply(), preSupply);
         assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-
-        // ~ Execute sell -> distribute ~
-
-        uint256 amountToSell = 1_000 ether;
-        _sell(JOE, amountToSell);
-
-        // ~ Post-state check ~
-    
-        assertEq(rwaToken.balanceOf(address(rwaToken)), amountToSell * rwaToken.totalFees() / 100);
-
-        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
-    }
-
-    /// @dev Verifies proper state changes when there are accumulated fees on the RWA contract and
-    ///      there is a sequential transfer that occurs distributing royalties.
-    function test_mainDeployment_rwaToken_royaltyDistribution_onTransfer() public {
-
-        // ~ Config ~
-
-        uint256 amountETH = 10 ether;
-        vm.deal(JOE, amountETH);
-
-        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
-
-        uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
-        assertGt(taxedAmount, 0);
-
-        uint256 burnPortion = (taxedAmount * rwaToken.burnFee()) / rwaToken.totalFees(); // 2/5
-        uint256 revSharePortion = (taxedAmount * rwaToken.revShareFee()) / rwaToken.totalFees(); // 2/5
-
-        uint256 preSupply = rwaToken.totalSupply();
-
-        // Execute buy to accumulate fees
-        _buy(JOE, amountETH);
-
-        // ~ Pre-state check ~
-    
-        assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
         
-        assertEq(rwaToken.totalSupply(), preSupply);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
+        // check boxALM balance/state
+        assertEq(rwaToken.balanceOf(box), 0);
+        assertEq(IERC20(WETH).balanceOf(box), 0);
 
-        (uint256 preReserve0, uint256 preReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA PRE TRANSFER Reserves", preReserve0);
-        emit log_named_uint("ETH PRE TRANSFER Reserves", preReserve1);
+        // check GaugeV2ALM balance/state
+        assertEq(IERC20(box).balanceOf(gALM), 0);
 
         // ~ Execute transfer -> distribute ~
 
-        uint256 amountToTransfer = 1_000 ether;
         vm.prank(JOE);
-        rwaToken.transfer(ALICE, amountToTransfer); 
+        royaltyHandler.distributeRoyalties();
 
         // ~ Post-state check ~
     
-        assertEq(rwaToken.balanceOf(address(rwaToken)), 0); // NOTE NO TAX ON TRANSFER
-
         assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
         assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
 
-        (uint256 postReserve0, uint256 postReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA POST TRANSFER Reserves", postReserve0);
-        emit log_named_uint("ETH POST TRANSFER Reserves", postReserve1);
+        // check boxALM balance/state
+        assertGt(rwaToken.balanceOf(box), 0);
+        assertGt(IERC20(WETH).balanceOf(box), 0);
 
-        assertGt(postReserve0, preReserve0);
+        // check GaugeV2ALM balance/state
+        assertGt(IERC20(box).balanceOf(gALM), 0);
     }
 
 
@@ -2607,7 +2661,7 @@ contract MainDeploymentTest is Utility {
         vm.expectRevert(abi.encodeWithSelector(RWAVotingEscrow.NotAuthorized.selector, JOE));
         veRWA.migrate(NIK, amount, duration);
 
-        vm.prank(UNREAL_ENDPOINT);
+        vm.prank(UNREAL_LZ_ENDPOINT_V1);
         uint256 _tokenId = veRWA.migrate(NIK, amount, duration);
 
         // ~ Post-state check ~
@@ -3139,57 +3193,11 @@ contract MainDeploymentTest is Utility {
     // ~ Revenue Distributor ~
 
     /// @dev This unit test verifies proper state changes when RevenueDistributor::convertRewardToken is executed.
-    function test_mainDeployment_revDist_convertRewardToken_single_UniV2() public {
-
-        // ~ Config ~
-
-        uint256 amountIn = 100 ether;
-        rwaToken.mintFor(address(revDistributor), amountIn);
-
-        uint256 quoteOut = _getQuoteSell(amountIn);
-        uint256 preBal = address(revStreamETH).balance;
-
-        address[] memory path = new address[](2);
-        path[0] = address(rwaToken);
-        path[1] = WETH;
-
-        // ~ Pre-state check ~
-
-        assertEq(rwaToken.balanceOf(address(revDistributor)), amountIn);
-        assertEq(address(revStreamETH).balance, preBal);
-
-        // ~ Execute RevenueDistributor::convertRewardToken ~
-
-        vm.startPrank(ADMIN);
-        uint256 amountOut = revDistributor.convertRewardToken(
-            address(rwaToken),
-            amountIn,
-            UNREAL_UNIV2_ROUTER,
-            abi.encodeWithSignature(
-                "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
-                amountIn,
-                quoteOut,
-                path,
-                address(revDistributor),
-                block.timestamp + 100
-            )
-        );
-        vm.stopPrank();
-
-        // ~ Post-state check ~
-
-        assertEq(amountOut, quoteOut);
-
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-        assertEq(address(revStreamETH).balance, preBal + quoteOut);
-    }
-
-    /// @dev This unit test verifies proper state changes when RevenueDistributor::convertRewardToken is executed.
     function test_mainDeployment_revDist_convertRewardToken_single_UniV3() public {
 
         // ~ Config ~
 
-        uint256 amountIn = 50 ether;
+        uint256 amountIn = 5 ether;
         deal(address(UNREAL_DAI), address(revDistributor), amountIn);
 
         //uint256 quoteOut = _getQuoteSell(amountIn);
@@ -3198,8 +3206,8 @@ contract MainDeploymentTest is Utility {
         ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(UNREAL_DAI),
             tokenOut: WETH,
-            fee: 1000,
-            recipient: address(UNREAL_SWAP_ROUTER),
+            fee: 100,
+            recipient: address(swapRouter),
             deadline: block.timestamp + 100,
             amountIn: amountIn,
             amountOutMinimum: 0,
@@ -3241,7 +3249,7 @@ contract MainDeploymentTest is Utility {
         revDistributor.convertRewardToken(
             address(UNREAL_DAI),
             amountIn,
-            UNREAL_SWAP_ROUTER,
+            address(swapRouter),
             abi.encodeWithSignature("multicall(bytes[])", multicallData)
         );
         vm.stopPrank();
@@ -3257,7 +3265,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Config ~
 
-        uint256 amountIn = 50 ether;
+        uint256 amountIn = 5 ether;
 
         rwaToken.mintFor(JOE, amountIn);
         // mint Joe veRWA token
@@ -3271,21 +3279,17 @@ contract MainDeploymentTest is Utility {
         vm.stopPrank();
 
         rwaToken.mintFor(address(revDistributor), amountIn);
-        //deal(address(UNREAL_USTB), address(revDistributor), amountIn);
-        vm.prank(0x95e3664633A8650CaCD2c80A0F04fb56F65DF300); // USTB holder
-        IERC20(address(UNREAL_USTB)).transfer(address(revDistributor), amountIn);
+        _dealUSTB(address(revDistributor), amountIn);
         deal(address(UNREAL_DAI), address(revDistributor), amountIn);
 
-        // uint256 quoteOut1 = _getQuoteETH(address(mockRevToken1), amountIn);
-        // uint256 quoteOut2 = _getQuoteETH(address(mockRevToken2), amountIn);
-        // uint256 quoteOut3 = _getQuoteETH(address(rwaToken), amountIn);
+        // DAI -> WETH using UniV3
 
-        ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
+        ISwapRouter.ExactInputSingleParams memory swapParamsDAI = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(UNREAL_DAI),
             tokenOut: WETH,
-            fee: 1000,
-            recipient: address(UNREAL_SWAP_ROUTER),
-            deadline: block.timestamp + 100,
+            fee: 100,
+            recipient: address(swapRouter),
+            deadline: block.timestamp,
             amountIn: amountIn,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
@@ -3294,14 +3298,14 @@ contract MainDeploymentTest is Utility {
         bytes memory data1 = 
             abi.encodeWithSignature(
                 "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
-                swapParams.tokenIn,
-                swapParams.tokenOut,
-                swapParams.fee,
-                swapParams.recipient,
-                swapParams.deadline,
-                swapParams.amountIn,
-                swapParams.amountOutMinimum,
-                swapParams.sqrtPriceLimitX96
+                swapParamsDAI.tokenIn,
+                swapParamsDAI.tokenOut,
+                swapParamsDAI.fee,
+                swapParamsDAI.recipient,
+                swapParamsDAI.deadline,
+                swapParamsDAI.amountIn,
+                swapParamsDAI.amountOutMinimum,
+                swapParamsDAI.sqrtPriceLimitX96
             );
 
         bytes memory data2 =
@@ -3311,16 +3315,50 @@ contract MainDeploymentTest is Utility {
                 address(revDistributor)
             );
         
-        bytes[] memory multicallData = new bytes[](2);
-        multicallData[0] = data1;
-        multicallData[1] = data2;
+        bytes[] memory multicallDataDAI = new bytes[](2);
+        multicallDataDAI[0] = data1;
+        multicallDataDAI[1] = data2;
 
-        address[] memory path1 = new address[](2);
-        path1[0] = address(rwaToken);
-        path1[1] = WETH;
-        address[] memory path2 = new address[](2);
-        path2[0] = address(UNREAL_USTB);
-        path2[1] = WETH;
+        // RWA -> WETH using UniV3
+
+        ISwapRouter.ExactInputSingleParams memory swapParamsRWA = ISwapRouter.ExactInputSingleParams({
+            tokenIn: address(rwaToken),
+            tokenOut: WETH,
+            fee: 100,
+            recipient: address(swapRouter),
+            deadline: block.timestamp,
+            amountIn: amountIn,
+            amountOutMinimum: 0,
+            sqrtPriceLimitX96: 0
+        });
+
+        data1 = abi.encodeWithSignature(
+                "exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+                swapParamsRWA.tokenIn,
+                swapParamsRWA.tokenOut,
+                swapParamsRWA.fee,
+                swapParamsRWA.recipient,
+                swapParamsRWA.deadline,
+                swapParamsRWA.amountIn,
+                swapParamsRWA.amountOutMinimum,
+                swapParamsRWA.sqrtPriceLimitX96
+            );
+
+        data2 = abi.encodeWithSignature(
+                "unwrapWETH9(uint256,address)",
+                0, // minimum out
+                address(revDistributor)
+            );
+        
+        bytes[] memory multicallDataRWA = new bytes[](2);
+        multicallDataRWA[0] = data1;
+        multicallDataRWA[1] = data2;
+
+        // USTB -> WETH using UniV2 & config
+
+        address[] memory pathUSTB = new address[](2);
+        pathUSTB[0] = address(UNREAL_USTB);
+        pathUSTB[1] = WETH;
 
         address[] memory tokens = new address[](3);
         tokens[0] = address(rwaToken);
@@ -3329,40 +3367,33 @@ contract MainDeploymentTest is Utility {
 
         uint256[] memory amounts = new uint256[](3);
         amounts[0] = amountIn;
-        amounts[1] = amountIn;
+        amounts[1] = IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor));
         amounts[2] = amountIn;
 
         address[] memory targets = new address[](3);
-        targets[0] = UNREAL_UNIV2_ROUTER;
-        targets[1] = UNREAL_UNIV2_ROUTER;
-        targets[2] = UNREAL_SWAP_ROUTER;
+        targets[0] = address(swapRouter);
+        targets[1] = address(uniswapV2Router);
+        targets[2] = address(swapRouter);
 
         bytes[] memory data = new bytes[](3);
         data[0] = 
-            abi.encodeWithSignature(
-                "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
-                amountIn,
-                0,
-                path1,
-                address(revDistributor),
-                block.timestamp + 100
-            );
+            abi.encodeWithSignature("multicall(bytes[])", multicallDataRWA);
         data[1] = 
             abi.encodeWithSignature(
                 "swapExactTokensForETH(uint256,uint256,address[],address,uint256)",
-                amountIn,
+                IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor)),
                 0,
-                path2,
+                pathUSTB,
                 address(revDistributor),
                 block.timestamp + 100
             );
         data[2] = 
-            abi.encodeWithSignature("multicall(bytes[])", multicallData);
+            abi.encodeWithSignature("multicall(bytes[])", multicallDataDAI);
 
         // ~ Pre-state check ~
 
         assertEq(rwaToken.balanceOf(address(revDistributor)), amountIn);
-        assertEq(IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor)), amountIn);
+        assertGt(IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor)), amountIn);
         assertEq(IERC20(address(UNREAL_DAI)).balanceOf(address(revDistributor)), amountIn);
         assertEq(address(revStreamETH).balance, 0);
 
@@ -3378,10 +3409,6 @@ contract MainDeploymentTest is Utility {
         vm.stopPrank();
 
         // ~ Post-state check ~
-
-        // assertEq(amountsOut[0], quoteOut1); 0.094803704666332798 ETH from RWA
-        // assertEq(amountsOut[1], quoteOut2); 0.049602730389010781 ETH from USTB
-        // assertEq(amountsOut[2], quoteOut3); 0.000998992512735895 ETH from DAI
 
         // 0.145405427568079474 ETH total distributed
 
@@ -4213,7 +4240,7 @@ contract MainDeploymentTest is Utility {
 
         // get quote
         (uint256 quoteETHFromUSDC,,,) = quoter.quoteExactInput(
-            abi.encodePacked(address(UNREAL_USDC), uint24(1000), address(UNREAL_DAI), uint24(1000), WETH),
+            abi.encodePacked(address(UNREAL_USDC), uint24(100), address(UNREAL_DAI), uint24(100), WETH),
             amountUSDC
         );
 
@@ -4221,7 +4248,7 @@ contract MainDeploymentTest is Utility {
 
         IERC20(address(UNREAL_USDC)).approve(address(exactInputWrapper), amountUSDC);
         exactInputWrapper.exactInputForETH(
-            abi.encodePacked(address(UNREAL_USDC), uint24(1000), address(UNREAL_DAI), uint24(1000), WETH),
+            abi.encodePacked(address(UNREAL_USDC), uint24(100), address(UNREAL_DAI), uint24(100), WETH),
             address(UNREAL_USDC),
             address(this),
             block.timestamp + 100,
@@ -4256,7 +4283,7 @@ contract MainDeploymentTest is Utility {
 
         // get quote
         (uint256 quoteETHFromUSDC,,,) = quoter.quoteExactInput(
-            abi.encodePacked(address(UNREAL_USDC), uint24(1000), address(UNREAL_DAI), uint24(1000), WETH),
+            abi.encodePacked(address(UNREAL_USDC), uint24(100), address(UNREAL_DAI), uint24(100), WETH),
             amountUSDC
         );
 
@@ -4276,7 +4303,7 @@ contract MainDeploymentTest is Utility {
             address(exactInputWrapper),
             abi.encodeWithSignature(
                 "exactInputForETH(bytes,address,address,uint256,uint256,uint256)",
-                abi.encodePacked(address(UNREAL_USDC), uint24(1000), address(UNREAL_DAI), uint24(1000), WETH),
+                abi.encodePacked(address(UNREAL_USDC), uint24(100), address(UNREAL_DAI), uint24(100), WETH),
                 address(UNREAL_USDC),
                 address(revDistributor),
                 block.timestamp + 100,

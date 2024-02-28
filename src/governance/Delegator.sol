@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
@@ -15,14 +15,12 @@ import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
  *         This contract will be created by the DelegateFactory and will be assigned a delegatee.
  *         Upon creation, a veRWA NFT will be deposited in which the voting power is delegated to the delegatee.
  */
-contract Delegator is AccessControlUpgradeable {
+contract Delegator is OwnableUpgradeable {
 
     // ---------------
     // State Variables
     // ---------------
 
-    /// @notice Hashed identifier for `DEPOSITOR` role.
-    bytes32 public constant DEPOSITOR_ROLE = keccak256("DEPOSITOR");
     /// @notice Token Id of NFT that is delegated.
     uint256 public delegatedToken;
     /// @notice Contract reference of VotingEscrowRWA (veRWA) contract.
@@ -77,15 +75,12 @@ contract Delegator is AccessControlUpgradeable {
         address _creator,
         address _delegatee
     ) external initializer {
-        veRWA = IERC721Enumerable(_veRWA);
+        __Ownable_init(_creator);
 
+        veRWA = IERC721Enumerable(_veRWA);
         creator = _creator;
         delegatee = _delegatee;
         delegateFactory = msg.sender;
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _creator);
-        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
-        _grantRole(DEPOSITOR_ROLE, msg.sender);
     }
 
 
@@ -98,7 +93,9 @@ contract Delegator is AccessControlUpgradeable {
      * @dev There should only be 1 NFT deposited during the lifespan of this delegator.
      * @param _tokenId Token identifier of veRWA token.
      */
-    function depositDelegatorToken(uint256 _tokenId) external onlyRole(DEPOSITOR_ROLE) {     
+    function depositDelegatorToken(uint256 _tokenId) external {     
+        require(msg.sender == delegateFactory, "Delegator: Not authorized");
+
         delegatedToken = _tokenId;   
 
         veRWA.safeTransferFrom(msg.sender, address(this), _tokenId);
@@ -110,7 +107,9 @@ contract Delegator is AccessControlUpgradeable {
     /**
      * @notice This method is used to transfer the `delegatedToken` back to the `creator`.
      */
-    function withdrawDelegatedToken() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function withdrawDelegatedToken() external {
+        require(msg.sender == delegateFactory || msg.sender == owner(), "Delegator: Not authorized");
+
         Votes(address(veRWA)).delegate(address(this));
         veRWA.safeTransferFrom(address(this), creator, delegatedToken);
 

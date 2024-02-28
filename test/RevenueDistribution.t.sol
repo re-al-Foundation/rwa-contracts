@@ -74,9 +74,7 @@ contract RevenueDistributorTest is Utility {
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
-                ADMIN,
-                address(MUMBAI_UNIV2_ROUTER),
-                address(0)
+                ADMIN
             )
         );
         rwaToken = RWAToken(payable(address(rwaTokenProxy)));
@@ -160,7 +158,7 @@ contract RevenueDistributorTest is Utility {
 
         // RevenueDistributor config
         vm.startPrank(ADMIN);
-        revDistributor.grantRole(DISTRIBUTOR_ROLE, GELATO); // for gelato functions to distribute
+        revDistributor.setDistributor(GELATO, true);
         revDistributor.updateRevenueStream(payable(address(revStreamETH)));
         revDistributor.addRevenueToken(address(mockRevToken1));
         revDistributor.addRevenueToken(address(mockRevToken2));
@@ -174,9 +172,8 @@ contract RevenueDistributorTest is Utility {
 
         // Grant minter role to address(this) & veRWA
         vm.startPrank(ADMIN);
-        rwaToken.grantRole(MINTER_ROLE, address(this)); // for testing
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
+        rwaToken.setVotingEscrowRWA(address(veRWA));
+        rwaToken.setReceiver(address(this)); // for testing
         vm.stopPrank();
 
         // Exclude necessary addresses from RWA fees.
@@ -236,7 +233,7 @@ contract RevenueDistributorTest is Utility {
         ETH_DEPOSIT = 10 ether;
         uint256 RWA_DEPOSIT = 100_000 ether;
 
-        rwaToken.mint(RWA_DEPOSIT);
+        rwaToken.mintFor(address(this), RWA_DEPOSIT);
         rwaToken.approve(address(MUMBAI_UNIV2_ROUTER), RWA_DEPOSIT);
 
         IUniswapV2Router02(MUMBAI_UNIV2_ROUTER).addLiquidityETH{value: ETH_DEPOSIT}(
@@ -274,8 +271,7 @@ contract RevenueDistributorTest is Utility {
 
     /// @dev Verifies initial state of RevenueDistributor contract.
     function test_revDist_init_state() public {
-        assertEq(revDistributor.hasRole(0x00, ADMIN), true);
-        assertEq(revDistributor.hasRole(DISTRIBUTOR_ROLE, ADMIN), true);
+        assertEq(revDistributor.owner(), ADMIN);
     }
 
 
@@ -490,5 +486,5 @@ contract RevenueDistributorTest is Utility {
         assertEq(revTokens[0], address(rwaToken));
         assertEq(revTokens[1], address(mockRevToken2));
     }
-
+    
 }

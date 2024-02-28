@@ -25,8 +25,8 @@ import { ExactInputWrapper } from "../../../src/helpers/ExactInputWrapper.sol";
 // uniswap
 import { IUniswapV2Router02 } from "../../../src/interfaces/IUniswapV2Router02.sol";
 
-import { ISwapRouter } from "../../../test/interfaces/ISwapRouter.sol";
-import { IQuoterV2 } from "../../../test/interfaces/IQuoterV2.sol";
+import { ISwapRouter } from "../../../src/interfaces/ISwapRouter.sol";
+import { IQuoterV2 } from "../../../src/interfaces/IQuoterV2.sol";
 
 //helper contracts
 import "../../../test/utils/Constants.sol";
@@ -42,8 +42,8 @@ contract DistributeRevenue3 is Script {
 
     // ~ Contracts ~
 
-    RWAToken public rwaToken = RWAToken(payable(0x909Fd75Ce23a7e61787FE2763652935F92116461));
-    RevenueDistributor public revDistributor = RevenueDistributor(payable(0xa443Bf2fCA2119bFDb97Bc01096fBC4F1546c8Ae));
+    RWAToken public rwaToken = RWAToken(payable(UNREAL_RWA_TOKEN));
+    RevenueDistributor public revDistributor = RevenueDistributor(payable(UNREAL_REV_DISTRIBUTOR));
     RevenueStreamETH public revStreamETH;
 
     ExactInputWrapper public exactInputWrapper = ExactInputWrapper(payable(0xD86ee67328cDACa103b82774FF0b131D03dfdFB5));
@@ -68,8 +68,8 @@ contract DistributeRevenue3 is Script {
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
-    bytes4 public selector_swapExactTokensForETH =
-        bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"));
+    //bytes4 public selector_swapExactTokensForETH =
+    //   bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"));
     bytes4 public selector_exactInput = 
         bytes4(keccak256("multicall(bytes[])"));
     bytes4 public selector_exactInputWrapper = 

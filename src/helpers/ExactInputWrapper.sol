@@ -5,7 +5,7 @@ pragma solidity ^0.8.19;
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 
-import { ISwapRouter } from "../../test/interfaces/ISwapRouter.sol";
+import { ISwapRouter } from "../interfaces/ISwapRouter.sol";
 import { IWETH } from "../interfaces/IWETH.sol";
 
 contract ExactInputWrapper {
@@ -40,7 +40,8 @@ contract ExactInputWrapper {
 
         IERC20(address(tokenIn)).transferFrom(msg.sender, address(this), amountIn);
         IERC20(address(tokenIn)).approve(address(swapRouter), amountIn);
-        amountOut = swapRouter.exactInput(params);
+        amountOut = swapRouter.exactInputFeeOnTransfer(params);
+        //amountOut = swapRouter.exactInput(params);
 
         require(amountOut != 0, "Insufficient amount out");
 

@@ -15,6 +15,7 @@ import { RevenueDistributor } from "../src/RevenueDistributor.sol";
 import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
 import { VotingEscrowVesting } from "../src/governance/VotingEscrowVesting.sol";
 import { RWAToken } from "../src/RWAToken.sol";
+import { RoyaltyHandler } from "../src/RoyaltyHandler.sol";
 import { DelegateFactory } from "../src/governance/DelegateFactory.sol";
 import { Delegator } from "../src/governance/Delegator.sol";
 
@@ -42,6 +43,7 @@ contract RWATokenTest is Utility {
     RWAVotingEscrow public veRWA;
     VotingEscrowVesting public vesting;
     RWAToken public rwaToken;
+    RoyaltyHandler public royaltyHandler;
     DelegateFactory public delegateFactory;
     Delegator public delegator;
 
@@ -49,6 +51,7 @@ contract RWATokenTest is Utility {
     ERC1967Proxy public revStreamProxy;
     ERC1967Proxy public revDistributorProxy;
     ERC1967Proxy public veRWAProxy;
+    ERC1967Proxy public royaltyHandlerProxy;
     ERC1967Proxy public vestingProxy;
     ERC1967Proxy public rwaTokenProxy;
     ERC1967Proxy public delegateFactoryProxy;
@@ -56,6 +59,8 @@ contract RWATokenTest is Utility {
     // ~ Variables ~
 
     address public WETH;
+
+    address internal pair;
 
     function setUp() public {
 
@@ -72,9 +77,7 @@ contract RWATokenTest is Utility {
         rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
-                ADMIN,
-                MUMBAI_UNIV2_ROUTER,
-                address(0)
+                ADMIN
             )
         );
         rwaToken = RWAToken(payable(address(rwaTokenProxy)));
@@ -132,6 +135,27 @@ contract RWATokenTest is Utility {
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));
 
 
+        // ~ Royalty Handler Deployment ~
+
+        // Deploy royaltyHandler base
+        royaltyHandler = new RoyaltyHandler();
+
+        // Deploy proxy for royaltyHandler
+        royaltyHandlerProxy = new ERC1967Proxy(
+            address(royaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                ADMIN,
+                address(revDistributor),
+                address(rwaToken),
+                WETH,
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+        royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
+
+
         // ~ Delegator Deployment ~
 
         // Deploy Delegator implementation
@@ -161,21 +185,22 @@ contract RWATokenTest is Utility {
         vm.prank(ADMIN);
         vesting.setVotingEscrowContract(address(veRWA));
 
-        vm.prank(ADMIN);
-        rwaToken.setRevenueDistributor(address(revDistributor));
+        //vm.prank(ADMIN);
+        //rwaToken.setRevenueDistributor(address(revDistributor));
 
         // create pair
-        address pair = IUniswapV2Factory(IUniswapV2Router02(MUMBAI_UNIV2_ROUTER).factory()).createPair(address(rwaToken), WETH);
+        pair = IUniswapV2Factory(IUniswapV2Router02(MUMBAI_UNIV2_ROUTER).factory()).createPair(address(rwaToken), WETH);
 
         // Grant minter role to address(this) & veRWA
         vm.startPrank(ADMIN);
-        rwaToken.setUniswapV2Pair(pair);
-        rwaToken.grantRole(MINTER_ROLE, address(this)); // for testing
-        rwaToken.grantRole(BURNER_ROLE, address(this)); // for testing
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
+        rwaToken.setAutomatedMarketMakerPair(pair, true);
+        //rwaToken.setUniswapV2Pair(pair);
+        rwaToken.setRoyaltyHandler(address(royaltyHandler));
+        rwaToken.setVotingEscrowRWA(address(veRWA));
+        rwaToken.setReceiver(address(this)); // for testing
         // whitelist
         rwaToken.excludeFromFees(address(veRWA), true);
+        rwaToken.excludeFromFees(address(this), true); // for testing
         vm.stopPrank();
 
         // Mint Joe $RWA tokens
@@ -187,7 +212,7 @@ contract RWATokenTest is Utility {
         uint256 ETH_DEPOSIT = 10 ether;
         uint256 TOKEN_DEPOSIT = 1_000_000 ether;
 
-        rwaToken.mint(TOKEN_DEPOSIT);
+        rwaToken.mintFor(address(this), TOKEN_DEPOSIT);
         rwaToken.approve(address(MUMBAI_UNIV2_ROUTER), TOKEN_DEPOSIT);
 
         // Create liquidity pool.
@@ -200,19 +225,28 @@ contract RWATokenTest is Utility {
             block.timestamp + 300
         );
 
-        (uint256 reserve0, uint256 reserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
+        (uint256 reserve0, uint256 reserve1,) = IUniswapV2Pair(pair).getReserves();
         emit log_named_uint("RWA Init Reserves", reserve0);
         emit log_named_uint("ETH Init Reserves", reserve1);
 
-        vm.prank(address(rwaToken));
-        rwaToken.approve(address(this), TOKEN_DEPOSIT - reserve0);
-        rwaToken.burnFrom(address(rwaToken), TOKEN_DEPOSIT - reserve0);
+        //vm.prank(address(rwaToken));
+        //rwaToken.approve(address(this), TOKEN_DEPOSIT - reserve0);
+        //rwaToken.burnFrom(address(rwaToken), TOKEN_DEPOSIT - reserve0);
+
+        _createLabels();
     }
 
 
     // -------
     // Utility
     // -------
+
+    function _createLabels() internal {
+        vm.label(JOE, "JOE");
+        vm.label(address(rwaToken), "RWAToken");
+        vm.label(address(royaltyHandler), "RoyaltyHandler");
+        vm.label(MUMBAI_UNIV2_ROUTER, "Mumbai_UniV2_Router");
+    }
 
     /// @dev Returns the amount of $RWA tokens quoted for `amount` ETH.
     function _getQuoteBuy(uint256 amount) internal returns (uint256) {
@@ -279,7 +313,7 @@ contract RWATokenTest is Utility {
 
     /// @dev Verifies initial state of RWAToken contract.
     function test_rwaToken_init_state() public {
-        assertNotEq(rwaToken.uniswapV2Pair(), address(0));
+        //assertNotEq(rwaToken.uniswapV2Pair(), address(0));
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
     }
 
@@ -298,7 +332,7 @@ contract RWATokenTest is Utility {
 
         // get quote for buy
         uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
+        uint256 taxedAmount = quote * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
         // ~ Pre-state check ~
@@ -306,6 +340,7 @@ contract RWATokenTest is Utility {
         assertEq(JOE.balance, amountETH);
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute buy ~
 
@@ -315,7 +350,8 @@ contract RWATokenTest is Utility {
 
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
     }
 
     /// @dev Verifies proper state changes when a WHITELISTED user buys $RWA tokens from a UniV2Pool.
@@ -360,7 +396,7 @@ contract RWATokenTest is Utility {
 
         // get quote for buy
         uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
+        uint256 taxedAmount = quote * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
         // ~ Pre-state check ~
@@ -368,6 +404,7 @@ contract RWATokenTest is Utility {
         assertEq(JOE.balance, amountETH);
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute buy ~
 
@@ -377,7 +414,8 @@ contract RWATokenTest is Utility {
 
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
     }
 
     /// @dev Verifies proper state changes when a user sells $RWA tokens into a UniV2Pool.
@@ -386,11 +424,11 @@ contract RWATokenTest is Utility {
         // ~ Config ~
 
         uint256 amountTokens = 10_000 ether;
-        rwaToken.mintFor(JOE, amountTokens);
+        deal(address(rwaToken), JOE, amountTokens);
 
         // get quote for buy
         uint256 quote = _getQuoteSell(amountTokens);
-        uint256 taxedAmount = amountTokens * rwaToken.totalFees() / 100;
+        uint256 taxedAmount = amountTokens * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
         // ~ Pre-state check ~
@@ -398,6 +436,7 @@ contract RWATokenTest is Utility {
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), amountTokens);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute sell ~
 
@@ -408,7 +447,8 @@ contract RWATokenTest is Utility {
         assertGt(JOE.balance, 0);
         assertLt(JOE.balance, quote);
         assertEq(rwaToken.balanceOf(JOE), 0);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
     }
 
     /// @dev Verifies proper state changes when a WHITELISTED user sells $RWA tokens into a UniV2Pool.
@@ -421,7 +461,7 @@ contract RWATokenTest is Utility {
         rwaToken.excludeFromFees(JOE, true);
 
         uint256 amountTokens = 10_000 ether;
-        rwaToken.mintFor(JOE, amountTokens);
+        deal(address(rwaToken), JOE, amountTokens);
 
         // get quote for buy
         uint256 quote = _getQuoteSell(amountTokens);
@@ -431,6 +471,7 @@ contract RWATokenTest is Utility {
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), amountTokens);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute sell ~
 
@@ -441,6 +482,7 @@ contract RWATokenTest is Utility {
         assertEq(JOE.balance, quote); // no tax taken.
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
     }
 
     /// @dev Uses fuzzing to verify proper state changes when a user sells $RWA tokens into a UniV2Pool.
@@ -449,11 +491,11 @@ contract RWATokenTest is Utility {
 
         // ~ Config ~
 
-        rwaToken.mintFor(JOE, amountTokens);
+        deal(address(rwaToken), JOE, amountTokens);
 
         // get quote for buy
         uint256 quote = _getQuoteSell(amountTokens);
-        uint256 taxedAmount = amountTokens * rwaToken.totalFees() / 100;
+        uint256 taxedAmount = amountTokens * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
         // ~ Pre-state check ~
@@ -461,6 +503,7 @@ contract RWATokenTest is Utility {
         assertEq(JOE.balance, 0);
         assertEq(rwaToken.balanceOf(JOE), amountTokens);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute sell ~
 
@@ -471,7 +514,8 @@ contract RWATokenTest is Utility {
         assertGt(JOE.balance, 0);
         assertLt(JOE.balance, quote);
         assertEq(rwaToken.balanceOf(JOE), 0);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
     }
 
     /// @dev Verifies proper state changes when a user transfer tokens to another user.
@@ -481,7 +525,7 @@ contract RWATokenTest is Utility {
         // ~ Config ~
 
         uint256 amountTokens = 10_000 ether;
-        rwaToken.mintFor(JOE, amountTokens);
+        deal(address(rwaToken), JOE, amountTokens);
 
         // ~ Pre-state check ~
 
@@ -512,7 +556,7 @@ contract RWATokenTest is Utility {
         rwaToken.excludeFromFees(JOE, true);
 
         uint256 amountTokens = 10_000 ether;
-        rwaToken.mintFor(JOE, amountTokens);
+        deal(address(rwaToken), JOE, amountTokens);
 
         // ~ Pre-state check ~
 
@@ -539,7 +583,7 @@ contract RWATokenTest is Utility {
 
         // ~ Config ~
 
-        rwaToken.mintFor(JOE, amountTokens);
+        deal(address(rwaToken), JOE, amountTokens);
 
         // ~ Pre-state check ~
 
@@ -559,241 +603,25 @@ contract RWATokenTest is Utility {
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
     }
 
-    /// @dev Verifies proper state changes when there are accumulated fees on the RWA contract and
-    ///      there is a second buy that occurs without distributing royalties.
-    function test_rwaToken_royaltyDistribution_onBuy() public {
-
-        // ~ Config ~
-
-        uint256 amountETH = 10 ether;
-        vm.deal(JOE, amountETH);
-
-        uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
-        assertGt(taxedAmount, 0);
-
-        uint256 preSupply = rwaToken.totalSupply();
-
-        // Execute buy to accumulate fees
-        _buy(JOE, amountETH);
-
-        // ~ Pre-state check ~
-    
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-        assertEq(rwaToken.totalSupply(), preSupply);
-
-        (uint256 preReserve0, uint256 preReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA PRE BUY Reserves", preReserve0);
-        emit log_named_uint("ETH PRE BUY Reserves", preReserve1);
-
-        quote = _getQuoteBuy(amountETH);
-
-        // ~ Execute buy -> Royalties do NOT distribute ~
-
-        vm.deal(JOE, amountETH);
-        _buy(JOE, amountETH);
-
-        // ~ Post-state check ~
-    
-        assertGt(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-        assertEq(rwaToken.totalSupply(), preSupply);
-
-        (uint256 postReserve0, uint256 postReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA POST BUY Reserves", postReserve0); // DOWN
-        emit log_named_uint("ETH POST BUY Reserves", postReserve1); // UP
-
-        assertEq(postReserve0, preReserve0 - quote);
-        assertEq(postReserve1, preReserve1 + amountETH);
-    }
-
-    /// @dev Verifies proper state changes when there are accumulated fees on the RWA contract and
-    ///      there is a sequential sell that occurs distributing royalties.
-    function test_rwaToken_royaltyDistribution_onSell() public {
-
-        // ~ Config ~
-
-        uint256 amountETH = 10 ether;
-        vm.deal(JOE, amountETH);
-
-        uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
-        assertGt(taxedAmount, 0);
-
-        uint256 burnPortion = (taxedAmount * rwaToken.burnFee()) / rwaToken.totalFees(); // 2/5
-        emit log_named_uint("burn portion", burnPortion);
-
-        uint256 revSharePortion = (taxedAmount * rwaToken.revShareFee()) / rwaToken.totalFees(); // 2/5
-        emit log_named_uint("revDistributor portion", revSharePortion);
-
-        uint256 lpPortion = taxedAmount - burnPortion - revSharePortion; // 1/5
-        emit log_named_uint("lp portion", lpPortion);
-
-        uint256 tokensForEthLp = lpPortion/2;
-        lpPortion -= lpPortion;
-
-        uint256 preSupply = rwaToken.totalSupply();
-
-        // Execute buy to accumulate fees
-        _buy(JOE, amountETH);
-
-        // ~ Pre-state check ~
-    
-        assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
-        
-        assertEq(rwaToken.totalSupply(), preSupply);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-
-        // ~ Execute sell -> distribute ~
-
-        uint256 amountToSell = 1_000 ether;
-        _sell(JOE, amountToSell);
-
-        // ~ Post-state check ~
-    
-        assertEq(rwaToken.balanceOf(address(rwaToken)), amountToSell * rwaToken.totalFees() / 100);
-
-        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
-    }
-
-    /// @dev Verifies proper state changes when there are accumulated fees on the RWA contract and
-    ///      there is a sequential transfer that occurs distributing royalties.
-    function test_rwaToken_royaltyDistribution_onTransfer() public {
-
-        // ~ Config ~
-
-        uint256 amountETH = 10 ether;
-        vm.deal(JOE, amountETH);
-
-        uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
-        assertGt(taxedAmount, 0);
-
-        uint256 burnPortion = (taxedAmount * rwaToken.burnFee()) / rwaToken.totalFees(); // 2/5
-        uint256 revSharePortion = (taxedAmount * rwaToken.revShareFee()) / rwaToken.totalFees(); // 2/5
-
-        uint256 preSupply = rwaToken.totalSupply();
-
-        // Execute buy to accumulate fees
-        _buy(JOE, amountETH);
-
-        // ~ Pre-state check ~
-    
-        assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
-        
-        assertEq(rwaToken.totalSupply(), preSupply);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-
-        (uint256 preReserve0, uint256 preReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA PRE TRANSFER Reserves", preReserve0);
-        emit log_named_uint("ETH PRE TRANSFER Reserves", preReserve1);
-
-        // ~ Execute transfer -> distribute ~
-
-        uint256 amountToTransfer = 1_000 ether;
-        vm.prank(JOE);
-        rwaToken.transfer(ALICE, amountToTransfer); 
-
-        // ~ Post-state check ~
-    
-        assertEq(rwaToken.balanceOf(address(rwaToken)), 0); // NOTE NO TAX ON TRANSFER
-
-        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
-
-        (uint256 postReserve0, uint256 postReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA POST TRANSFER Reserves", postReserve0);
-        emit log_named_uint("ETH POST TRANSFER Reserves", postReserve1);
-
-        assertGt(postReserve0, preReserve0);
-    }
-
     /// @dev Verifies proper state changes when updateFees is executed.
-    function test_rwaToken_updateFees() public {
+    function test_rwaToken_royaltyHandler_updateDistribution() public {
 
         // ~ Pre-state check ~
 
-        assertEq(rwaToken.burnFee(), 2);
-        assertEq(rwaToken.revShareFee(), 2);
-        assertEq(rwaToken.lpFee(), 1);
-        assertEq(rwaToken.totalFees(), 5);
+        assertEq(royaltyHandler.burnPortion(), 2);
+        assertEq(royaltyHandler.revSharePortion(), 2);
+        assertEq(royaltyHandler.lpPortion(), 1);
 
         // ~ Execute updateFees ~
 
         vm.prank(ADMIN);
-        rwaToken.updateFees(4, 4, 2);
+        royaltyHandler.updateDistribution(4, 4, 2);
 
         // ~ Post-state check ~
 
-        assertEq(rwaToken.burnFee(), 4);
-        assertEq(rwaToken.revShareFee(), 4);
-        assertEq(rwaToken.lpFee(), 2);
-        assertEq(rwaToken.totalFees(), 10);
-    }
-
-    /// @dev Verifies proper taxation and distribution after fees have been modified.
-    function test_rwaToken_updateFees_royaltyDistribution() public {
-
-        // ~ Config ~
-
-        uint256 amountETH = 10 ether;
-        vm.deal(JOE, amountETH);
-
-        vm.prank(ADMIN);
-        rwaToken.updateFees(4, 4, 2);
-
-        assertEq(rwaToken.burnFee(), 4);
-        assertEq(rwaToken.revShareFee(), 4);
-        assertEq(rwaToken.lpFee(), 2);
-        assertEq(rwaToken.totalFees(), 10);
-
-        uint256 quote = _getQuoteBuy(amountETH);
-        uint256 taxedAmount = quote * rwaToken.totalFees() / 100;
-        assertGt(taxedAmount, 0);
-
-        uint256 burnPortion = (taxedAmount * rwaToken.burnFee()) / rwaToken.totalFees(); // 4/10
-        uint256 revSharePortion = (taxedAmount * rwaToken.revShareFee()) / rwaToken.totalFees(); // 4/10
-
-        uint256 preSupply = rwaToken.totalSupply();
-
-        // Execute buy to accumulate fees
-        _buy(JOE, amountETH);
-
-        // ~ Pre-state check ~
-    
-        assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), taxedAmount);
-        
-        assertEq(rwaToken.totalSupply(), preSupply);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
-
-        (uint256 preReserve0, uint256 preReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA PRE TRANSFER Reserves", preReserve0);
-        emit log_named_uint("ETH PRE TRANSFER Reserves", preReserve1);
-
-        // ~ Execute transfer -> distribute ~
-
-        uint256 amountToTransfer = 1_000 ether;
-        vm.prank(JOE);
-        rwaToken.transfer(ALICE, amountToTransfer); 
-
-        // ~ Post-state check ~
-    
-        //assertEq(rwaToken.balanceOf(address(rwaToken)), (amountToTransfer * rwaToken.totalFees()) / 100);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), 0); // NOTE NO TAX ON TRANSFER
-
-        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
-        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
-
-        (uint256 postReserve0, uint256 postReserve1,) = IUniswapV2Pair(rwaToken.uniswapV2Pair()).getReserves();
-        emit log_named_uint("RWA POST TRANSFER Reserves", postReserve0);
-        emit log_named_uint("ETH POST TRANSFER Reserves", postReserve1);
-
-        assertGt(postReserve0, preReserve0);
+        assertEq(royaltyHandler.burnPortion(), 4);
+        assertEq(royaltyHandler.revSharePortion(), 4);
+        assertEq(royaltyHandler.lpPortion(), 2);
     }
 
     function test_rwaToken_blacklist() public {
@@ -803,7 +631,7 @@ contract RWATokenTest is Utility {
 
         // mint RWA for sell
         uint256 amountTokens = 10_000 ether;
-        rwaToken.mintFor(JOE, amountTokens);
+        deal(address(rwaToken), JOE, amountTokens);
 
         // mint ETH for buy
         uint256 amountETH = 1 ether;

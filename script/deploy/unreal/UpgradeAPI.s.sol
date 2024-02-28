@@ -24,8 +24,7 @@ contract UpgradeAPI is Script {
 
     // ~ Contracts ~
 
-    VotingEscrowRWAAPI public api = VotingEscrowRWAAPI(0x70805d3Fa831608eED291Be797f726231f15316a);
-    VotingEscrowRWAAPI public newApi;
+    VotingEscrowRWAAPI public api = VotingEscrowRWAAPI(UNREAL_RWA_API);
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
@@ -38,7 +37,7 @@ contract UpgradeAPI is Script {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
         // Deploy api
-        newApi = new VotingEscrowRWAAPI();
+        VotingEscrowRWAAPI newApi = new VotingEscrowRWAAPI();
 
         // Upgrade
         api.upgradeToAndCall(address(newApi), "");
@@ -50,6 +49,3 @@ contract UpgradeAPI is Script {
         vm.stopBroadcast();
     }
 }
-
-// == Logs ==
-//   API = 0x70805d3Fa831608eED291Be797f726231f15316a

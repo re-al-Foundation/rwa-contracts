@@ -23,6 +23,30 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     /// @dev Contract reference for RevenueStreamETH.
     RevenueStreamETH public revStream;
 
+    /// @dev Object used to return veRWA token data.
+    struct TokenData {
+        /// @dev Token identifier.
+        uint256 tokenId;
+        /// @dev Amount of RWA locked in token.
+        uint256 lockedAmount;
+        /// @dev Remaining duration left to vest until lock expired.
+        uint256 remainingDuration;
+        /// @dev Voting power of token.
+        uint256 votingPower;
+    }
+
+    /// @dev Object used to return veRWA vesting data.
+    struct VestingData {
+        /// @dev Token identifier.
+        uint256 tokenId;
+        /// @dev lock epoch start time.
+        uint256 startTime;
+        /// @dev lock epoch end time.
+        uint256 endTime;
+        ///@dev amount of tokens locked.
+        uint256 amount;
+    }
+
 
     // -----------
     // Constructor
@@ -100,27 +124,17 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     /**
      * @notice Returns an array of tokenIds owned by an address. It also returns the locked amount of RWA and remaining duration of each NFT.
      * @param account Address of account we wish to fetch array of NFTs in custody of.
-     * @return tokenIds Array of tokenIds owned by `account`.
-     * @return lockedAmount Array of locked amount of RWA in lock. Indexes correspond with `tokenIds`.
-     * @return remainingDuration Array of remaining duration of each lock. Indexes correspond with `tokenIds`.
+     * @return tokenData Array of token data.
      */
-    function getNFTsOfOwnerWithData(address account) external view returns (
-        uint256[] memory tokenIds,
-        uint256[] memory lockedAmount, 
-        uint256[] memory remainingDuration
-    ) {
+    function getNFTsOfOwnerWithData(address account) external view returns (TokenData[] memory tokenData) {
         uint256 amount = veRWA.balanceOf(account);
-
-        tokenIds = new uint256[](amount);
-        lockedAmount = new uint256[](amount);
-        remainingDuration = new uint256[](amount);
+        tokenData = new TokenData[](amount);
 
         for (uint256 i; i < amount;) {
-
-            tokenIds[i] = veRWA.tokenOfOwnerByIndex(account, i);
-            lockedAmount[i] = veRWA.getLockedAmount(tokenIds[i]);
-            remainingDuration[i] = veRWA.getRemainingVestingDuration(tokenIds[i]);
-
+            tokenData[i].tokenId = veRWA.tokenOfOwnerByIndex(account, i);
+            tokenData[i].lockedAmount = veRWA.getLockedAmount(tokenData[i].tokenId);
+            tokenData[i].remainingDuration = veRWA.getRemainingVestingDuration(tokenData[i].tokenId);
+            tokenData[i].votingPower = veRWA.getPastVotingPower(tokenData[i].tokenId, block.timestamp-1);
             unchecked {
                 ++i;
             }
@@ -204,21 +218,24 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     /**
      * @notice Returns an array of tokenIds owned by an address that are being vested. It also returns the locked amount of RWA and remaining duration of each NFT.
      * @param account Address of account we wish to fetch array of NFTs being vested.
-     * @return tokenIds Array of tokenIds being vested by `account`.
-     * @return vestingSchedules Array of vesting schedules for each token in `tokenIds`.
-     * @dev `vestingSchedules` is of struct type VotingEscrowVesting.VestingSchedule.
+     * @return vestingSchedules Array of vesting schedules with tokenIds.
      */
-    function getVestedTokensByOwnerWithData(address account) external view returns (
-        uint256[] memory tokenIds,
-        VotingEscrowVesting.VestingSchedule[] memory vestingSchedules
-    ) {
+    function getVestedTokensByOwnerWithData(address account) external view returns (VestingData[] memory vestingSchedules) {
         uint256 amount = veVesting.balanceOf(account);
         
-        tokenIds = veVesting.getDepositedTokens(account);
-        vestingSchedules = new VotingEscrowVesting.VestingSchedule[](amount);
+        uint256[] memory tokenIds = veVesting.getDepositedTokens(account);
+        VotingEscrowVesting.VestingSchedule memory vestingObj;
+
+        vestingSchedules = new VestingData[](amount);
 
         for (uint256 i; i < amount;) {
-            vestingSchedules[i] = veVesting.getSchedule(tokenIds[i]);
+            vestingObj = veVesting.getSchedule(tokenIds[i]);
+
+            vestingSchedules[i].tokenId = tokenIds[i];
+            vestingSchedules[i].startTime = vestingObj.startTime;
+            vestingSchedules[i].endTime = vestingObj.endTime;
+            vestingSchedules[i].amount = vestingObj.amount;
+
             unchecked {
                 ++i;
             }

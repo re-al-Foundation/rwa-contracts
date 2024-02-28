@@ -141,9 +141,8 @@ contract MarketplaceTest is Utility {
 
         // Grant minter role to address(this) & veRWA
         vm.startPrank(ADMIN);
-        rwaToken.grantRole(MINTER_ROLE, address(this)); // for testing
-        rwaToken.grantRole(MINTER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
-        rwaToken.grantRole(BURNER_ROLE, address(veRWA)); // for RWAVotingEscrow:migrate
+        rwaToken.setVotingEscrowRWA(address(veRWA));
+        rwaToken.setReceiver(address(this)); // for testing
         vm.stopPrank();
 
         // Mint Joe $RWA tokens

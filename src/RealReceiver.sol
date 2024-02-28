@@ -2,8 +2,8 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
-import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // tangible imports
 import { NonblockingLzAppUpgradeable } from "@tangible-foundation-contracts/layerzero/lzApp/NonblockingLzAppUpgradeable.sol";
@@ -22,7 +22,7 @@ import { BytesLib } from "./libraries/BytesLib.sol";
  * - During a migration process, will receive the message from CrossChainMigrator on Polygon to fulfill an NFT migration.
  *   Will take the data payload and use it to call the VotingEscrowRWA contract.
  */
-contract RealReceiver is NonblockingLzAppUpgradeable, UUPSUpgradeable, AccessControlUpgradeable {
+contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUpgradeable {
     using BytesLib for bytes;
 
     // ---------------
@@ -94,12 +94,13 @@ contract RealReceiver is NonblockingLzAppUpgradeable, UUPSUpgradeable, AccessCon
         address _rwaToken,
         address _admin
     ) external initializer {
+        __Ownable_init(_admin);
+        __NonblockingLzApp_init(_admin);
+        __UUPSUpgradeable_init();
+        
         veRwaNFT = _veRwaNFT;
         rwaToken = _rwaToken;
         srcChainId = _srcChainId;
-
-        __NonblockingLzApp_init(_admin);
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
 
@@ -111,7 +112,7 @@ contract RealReceiver is NonblockingLzAppUpgradeable, UUPSUpgradeable, AccessCon
      * @notice This method allows a permissioned admin to update the `veRwaNFT` address.
      * @param _newVeRwa New address.
      */
-    function setVotingEscrowRWA(address _newVeRwa) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setVotingEscrowRWA(address _newVeRwa) external onlyOwner {
         require(_newVeRwa != address(0), "Cannot be address(0)");
         veRwaNFT = _newVeRwa;
     }
@@ -120,7 +121,7 @@ contract RealReceiver is NonblockingLzAppUpgradeable, UUPSUpgradeable, AccessCon
      * @notice This method allows a permissioned admin to update the `rwaToken` address.
      * @param _newRwaToken New address.
      */
-    function setRwaToken(address _newRwaToken) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setRwaToken(address _newRwaToken) external onlyOwner {
         require(_newRwaToken != address(0), "Cannot be address(0)");
         rwaToken = _newRwaToken;
     }
@@ -212,5 +213,5 @@ contract RealReceiver is NonblockingLzAppUpgradeable, UUPSUpgradeable, AccessCon
     /**
      * @notice Inherited from UUPSUpgradeable. Allows us to authorize the DEFAULT_ADMIN_ROLE role to upgrade this contract's implementation.
      */
-    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

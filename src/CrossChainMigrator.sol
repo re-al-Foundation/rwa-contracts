@@ -2,9 +2,9 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { ERC20Burnable } from "@openzeppelin/contracts/token/ERC20/extensions/ERC20Burnable.sol";
-import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
+import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 
@@ -32,7 +32,7 @@ import { VotingMath } from "./governance/VotingMath.sol";
  * - On $TNGBL migrations, the CrossChainMigrator contract will burn the migrated $TNGBL tokens and send a 
  *   message to the RealReceiver on Real Chain to mint new tokens.
  */
-contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgradeable, AccessControlUpgradeable {
+contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
     using VotingMath for uint256;
 
     // ---------------
@@ -147,7 +147,10 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
         uint16 _remoteChainId,
         address _admin
     ) external initializer {
+        __Ownable_init(_admin);
         __NonblockingLzApp_init(_admin);
+        __UUPSUpgradeable_init();
+        
         useCustomAdapterParams = true;
 
         passiveIncomeNFT = PassiveIncomeNFT(_legacyPINFT);
@@ -161,8 +164,6 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
 
         BOOST_START = passiveIncomeNFT.boostStartTime();
         BOOST_END = passiveIncomeNFT.boostEndTime();
-
-        _grantRole(DEFAULT_ADMIN_ROLE, _admin);
     }
 
 
@@ -189,7 +190,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
         address zroPaymentAddress,
         bytes calldata adapterParams
     ) payable external {
-        require(migrationActive, "Migration is not active");
+        require(migrationActive, "CrossChainMigrator: Migration is not active");
 
         // Transfer NFT into this contract. Keep custody
         passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenId);
@@ -260,7 +261,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
         address zroPaymentAddress,
         bytes calldata adapterParams
     ) payable external nonReentrant {
-        require(migrationActive, "Migration is not active");
+        require(migrationActive, "CrossChainMigrator: Migration is not active");
 
         uint256[] memory lockedAmounts = new uint256[](_tokenIds.length);
         uint256[] memory durations = new uint256[](_tokenIds.length);
@@ -342,8 +343,8 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
         address zroPaymentAddress,
         bytes calldata adapterParams
     ) external payable {
-        require(migrationActive, "Migration is not active");
-        require(tngblToken.balanceOf(msg.sender) >= _amount, "Insufficient balance");
+        require(migrationActive, "CrossChainMigrator: Migration is not active");
+        require(tngblToken.balanceOf(msg.sender) >= _amount, "CrossChainMigrator: Insufficient balance");
 
         tngblToken.transferFrom(msg.sender, address(this), _amount);
 
@@ -356,10 +357,44 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
         emit MigrationInFlight_TNGBL(msg.sender, _amount);
     }
 
+    function burnToken(uint256 tokenId) external onlyOwner {
+        require(passiveIncomeNFT.ownerOf(tokenId) == address(this), "CrossChainMigrator: not owner");
+
+        (,uint256 endTime,
+        uint256 lockedAmount,
+        uint256 multiplier,
+        uint256 claimed,) = passiveIncomeNFT.locks(tokenId);
+
+        uint256 totalRewardAmount = (lockedAmount * (multiplier - 1e18)) / 1e18;
+
+        (uint256 amount,) = passiveIncomeNFT.claimableIncome(tokenId);
+
+        require(block.timestamp >= endTime, "CrossChainMigrator: not expired");
+
+        amount = lockedAmount + totalRewardAmount;
+
+        if (amount > claimed) {
+            unchecked {
+                amount = amount - claimed;
+            }
+        } else {
+            amount = 0;
+        }
+
+        uint256 received = passiveIncomeNFT.burn(tokenId);
+        uint256 excessAmount = received - amount;
+
+        if (excessAmount != 0) {
+            tngblToken.transfer(address(passiveIncomeNFT), excessAmount);
+        }
+
+        _burnTngbl();
+    }
+
     /**
      * @notice This method allows a permissioned admin address to toggle migratino on/off.
      */
-    function toggleMigration() external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function toggleMigration() external onlyOwner {
         migrationActive = !migrationActive;
     }
 
@@ -367,7 +402,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
      * @notice This method allows a permissioned admin to update the `tngblToken` address.
      * @dev This is mainly for testnet since the current mainnet TNGBL contract will not change.
      */
-    function setTngblAddress(address _newContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setTngblAddress(address _newContract) external onlyOwner {
         require(_newContract != address(0), "invalid input");
         tngblToken = ERC20Burnable(_newContract);
     }
@@ -376,7 +411,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
      * @notice This method allows a permissioned admin to update the `passiveIncomeNFT` address.
      * @dev This is mainly for testnet since the current mainnet PI NFT contract will not change.
      */
-    function setPassiveIncomeNFTAddress(address _newContract) external onlyRole(DEFAULT_ADMIN_ROLE) {
+    function setPassiveIncomeNFTAddress(address _newContract) external onlyOwner {
         require(_newContract != address(0), "invalid input");
         passiveIncomeNFT = PassiveIncomeNFT(_newContract);
     }
@@ -384,18 +419,15 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
     /**
      * @notice This method allows a permissioned admin to burn the balance of TNGBL in this contract.
      */
-    function burnTngbl() external onlyRole(DEFAULT_ADMIN_ROLE) {
-        uint256 amount = tngblToken.balanceOf(address(this));
-
-        tngblToken.approve(address(this), amount);
-        tngblToken.burnFrom(address(this), amount);
+    function burnTngbl() external onlyOwner {
+        _burnTngbl();
     }
 
     /**
      * @notice This method allows a permissioned admin to update the `receiver` state variable.
      */
-    function setReceiver(address _newReceiver) external onlyRole(DEFAULT_ADMIN_ROLE) {
-        require(_newReceiver != address(0), "invalid input");
+    function setReceiver(address _newReceiver) external onlyOwner {
+        require(_newReceiver != address(0), "CrossChainMigrator: Invalid input");
         receiver = _newReceiver;
     }
 
@@ -486,6 +518,16 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
     // ----------------
 
     /**
+     * @notice This method burns the TNGBL balance in this contracts.
+     */
+    function _burnTngbl() internal {
+        uint256 amount = tngblToken.balanceOf(address(this));
+
+        tngblToken.approve(address(this), amount);
+        tngblToken.burnFrom(address(this), amount);
+    }
+
+    /**
      * @notice This method resets `lCache` to zero values.
      */
     function _clearLockCache() private {
@@ -513,7 +555,7 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
         if (useCustomAdapterParams) {
             _checkGasLimit(dstChainId, pkType, adapterParams, extraGas);
         } else {
-            require(adapterParams.length == 0, "PearlMigrator: _adapterParams must be empty.");
+            require(adapterParams.length == 0, "CrossChainMigrator: _adapterParams must be empty.");
         }
     }
     
@@ -532,5 +574,5 @@ contract CrossChainMigrator is NonblockingLzAppUpgradeable, ReentrancyGuardUpgra
     /**
      * @notice Inherited from UUPSUpgradeable. Allows us to authorize the DEFAULT_ADMIN_ROLE role to upgrade this contract's implementation.
      */
-    function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
+    function _authorizeUpgrade(address) internal override onlyOwner {}
 }

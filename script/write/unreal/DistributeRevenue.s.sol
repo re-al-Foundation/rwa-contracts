@@ -43,7 +43,7 @@ contract DistributeRevenue is Script {
     RWAToken public rwaToken = RWAToken(payable(UNREAL_RWA_TOKEN));
     RevenueDistributor public revDistributor = RevenueDistributor(payable(UNREAL_REV_DISTRIBUTOR));
     RevenueStreamETH public revStreamETH = RevenueStreamETH(payable(UNREAL_REV_STREAM));
-    IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2_NEW);
+    IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2);
 
 
     // ~ Variables ~
@@ -75,21 +75,17 @@ contract DistributeRevenue is Script {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
         uint256 amount = DAI.balanceOf(address(revDistributor));
-        amount = 1 ether;
-
-        uint256 getBal = IERC20(USTB).balanceOf(0xF639D205aE5Ab1a8473B9fe2091B6cDfe09dAa1B);
-
-        revDistributor.setSelectorForTarget(wrapper, selector_exactInputWrapper);
-
-        (uint256 quoteWETHFromDAI,,,) = quoter.quoteExactInput(
-            abi.encodePacked(DAI, uint24(100), USTB, uint24(3000), WETH),
-            amount
-        );
-
-        console2.log("quote", quoteWETHFromDAI);
+        amount = 100 ether;
 
         uint256 amountOut;
         if (token == address(DAI)) {
+            // get quote
+            (uint256 quoteWETHFromDAI,,,) = quoter.quoteExactInput(
+                abi.encodePacked(DAI, uint24(100), USTB, uint24(3000), WETH),
+                amount
+            );
+            console2.log("quoted", quoteWETHFromDAI);
+            // perform swap
             amountOut = revDistributor.convertRewardToken(
                 address(DAI),
                 amount,
@@ -101,12 +97,12 @@ contract DistributeRevenue is Script {
                     address(revDistributor),
                     block.timestamp + 100,
                     amount,
-                    0
+                    quoteWETHFromDAI
                 )
             );
         }
 
-        console2.log("amount ETH", amountOut);
+        console2.log("amount ETH", amountOut); // .235579604567830790
 
         vm.stopBroadcast();
     }

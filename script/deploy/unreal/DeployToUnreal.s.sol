@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../base/DeployUtility.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -40,7 +41,7 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script deploys the RWA ecosystem to Unreal chain.
  */
-contract DeployToUnreal is Script {
+contract DeployToUnreal is DeployUtility {
 
     // ~ Contracts ~
 
@@ -73,9 +74,6 @@ contract DeployToUnreal is Script {
 
     // ~ Variables ~
 
-    address public WETH;
-    IUniswapV2Router02 public uniswapV2Router = IUniswapV2Router02(UNREAL_UNIV2_ROUTER);
-
     address public passiveIncomeNFTV1 = POLYGON_PI_NFT;
     address public tngblToken = POLYGON_TNGBL_TOKEN;
 
@@ -93,11 +91,11 @@ contract DeployToUnreal is Script {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
+        _setUp("unreal");
     }
 
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
-        WETH = uniswapV2Router.WETH();
 
         // ~ Deploy Contracts ~
 
@@ -191,8 +189,8 @@ contract DeployToUnreal is Script {
                 address(revDistributor),
                 address(rwaToken),
                 UNREAL_WETH,
-                UNREAL_SWAP_ROUTER_NEW,
-                UNREAL_QUOTERV2_NEW
+                UNREAL_SWAP_ROUTER,
+                UNREAL_QUOTERV2
             )
         );
         console2.log("royaltyHandler", address(royaltyHandlerProxy));
@@ -251,7 +249,7 @@ contract DeployToUnreal is Script {
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
         // (19d) add necessary selectors for swaps
         //revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
-        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER_NEW, selector_exactInput); // for V3 swaps with swapRouter
+        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInput); // for V3 swaps with swapRouter
 
         // (20) pair manager must create RWA/WETH pair
         //      TODO: Have pearlV2 pair manager create the RWA/WETH pair

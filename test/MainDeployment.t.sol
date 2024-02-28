@@ -101,10 +101,7 @@ contract MainDeploymentTest is Utility {
 
     IUniswapV2Router02 public uniswapV2Router = IUniswapV2Router02(UNREAL_UNIV2_ROUTER);
     IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2);
-    ISwapRouter public router = ISwapRouter(UNREAL_SWAP_ROUTER);
-
-    IQuoterV2 public quoter_2 = IQuoterV2(UNREAL_QUOTERV2_NEW);
-    ISwapRouter public router_2 = ISwapRouter(UNREAL_SWAP_ROUTER_NEW);
+    ISwapRouter public swapRouter = ISwapRouter(UNREAL_SWAP_ROUTER);
 
     bytes4 public selector_swapExactTokensForETH =
         bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"));
@@ -122,7 +119,7 @@ contract MainDeploymentTest is Utility {
 
         vm.createSelectFork(UNREAL_RPC_URL);
 
-        WETH = uniswapV2Router.WETH();
+        WETH = UNREAL_WETH;
 
         // ~ Deploy Contracts ~
 
@@ -205,8 +202,8 @@ contract MainDeploymentTest is Utility {
                 address(revDistributor),
                 address(rwaToken),
                 UNREAL_WETH,
-                address(router_2),
-                address(quoter_2),
+                address(swapRouter),
+                address(quoter),
                 UNREAL_BOX_MANAGER,
                 UNREAL_GAUGEV2ALM
             )
@@ -260,7 +257,7 @@ contract MainDeploymentTest is Utility {
         api = VotingEscrowRWAAPI(address(apiProxy));
 
         // (20) Deploy wrapper
-        exactInputWrapper = new ExactInputWrapper(address(UNREAL_SWAP_ROUTER), WETH);
+        exactInputWrapper = new ExactInputWrapper(address(swapRouter), WETH);
 
         // ~ Config ~
 
@@ -281,9 +278,8 @@ contract MainDeploymentTest is Utility {
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
         // (22d) add necessary selectors for swaps
         revDistributor.setSelectorForTarget(UNREAL_UNIV2_ROUTER, selector_swapExactTokensForETH); // for RWA -> ETH swaps
-        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInput); // for V3 swaps with swapRouter
         revDistributor.setSelectorForTarget(address(exactInputWrapper), selector_exactInputWrapper);
-        revDistributor.setSelectorForTarget(address(router_2), selector_exactInput);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInput);
         vm.stopPrank();
 
         // (23) pair manager must create RWA/WETH pair
@@ -362,7 +358,7 @@ contract MainDeploymentTest is Utility {
         });
         INonfungiblePositionManager(UNREAL_NFTMANAGER).mint(params);
 
-        // ~ note For testing, make USTB/WETH pool ~
+        // ~ note For testing, create USTB/WETH pool ~
 
         ETH_DEPOSIT = 10 ether;
         TOKEN_DEPOSIT = 20_000 ether;
@@ -381,6 +377,64 @@ contract MainDeploymentTest is Utility {
             address(this),
             block.timestamp + 300
         );
+        
+        // ~ note For testing, create USDC/DAI pool ~
+
+        vm.prank(UNREAL_PAIR_MANAGER);
+        pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(UNREAL_USDC, UNREAL_DAI, 100);
+        IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).initializePoolPrice(pair, uint160(initPrice));
+
+        uint256 amount0 = 100 * 10**6;
+        uint256 amount1 = 100 * 10**18;
+
+        deal(UNREAL_USDC, address(this), amount0);
+        IERC20(UNREAL_USDC).approve(UNREAL_NFTMANAGER, amount0);
+        deal(UNREAL_DAI, address(this), amount1);
+        IERC20(UNREAL_DAI).approve(UNREAL_NFTMANAGER, amount1);
+
+        params = INonfungiblePositionManager.MintParams({
+            token0: UNREAL_DAI,
+            token1: UNREAL_USDC,
+            fee: 100,
+            tickLower: -10,
+            tickUpper: 10,
+            amount0Desired: amount0,
+            amount1Desired: amount1,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: address(this),
+            deadline: block.timestamp
+        });
+        INonfungiblePositionManager(UNREAL_NFTMANAGER).mint(params);
+
+        // ~ note For testing, create DAI/WETH pool ~
+
+        vm.prank(UNREAL_PAIR_MANAGER);
+        pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(UNREAL_WETH, UNREAL_DAI, 100);
+        IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).initializePoolPrice(pair, uint160(initPrice));
+
+        amount0 = 100 * 10**18;
+        amount1 = 100 * 10**18;
+
+        deal(UNREAL_WETH, address(this), amount0);
+        IERC20(UNREAL_WETH).approve(UNREAL_NFTMANAGER, amount0);
+        deal(UNREAL_DAI, address(this), amount1);
+        IERC20(UNREAL_DAI).approve(UNREAL_NFTMANAGER, amount1);
+
+        params = INonfungiblePositionManager.MintParams({
+            token0: UNREAL_DAI,
+            token1: UNREAL_WETH,
+            fee: 100,
+            tickLower: -100,
+            tickUpper: 100,
+            amount0Desired: amount0,
+            amount1Desired: amount1,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: address(this),
+            deadline: block.timestamp
+        });
+        INonfungiblePositionManager(UNREAL_NFTMANAGER).mint(params);
     }
 
 
@@ -403,7 +457,7 @@ contract MainDeploymentTest is Utility {
             sqrtPriceLimitX96: 0
         });
 
-        (uint256 amountOut,,,) = quoter_2.quoteExactInputSingle(params);
+        (uint256 amountOut,,,) = quoter.quoteExactInputSingle(params);
         return amountOut;
     }
 
@@ -424,8 +478,8 @@ contract MainDeploymentTest is Utility {
         });
 
         vm.startPrank(actor);
-        IERC20(WETH).approve(address(router_2), amount);
-        router_2.exactInputSingle(swapParams);
+        IERC20(WETH).approve(address(swapRouter), amount);
+        swapRouter.exactInputSingle(swapParams);
         vm.stopPrank();
     }
 
@@ -439,7 +493,7 @@ contract MainDeploymentTest is Utility {
             sqrtPriceLimitX96: 0
         });
 
-        (uint256 amountOut,,,) = quoter_2.quoteExactInputSingle(params);
+        (uint256 amountOut,,,) = quoter.quoteExactInputSingle(params);
         return amountOut;
     }
 
@@ -459,8 +513,8 @@ contract MainDeploymentTest is Utility {
         uint256 WETHPreBal = IERC20(WETH).balanceOf(address(this));
 
         vm.startPrank(actor);
-        rwaToken.approve(address(router_2), amount);
-        router_2.exactInputSingleFeeOnTransfer(swapParams);
+        rwaToken.approve(address(swapRouter), amount);
+        swapRouter.exactInputSingleFeeOnTransfer(swapParams);
         vm.stopPrank();
 
         uint256 amountETH = IERC20(WETH).balanceOf(address(this)) - WETHPreBal;
@@ -3144,7 +3198,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Config ~
 
-        uint256 amountIn = 50 ether;
+        uint256 amountIn = 5 ether;
         deal(address(UNREAL_DAI), address(revDistributor), amountIn);
 
         //uint256 quoteOut = _getQuoteSell(amountIn);
@@ -3153,8 +3207,8 @@ contract MainDeploymentTest is Utility {
         ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(UNREAL_DAI),
             tokenOut: WETH,
-            fee: 1000,
-            recipient: address(UNREAL_SWAP_ROUTER),
+            fee: 100,
+            recipient: address(swapRouter),
             deadline: block.timestamp + 100,
             amountIn: amountIn,
             amountOutMinimum: 0,
@@ -3196,7 +3250,7 @@ contract MainDeploymentTest is Utility {
         revDistributor.convertRewardToken(
             address(UNREAL_DAI),
             amountIn,
-            UNREAL_SWAP_ROUTER,
+            address(swapRouter),
             abi.encodeWithSignature("multicall(bytes[])", multicallData)
         );
         vm.stopPrank();
@@ -3234,8 +3288,8 @@ contract MainDeploymentTest is Utility {
         ISwapRouter.ExactInputSingleParams memory swapParamsDAI = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(UNREAL_DAI),
             tokenOut: WETH,
-            fee: 1000,
-            recipient: address(UNREAL_SWAP_ROUTER),
+            fee: 100,
+            recipient: address(swapRouter),
             deadline: block.timestamp,
             amountIn: amountIn,
             amountOutMinimum: 0,
@@ -3272,7 +3326,7 @@ contract MainDeploymentTest is Utility {
             tokenIn: address(rwaToken),
             tokenOut: WETH,
             fee: 100,
-            recipient: address(router_2),
+            recipient: address(swapRouter),
             deadline: block.timestamp,
             amountIn: amountIn,
             amountOutMinimum: 0,
@@ -3318,9 +3372,9 @@ contract MainDeploymentTest is Utility {
         amounts[2] = amountIn;
 
         address[] memory targets = new address[](3);
-        targets[0] = address(router_2);
-        targets[1] = UNREAL_UNIV2_ROUTER;
-        targets[2] = UNREAL_SWAP_ROUTER;
+        targets[0] = address(swapRouter);
+        targets[1] = address(uniswapV2Router);
+        targets[2] = address(swapRouter);
 
         bytes[] memory data = new bytes[](3);
         data[0] = 
@@ -4187,7 +4241,7 @@ contract MainDeploymentTest is Utility {
 
         // get quote
         (uint256 quoteETHFromUSDC,,,) = quoter.quoteExactInput(
-            abi.encodePacked(address(UNREAL_USDC), uint24(1000), address(UNREAL_DAI), uint24(1000), WETH),
+            abi.encodePacked(address(UNREAL_USDC), uint24(100), address(UNREAL_DAI), uint24(100), WETH),
             amountUSDC
         );
 
@@ -4195,7 +4249,7 @@ contract MainDeploymentTest is Utility {
 
         IERC20(address(UNREAL_USDC)).approve(address(exactInputWrapper), amountUSDC);
         exactInputWrapper.exactInputForETH(
-            abi.encodePacked(address(UNREAL_USDC), uint24(1000), address(UNREAL_DAI), uint24(1000), WETH),
+            abi.encodePacked(address(UNREAL_USDC), uint24(100), address(UNREAL_DAI), uint24(100), WETH),
             address(UNREAL_USDC),
             address(this),
             block.timestamp + 100,
@@ -4230,7 +4284,7 @@ contract MainDeploymentTest is Utility {
 
         // get quote
         (uint256 quoteETHFromUSDC,,,) = quoter.quoteExactInput(
-            abi.encodePacked(address(UNREAL_USDC), uint24(1000), address(UNREAL_DAI), uint24(1000), WETH),
+            abi.encodePacked(address(UNREAL_USDC), uint24(100), address(UNREAL_DAI), uint24(100), WETH),
             amountUSDC
         );
 
@@ -4250,7 +4304,7 @@ contract MainDeploymentTest is Utility {
             address(exactInputWrapper),
             abi.encodeWithSignature(
                 "exactInputForETH(bytes,address,address,uint256,uint256,uint256)",
-                abi.encodePacked(address(UNREAL_USDC), uint24(1000), address(UNREAL_DAI), uint24(1000), WETH),
+                abi.encodePacked(address(UNREAL_USDC), uint24(100), address(UNREAL_DAI), uint24(100), WETH),
                 address(UNREAL_USDC),
                 address(revDistributor),
                 block.timestamp + 100,

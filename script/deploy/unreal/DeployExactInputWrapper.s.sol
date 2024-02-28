@@ -8,6 +8,7 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 
 // local imports
 import { ExactInputWrapper } from "../../../src/helpers/ExactInputWrapper.sol";
+import { RevenueDistributor } from "../../../src/RevenueDistributor.sol";
 
 //helper contracts
 import "../../../test/utils/Constants.sol";
@@ -25,14 +26,17 @@ contract DeployExactInputWrapper is Script {
     // ~ Contracts ~
 
     // core contracts
-    address public router = payable(UNREAL_SWAP_ROUTER_NEW);
+    address public router = payable(UNREAL_SWAP_ROUTER);
     address public WETH = payable(UNREAL_WETH);
 
-    ExactInputWrapper public wrapper;
+    RevenueDistributor public revDistributor = RevenueDistributor(payable(UNREAL_REV_DISTRIBUTOR));
 
     address public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+
+    bytes4 public selector_exactInputWrapper = 
+        bytes4(keccak256("exactInputForETH(bytes,address,address,uint256,uint256,uint256)"));
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
@@ -44,11 +48,13 @@ contract DeployExactInputWrapper is Script {
         // ~ Deploy ExactInputWrapper ~
 
         // Deploy wrapper
-        wrapper = new ExactInputWrapper(
+        ExactInputWrapper wrapper = new ExactInputWrapper(
             router,
             WETH
         );
 
+        // set as target on RevDist
+        revDistributor.setSelectorForTarget(address(wrapper), selector_exactInputWrapper);
 
         // ~ Logs ~
 

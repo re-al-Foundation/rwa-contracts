@@ -188,6 +188,20 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     /**
+     * @notice This method is used to update the `swapRouter` variable.
+     */
+    function setSwapRouter(address _swapRouter) external onlyOwner {
+        swapRouter = ISwapRouter(_swapRouter);
+    }
+
+    /**
+     * @notice This method is used to update the `quoter` variable.
+     */
+    function setQuoter(address _quoter) external onlyOwner {
+        quoter = IQuoterV2(_quoter);
+    }
+
+    /**
      * @notice This method allows a permissioned admin to update the pool fee on the RWA/WETH pool it uses to swap RWA->WETH.
      * @param _fee pool fee.
      */

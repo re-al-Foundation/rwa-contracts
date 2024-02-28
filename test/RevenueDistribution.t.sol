@@ -486,5 +486,5 @@ contract RevenueDistributorTest is Utility {
         assertEq(revTokens[0], address(rwaToken));
         assertEq(revTokens[1], address(mockRevToken2));
     }
-
+    
 }

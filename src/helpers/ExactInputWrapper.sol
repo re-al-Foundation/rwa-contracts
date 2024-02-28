@@ -40,7 +40,8 @@ contract ExactInputWrapper {
 
         IERC20(address(tokenIn)).transferFrom(msg.sender, address(this), amountIn);
         IERC20(address(tokenIn)).approve(address(swapRouter), amountIn);
-        amountOut = swapRouter.exactInput(params);
+        amountOut = swapRouter.exactInputFeeOnTransfer(params);
+        //amountOut = swapRouter.exactInput(params);
 
         require(amountOut != 0, "Insufficient amount out");
 

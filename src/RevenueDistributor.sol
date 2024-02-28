@@ -87,6 +87,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      */
     event RevTokenRemoved(address indexed token);
 
+    event ETHReceived(address sender, uint256 amount);
+
 
     // -----------
     // Constructor
@@ -127,7 +129,9 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     /**
      * @notice This method allows address(this) to receive ETH.
      */
-    receive() external payable {}
+    receive() external payable {
+        emit ETHReceived(msg.sender, msg.value);
+    }
 
     /**
      * @notice Converts a specific revenue token to ETH and distribute to revenue stream.

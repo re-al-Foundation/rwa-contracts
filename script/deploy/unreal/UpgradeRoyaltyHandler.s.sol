@@ -37,9 +37,6 @@ contract UpgradeRoyaltyHandler is Script {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
         RoyaltyHandler newImplementation = new RoyaltyHandler();
-
-        console2.log("new RoyaltyHandler Implementation", address(newImplementation));
-
         royaltyHandler.upgradeToAndCall(address(newImplementation), "");
 
         vm.stopBroadcast();

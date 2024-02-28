@@ -204,8 +204,7 @@ contract MainDeploymentTest is Utility {
                 UNREAL_WETH,
                 address(swapRouter),
                 address(quoter),
-                UNREAL_BOX_MANAGER,
-                UNREAL_GAUGEV2ALM
+                UNREAL_BOX_MANAGER
             )
         );
         royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));

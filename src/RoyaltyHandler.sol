@@ -14,6 +14,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { ISwapRouter } from "./interfaces/ISwapRouter.sol";
 import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
 import { ILiquidBoxManager } from "./interfaces/ILiquidBoxManager.sol";
+import { ILiquidBox } from "./interfaces/ILiquidBox.sol";
 import { IGaugeV2ALM } from "./interfaces/IGaugeV2ALM.sol";
 
 /**
@@ -53,7 +54,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     address public box;
     /// @notice Stores contract reference to GaugeV2ALM for staking `box` tokens.
     IGaugeV2ALM public gaugeV2ALM;
-
+    /// @notice Stores contract reverence for ERC-20 token PEARL.
     IERC20 public pearl;
 
 
@@ -99,6 +100,10 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param _admin Initial default admin address.
      * @param _revDist RevenueDistributor contract address.
      * @param _rwaToken RWAToken contract address.
+     * @param _weth WETH contract address.
+     * @param _router SwapRouter contract address.
+     * @param _quoter QuoterV2 contract address.
+     * @param _boxManager LiquidBoxManager contract address.
      */
     function initialize(
         address _admin,
@@ -107,8 +112,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         address _weth,
         address _router,
         address _quoter,
-        address _boxManager,
-        address _gaugeV2
+        address _boxManager
     ) external initializer {
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
@@ -119,7 +123,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         swapRouter = ISwapRouter(_router);
         quoter = IQuoterV2(_quoter);
         boxManager = ILiquidBoxManager(_boxManager);
-        gaugeV2ALM = IGaugeV2ALM(_gaugeV2);
 
         burnPortion = 2; // 2/5
         revSharePortion = 2; // 2/5
@@ -316,10 +319,15 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         // Add liquidity via LiquidBoxManager.deposit
         IERC20(address(rwaToken)).approve(address(boxManager), amountRWA);
         IERC20(address(WETH)).approve(address(boxManager), amountWETH);
+
+        (uint256 amount0, uint256 amount1) = address(ILiquidBox(box).token0()) == address(rwaToken)
+            ? (amountRWA, amountWETH)
+            : (amountWETH, amountRWA);
+
         uint256 shares = boxManager.deposit(
             box,
-            amountRWA,
-            amountWETH,
+            amount0,
+            amount1,
             0, // amount0Min
             0  // amount1Min
         );

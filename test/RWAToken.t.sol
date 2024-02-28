@@ -150,7 +150,6 @@ contract RWATokenTest is Utility {
                 WETH,
                 MUMBAI_UNIV2_ROUTER,
                 address(0),
-                address(0),
                 address(0)
             )
         );

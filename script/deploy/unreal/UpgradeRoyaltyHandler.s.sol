@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -19,10 +20,10 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script deploys a new RoyaltyHandler contract and upgrades the current contract on unreal.
  */
-contract UpgradeRoyaltyHandler is Script {
+contract UpgradeRoyaltyHandler is DeployUtility {
 
     // ~ Contracts ~
-    RoyaltyHandler public royaltyHandler = RoyaltyHandler(payable(UNREAL_ROYALTY_HANDLER));
+    RoyaltyHandler public royaltyHandler;
 
     // ~ Variables ~
 
@@ -31,6 +32,8 @@ contract UpgradeRoyaltyHandler is Script {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
+        _setUp("unreal");
+        royaltyHandler = RoyaltyHandler(payable(_loadDeploymentAddress("RoyaltyHandler")));
     }
 
     function run() public {

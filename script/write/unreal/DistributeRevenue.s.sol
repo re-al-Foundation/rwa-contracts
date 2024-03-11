@@ -45,6 +45,7 @@ contract DistributeRevenue is DeployUtility {
     RevenueDistributor public revDistributor;
     RevenueStreamETH public revStreamETH;
     IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2);
+    address public wrapper = payable(UNREAL_EXACTINPUTWRAPPER);
 
     // ~ Variables ~
 
@@ -52,10 +53,7 @@ contract DistributeRevenue is DeployUtility {
     address public USTB = UNREAL_USTB;
     IERC20 public DAI = IERC20(UNREAL_DAI);
 
-    address public token = address(DAI);
-
-    address public wrapper = payable(UNREAL_EXACTINPUTWRAPPER);
-
+    address public token;
 
     bytes4 public selector_swapExactTokensForETH =
         bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"));
@@ -74,6 +72,8 @@ contract DistributeRevenue is DeployUtility {
         rwaToken = RWAToken(payable(_loadDeploymentAddress("RWAToken")));
         revDistributor = RevenueDistributor(payable(_loadDeploymentAddress("RevenueDistributor")));
         revStreamETH = RevenueStreamETH(payable(_loadDeploymentAddress("RevenueStreamETH")));
+
+        token = address(DAI); // TODO
     }
 
     function run() public {
@@ -85,11 +85,11 @@ contract DistributeRevenue is DeployUtility {
         uint256 amountOut;
         if (token == address(DAI)) {
             // get quote
-            (uint256 quoteWETHFromDAI,,,) = quoter.quoteExactInput(
+            (uint256 quote,,,) = quoter.quoteExactInput(
                 abi.encodePacked(DAI, uint24(100), USTB, uint24(3000), WETH),
                 amount
             );
-            console2.log("quoted", quoteWETHFromDAI);
+            console2.log("quoted", quote);
             // perform swap
             amountOut = revDistributor.convertRewardToken(
                 address(DAI),
@@ -100,14 +100,55 @@ contract DistributeRevenue is DeployUtility {
                     abi.encodePacked(DAI, uint24(100), USTB, uint24(3000), WETH),
                     address(DAI),
                     address(revDistributor),
-                    block.timestamp + 100,
+                    block.timestamp + 1000,
                     amount,
-                    quoteWETHFromDAI
+                    quote
                 )
             );
         }
+        else if (token == address(rwaToken)) {
+            // get quote
+            IQuoterV2.QuoteExactInputSingleParams memory params = IQuoterV2.QuoteExactInputSingleParams({
+                tokenIn: address(rwaToken),
+                tokenOut: WETH,
+                amountIn: amount,
+                fee: 3000,
+                sqrtPriceLimitX96: 0
+            });
+            (uint256 quote,,,) = quoter.quoteExactInputSingle(params);
+            console2.log("quoted", quote);
+            // build swap
+            bytes memory data1 = 
+                abi.encodeWithSignature(
+                    "exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))",
+                    address(rwaToken),
+                    WETH,
+                    3000,
+                    UNREAL_SWAP_ROUTER,
+                    block.timestamp + 1000,
+                    amount,
+                    quote,
+                    0
+                );
+            bytes memory data2 =
+                abi.encodeWithSignature(
+                    "unwrapWETH9(uint256,address)",
+                    quote, // minimum out
+                    address(revDistributor)
+                );
+            bytes[] memory multicallData = new bytes[](2);
+            multicallData[0] = data1;
+            multicallData[1] = data2;
+            // perform swap
+            amountOut = revDistributor.convertRewardToken(
+                address(rwaToken),
+                amount,
+                address(UNREAL_SWAP_ROUTER),
+                abi.encodeWithSignature("multicall(bytes[])", multicallData)
+            );
+        }
 
-        console2.log("amount ETH", amountOut); // .235579604567830790
+        console2.log("amount ETH", amountOut);
 
         vm.stopBroadcast();
     }

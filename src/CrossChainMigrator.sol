@@ -214,7 +214,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
             amountTokens = lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) - claimed;
         }
 
-        // if lock is expired -> just mint them RWA tokens
+        // if lock is expired -> revert
         if (block.timestamp >= endTime) {
             revert ExpiredNFT(_tokenId);
         }
@@ -288,7 +288,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
                 lockedAmounts[i] = lCache.lockedAmount + ((lCache.lockedAmount * (lCache.multiplier - 1e18)) / 1e18) - lCache.claimed;
             }
 
-            // if lock is expired -> just mint them RWA tokens
+            // if lock is expired -> revert
             if (block.timestamp >= lCache.endTime) {
                 revert ExpiredNFT(_tokenIds[i]);
             }

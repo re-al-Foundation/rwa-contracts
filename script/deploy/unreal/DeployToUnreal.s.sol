@@ -36,6 +36,7 @@ import "../../../test/utils/Constants.sol";
 /** 
     @dev To run: 
     forge script script/deploy/unreal/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
+    --gas-limit 30000000 \
     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
     @dev To verify manually: 
@@ -86,7 +87,7 @@ contract DeployToUnreal is DeployUtility {
         bytes4(keccak256("multicall(bytes[])"));
 
     function setUp() public {
-        vm.createSelectFork(UNREAL_RPC_URL);
+        vm.createSelectFork("https://rpc.unreal-orbit.gelato.digital");
         _setUp("unreal");
     }
 
@@ -131,7 +132,7 @@ contract DeployToUnreal is DeployUtility {
             abi.encodeWithSelector(RWAVotingEscrow.initialize.selector,
                 address(rwaToken), // RWA token
                 address(vesting),  // votingEscrowVesting
-                UNREAL_LZ_ENDPOINT_V1, // LZ endpoint
+                address(0), // LZ endpoint TODO: Set post
                 adminAddress // admin address
             )
         );
@@ -139,20 +140,20 @@ contract DeployToUnreal is DeployUtility {
         veRWA = RWAVotingEscrow(address(veRWAProxy));
 
 
-        // Deploy RealReceiver
-        receiver = new RealReceiver(UNREAL_LZ_ENDPOINT_V1);
-        // Deploy proxy for receiver
-        receiverProxy = new ERC1967Proxy(
-            address(receiver),
-            abi.encodeWithSelector(RealReceiver.initialize.selector,
-                uint16(block.chainid),
-                address(veRWA),
-                address(rwaToken),
-                adminAddress
-            )
-        );
-        console2.log("receiver", address(receiverProxy));
-        receiver = RealReceiver(address(receiverProxy));
+        // // Deploy RealReceiver
+        // receiver = new RealReceiver(UNREAL_LZ_ENDPOINT_V1);
+        // // Deploy proxy for receiver
+        // receiverProxy = new ERC1967Proxy(
+        //     address(receiver),
+        //     abi.encodeWithSelector(RealReceiver.initialize.selector,
+        //         uint16(block.chainid),
+        //         address(veRWA),
+        //         address(rwaToken),
+        //         adminAddress
+        //     )
+        // );
+        // console2.log("receiver", address(receiverProxy));
+        // receiver = RealReceiver(address(receiverProxy));
 
 
         // Deploy revDistributor contract
@@ -171,22 +172,22 @@ contract DeployToUnreal is DeployUtility {
 
 
         // Deploy royaltyHandler base
-        royaltyHandler = new RoyaltyHandler();
-        // Deploy proxy for royaltyHandler
-        royaltyHandlerProxy = new ERC1967Proxy(
-            address(royaltyHandler),
-            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
-                adminAddress,
-                address(revDistributor),
-                address(rwaToken),
-                UNREAL_WETH,
-                UNREAL_SWAP_ROUTER,
-                UNREAL_QUOTERV2,
-                UNREAL_BOX_MANAGER
-            )
-        );
-        console2.log("royaltyHandler", address(royaltyHandlerProxy));
-        royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
+        // royaltyHandler = new RoyaltyHandler();
+        // // Deploy proxy for royaltyHandler
+        // royaltyHandlerProxy = new ERC1967Proxy(
+        //     address(royaltyHandler),
+        //     abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+        //         adminAddress,
+        //         address(revDistributor),
+        //         address(rwaToken),
+        //         UNREAL_WETH,
+        //         UNREAL_SWAP_ROUTER,
+        //         UNREAL_QUOTERV2,
+        //         UNREAL_BOX_MANAGER
+        //     )
+        // );
+        // console2.log("royaltyHandler", address(royaltyHandlerProxy));
+        // royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
 
 
         // Deploy revStreamETH contract
@@ -229,7 +230,7 @@ contract DeployToUnreal is DeployUtility {
         vesting.setVotingEscrowContract(address(veRWA));
 
         // veRWA config
-        veRWA.updateEndpointReceiver(address(receiver));
+        // veRWA.updateEndpointReceiver(address(receiver)); TODO: Set post new deployment
 
         // RevenueDistributor config
         revDistributor.updateRevenueStream(payable(address(revStreamETH)));
@@ -243,9 +244,10 @@ contract DeployToUnreal is DeployUtility {
 
         // RWAToken config
         rwaToken.setVotingEscrowRWA(address(veRWA));
-        rwaToken.setReceiver(address(receiver));
+        // rwaToken.setReceiver(address(receiver)); TODO
         rwaToken.excludeFromFees(address(revDistributor), true);
-        rwaToken.setRoyaltyHandler(address(royaltyHandler));
+        rwaToken.excludeFromFees(UNREAL_SWAP_ROUTER, true);
+        // rwaToken.setRoyaltyHandler(address(royaltyHandler)); TODO: Set post new deployment
 
         rwaToken.mint(1_000_000 ether); // for testnet testing
 

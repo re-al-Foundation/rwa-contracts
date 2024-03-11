@@ -6,10 +6,6 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
-// local imports
-import { IUniswapV2Router02 } from "./interfaces/IUniswapV2Router02.sol";
-import { IUniswapV2Factory } from "./interfaces/IUniswapV2Factory.sol";
-
 /**
  * @title RWAToken
  * @author @chasebrownn

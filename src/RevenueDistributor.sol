@@ -350,7 +350,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     ) internal returns (uint256 _amountOut) {
         uint256 _before = address(this).balance;
         // check if this is a pre-approved contract for swapping/converting
-        require(fetchSelector[_target] == bytes4(_data[0:4]), "invalid selector");
+        require(fetchSelector[_target] == bytes4(_data[0:4]) && fetchSelector[_target] != bytes4(0), "invalid selector");
 
         IERC20(_tokenIn).forceApprove(_target, 0);
         IERC20(_tokenIn).forceApprove(_target, _amount);

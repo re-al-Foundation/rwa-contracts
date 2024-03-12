@@ -132,6 +132,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @dev Can only be called by an address granted the `DEPOSITOR_ROLE`.
      */
     function depositETH() payable external {
+        require(msg.value != 0, "RevenueStreamETH: msg.value == 0");
         require(msg.sender == revenueDistributor, "RevenueStreamETH: Not authorized");
 
         if (revenue[block.timestamp] == 0) {

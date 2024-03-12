@@ -17,7 +17,7 @@ import "../../../test/utils/Constants.sol";
 /** 
     @dev To run: 
     forge script script/deploy/unreal/DeployRWAToken.s.sol:DeployRWAToken --broadcast --legacy \
-    --gas-limit 30000000 \
+    --gas-limit 30000000 --block-gas-limit 30000000 \
     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
     @dev To verify manually: 
@@ -32,22 +32,15 @@ import "../../../test/utils/Constants.sol";
  */
 contract DeployRWAToken is DeployUtility {
 
-    // ~ Contracts ~
-
-    // core contracts
-    RWAToken public rwaToken;
-    // proxies
-    ERC1967Proxy public rwaTokenProxy;
-
     // ~ Variables ~
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
-    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+    //string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
+    string public UNREAL_RPC_URL = "https://rpc.unreal-orbit.gelato.digital";
     address public adminAddress = vm.envAddress("DEPLOYER_ADDRESS");
 
     function setUp() public {
-        vm.createSelectFork("https://rpc.unreal-orbit.gelato.digital");
-        _setUp("unreal");
+        vm.createSelectFork(UNREAL_RPC_URL);
     }
 
     function run() public {
@@ -57,17 +50,17 @@ contract DeployRWAToken is DeployUtility {
         // Deploy Contracts
         // ----------------
 
-        // Deploy $RWA Token implementation
-        rwaToken = new RWAToken();
-        // Deploy proxy for $RWA Token
-        rwaTokenProxy = new ERC1967Proxy(
-            address(rwaToken),
-            abi.encodeWithSelector(RWAToken.initialize.selector,
-                adminAddress
-            )
-        );
-        console2.log("RWAToken", address(rwaTokenProxy));
-        rwaToken = RWAToken(payable(address(rwaTokenProxy)));
+        // // Deploy $RWA Token implementation
+        // RWAToken rwaToken = new RWAToken();
+        // // Deploy proxy for $RWA Token
+        // ERC1967Proxy rwaTokenProxy = new ERC1967Proxy(
+        //     address(rwaToken),
+        //     abi.encodeWithSelector(RWAToken.initialize.selector,
+        //         adminAddress
+        //     )
+        // );
+        // console2.log("RWAToken", address(rwaTokenProxy));
+        // rwaToken = RWAToken(payable(address(rwaTokenProxy)));
 
 
         vm.stopBroadcast();

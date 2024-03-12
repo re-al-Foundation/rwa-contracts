@@ -5,7 +5,6 @@ pragma solidity ^0.8.19;
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
-import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
 
 /**
@@ -98,7 +97,7 @@ contract Delegator is OwnableUpgradeable {
 
         delegatedToken = _tokenId;   
 
-        veRWA.safeTransferFrom(msg.sender, address(this), _tokenId);
+        veRWA.transferFrom(msg.sender, address(this), _tokenId);
         Votes(address(veRWA)).delegate(delegatee);
 
         emit TokenDelegated(_tokenId, delegatee);
@@ -111,16 +110,8 @@ contract Delegator is OwnableUpgradeable {
         require(msg.sender == delegateFactory || msg.sender == owner(), "Delegator: Not authorized");
 
         Votes(address(veRWA)).delegate(address(this));
-        veRWA.safeTransferFrom(address(this), creator, delegatedToken);
+        veRWA.transferFrom(address(this), creator, delegatedToken);
 
         emit DelegationWithdrawn(delegatedToken, delegatee);
     }
-
-    /**
-     * @notice Allows address(this) to receive ERC721 tokens.
-     */
-    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
-        return IERC721Receiver.onERC721Received.selector;
-    }
-
 }

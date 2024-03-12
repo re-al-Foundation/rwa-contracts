@@ -5,6 +5,7 @@ pragma solidity ^0.8.19;
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 
@@ -19,7 +20,7 @@ import { FetchableBeaconProxy } from "../proxy/FetchableBeaconProxy.sol";
  *         A permissioned admin can create delegator contracts to deposit Voting Escrow tokens to delegate voting power
  *         to a delegatee.
  */
-contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable {
+contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
     // ---------------
     // State Variables
@@ -99,7 +100,7 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable {
      * @param _duration Amount of time to delegate voting power. Will be the expiration date for the new Delegator.
      * @return newDelegator -> Contract address of new Delegator beacon proxy.
      */
-    function deployDelegator(uint256 _tokenId, address _delegatee, uint256 _duration) external returns (address newDelegator) {
+    function deployDelegator(uint256 _tokenId, address _delegatee, uint256 _duration) external nonReentrant returns (address newDelegator) {
         require(canDelegate[msg.sender] || msg.sender == owner(), "DelegateFactory: Not authorized");
 
         // take token
@@ -133,7 +134,7 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to fetch any expired Delegators, withdraw the delegated token from the Delegator,
      *         and delete it's instance from this contract.
      */
-    function revokeExpiredDelegators() external {
+    function revokeExpiredDelegators() external nonReentrant {
         uint256 length = delegators.length;
         for (uint256 i; i < length;) {
             address delegator = delegators[i];

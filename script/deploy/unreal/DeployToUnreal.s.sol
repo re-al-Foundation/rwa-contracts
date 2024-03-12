@@ -36,11 +36,11 @@ import "../../../test/utils/Constants.sol";
 /** 
     @dev To run: 
     forge script script/deploy/unreal/DeployToUnreal.s.sol:DeployToUnreal --broadcast --legacy \
-    --gas-limit 30000000 \
+    --gas-estimate-multiplier 200 \
     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
     @dev To verify manually: 
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18231 --watch \ 
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
     src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 */
 

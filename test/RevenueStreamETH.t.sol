@@ -233,6 +233,14 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(cycles[1], block.timestamp);
     }
 
+    /// @dev Verifies msg.value cannot be 0 when depositETH() is called.
+    function test_revStreamETH_depositETH_cantBe0() public {
+
+        vm.prank(address(revDistributor));
+        vm.expectRevert("RevenueStreamETH: msg.value == 0");
+        revStream.depositETH{value: 0}();
+    }
+
     // ~ claimable ~
 
     /// @dev Verifies proper return variable when RevenueStreamETH::claimable() is called.

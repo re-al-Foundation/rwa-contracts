@@ -249,6 +249,8 @@ contract DeployToUnreal is DeployUtility {
         rwaToken.excludeFromFees(UNREAL_SWAP_ROUTER, true);
         // rwaToken.setRoyaltyHandler(address(royaltyHandler)); TODO: Set post new deployment
 
+        // royaltyHandler.setPearl TODO
+
         rwaToken.mint(1_000_000 ether); // for testnet testing
 
 
@@ -270,11 +272,12 @@ contract DeployToUnreal is DeployUtility {
         // Post-Deploy TODOs
         // -----------------
 
+        // TODO: Deploy API for FE ✅
         // TODO: Create the RWA/WETH pair, initialize, and add liquidity
         // TODO: Set RWA/WETH pair on RWAToken as automatedMarketMakerPair via RwaToken.setAutomatedMarketMakerPair(pair, true);
         // TODO: Create LiquidBox and GaugeV2ALM for RWA/WETH pair -> Set on RoyaltyHandler
-        // TODO: Set trusted remote address via CrossChainMigrator.setTrustedRemoteAddress(remoteEndpointId, abi.encodePacked(address(receiver)));
-        // TODO: Set trusted remote on receiver via RealReceiver.setTrustedRemoteAddress(sourceEndpointId, abi.encodePacked(address(crossChainMigrator)));
+        // TODO: Set trusted remote address via CrossChainMigrator.setTrustedRemoteAddress(remoteEndpointId, abi.encodePacked(address(receiver))); ✅
+        // TODO: Set trusted remote on receiver via RealReceiver.setTrustedRemoteAddress(sourceEndpointId, abi.encodePacked(address(crossChainMigrator))); ✅
         // TODO: Deploy and set ExactInputWrapper if needed
         // TODO: Set any permissions on any necessary Gelato Function callers
 

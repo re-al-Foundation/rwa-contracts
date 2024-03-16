@@ -569,7 +569,6 @@ contract RWAVotingEscrowTest is Utility {
 
         uint256 start;
         uint256 end;
-        uint256 amount;
 
         uint256[] memory depositedTokens;
 
@@ -596,10 +595,9 @@ contract RWAVotingEscrowTest is Utility {
         assertEq(veRWA.getVotes(JOE), amountTokens);
 
         // check vesting schedule data
-        (start, end, amount) = vesting.vestingSchedules(tokenId);
+        (start, end) = vesting.vestingSchedules(tokenId);
         assertEq(start, 0);
         assertEq(end, 0);
-        assertEq(amount, 0);
 
         // check deposited tokens by JOE on vesting contract
         depositedTokens = vesting.getDepositedTokens(JOE);
@@ -638,10 +636,9 @@ contract RWAVotingEscrowTest is Utility {
         assertEq(veRWA.getVotes(JOE), 0);
 
         // check vesting schedule data
-        (start, end, amount) = vesting.vestingSchedules(tokenId);
+        (start, end) = vesting.vestingSchedules(tokenId);
         assertEq(start, block.timestamp);
         assertEq(end, block.timestamp + (36 * 30 days));
-        assertEq(amount, amountTokens);
 
         // check deposited tokens by JOE on vesting contract
         depositedTokens = vesting.getDepositedTokens(JOE);
@@ -657,7 +654,6 @@ contract RWAVotingEscrowTest is Utility {
         assertEq(schedule[0].tokenId, tokenId);
         assertEq(schedule[0].startTime, block.timestamp);
         assertEq(schedule[0].endTime, block.timestamp + (36 * 30 days));
-        assertEq(schedule[0].amount, amountTokens);
     }
 
     // ~ VotingEscrowVesting::withdraw ~
@@ -680,11 +676,13 @@ contract RWAVotingEscrowTest is Utility {
         uint256 totalDuration = (2 * 30 days);
         uint256 skipTo = (1 * 30 days);
 
+        uint256 amount = rwaToken.balanceOf(JOE);
+
         vm.startPrank(JOE);
         rwaToken.approve(address(veRWA), amountTokens);
         veRWA.mint(
             JOE,
-            uint208(rwaToken.balanceOf(JOE)),
+            uint208(amount),
             totalDuration // 2 month lock time
         );
 
@@ -693,7 +691,6 @@ contract RWAVotingEscrowTest is Utility {
 
         uint256 startTime;
         uint256 endTime;
-        uint256 amount;
 
         uint256[] memory depositedTokens;
 
@@ -725,10 +722,9 @@ contract RWAVotingEscrowTest is Utility {
         assertEq(veRWA.getVotes(JOE), 0);
 
         // check vesting schedule data
-        (startTime, endTime, amount) = vesting.vestingSchedules(tokenId);
+        (startTime, endTime) = vesting.vestingSchedules(tokenId);
         assertEq(startTime, block.timestamp);
         assertEq(endTime, block.timestamp + totalDuration);
-        assertEq(amount, amountTokens);
 
         // check deposited tokens by JOE on vesting contract
         depositedTokens = vesting.getDepositedTokens(JOE);
@@ -766,10 +762,9 @@ contract RWAVotingEscrowTest is Utility {
         assertEq(veRWA.getAccountVotingPower(JOE), 0);
 
         // check vesting schedule data
-        (startTime, endTime, amount) = vesting.vestingSchedules(tokenId);
+        (startTime, endTime) = vesting.vestingSchedules(tokenId);
         assertEq(startTime, block.timestamp - skipTo);
         assertEq(endTime, block.timestamp + skipTo);
-        assertEq(amount, amountTokens);
 
         // check deposited tokens by JOE on vesting contract
         depositedTokens = vesting.getDepositedTokens(JOE);
@@ -817,10 +812,9 @@ contract RWAVotingEscrowTest is Utility {
         assertEq(veRWA.getVotes(JOE), votingPower);
 
         // check vesting schedule data
-        (startTime, endTime, amount) = vesting.vestingSchedules(tokenId);
+        (startTime, endTime) = vesting.vestingSchedules(tokenId);
         assertEq(startTime, 0);
         assertEq(endTime, 0);
-        assertEq(amount, 0);
 
         // check deposited tokens by JOE on vesting contract
         depositedTokens = vesting.getDepositedTokens(JOE);

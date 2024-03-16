@@ -234,7 +234,6 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
             vestingSchedules[i].tokenId = tokenIds[i];
             vestingSchedules[i].startTime = vestingObj.startTime;
             vestingSchedules[i].endTime = vestingObj.endTime;
-            vestingSchedules[i].amount = vestingObj.amount;
 
             unchecked {
                 ++i;

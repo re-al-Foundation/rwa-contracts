@@ -26,18 +26,21 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     // State Variables
     // ---------------
 
+    uint256 constant internal MAX_INT = type(uint256).max;
     /// @dev Array used to track all deposits by timestamp.
     uint256[] public cycles;
     /// @dev The duration between deposit and when the revenue in the cycle becomes expired.
     uint256 public timeUntilExpired;
+
+    uint256 public expiredRevClaimedIndex;
     /// @dev Mapping from cycle to amount revenue deposited into contract.
     mapping(uint256 cycle => uint256 amount) public revenue;
     /// @dev Mapping from cycle to amount revenue claimed from cycle.
     mapping(uint256 cycle => uint256 amount) public revenueClaimed;
     /// @dev Mapping from cycle to whether the expired unclaimed revenue was claimed/skimmed.
     mapping(uint256 cycle => bool) public expiredRevClaimed;
-    /// @dev Mapping of an account's last cycle claimed.
-    mapping(address account => uint256 cycle) public lastClaim;
+    /// @dev Mapping of an account's last index claimed from the cycle array.
+    mapping(address account => uint256 index) public lastClaimIndex;
     /// @dev Contract reference for veRWA contract.
     address public votingEscrow;
     /// @dev Stores the address of the RevenueDistributor contract.
@@ -153,19 +156,30 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @param account Address of shareholder that is claiming rewards.
      */
     function claimETH(address account) external returns (uint256 amount) {
-        require(account == msg.sender, "RevenueStreamETH: Not authorized");
+        claimETHIncrement(account, MAX_INT);
+    }
+
+    /**
+     * @notice This method allows eligible VE shareholders to claim their revenue rewards by account in increments by index.
+     * @param account Address of shareholder that is claiming rewards.
+     * @param numIndexes Number of revenue cycles the msg.sender wants to claim in one transaction.
+     *        If the amount of cycles is substantial, it's recommended to claim in more than one increment.
+     */
+    function claimETHIncrement(address account, uint256 numIndexes) public returns (uint256 amount) { // TODO: Test
+        require(account == msg.sender, "RevenueStreamETH: Not authorized"); // TODO: Switch to custom error
+        require(numIndexes != 0, "RevenueStreamETH: numIndexes cant be 0");
 
         uint256 cycle = currentCycle();
 
         uint256[] memory cyclesClaimable;
         uint256[] memory amountsClaimable;
         uint256 num;
+        uint256 indexes;
 
-        (amount, cyclesClaimable, amountsClaimable, num) = _claimable(account);
-
+        (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(account, numIndexes);
         require(amount > 0, "no claimable amount");
 
-        lastClaim[account] = cycle;
+        lastClaimIndex[account] += indexes;
 
         for (uint256 i; i < num;) {
             revenueClaimed[cyclesClaimable[i]] += amountsClaimable[i];
@@ -187,25 +201,18 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @return amount -> Amount of expired revenue that was skimmed.
      */
     function skimExpiredRevenue() external onlyOwner returns (uint256 amount) {
-        uint256[] memory expiredCycles;
-        uint256 num;
-        // fetch any expired cycles.
-        (amount, expiredCycles, num) = _checkForExpiredRevenue();
-        require(amount > 0, "No expired revenue claimable");
+        return _skimExpiredRevenue(MAX_INT);
+    }
 
-        // update `expiredRevClaimed` for each cycle being skimmed.
-        for (uint256 i; i < num;) {
-            expiredRevClaimed[expiredCycles[i]] = true;
-            unchecked {
-                ++i;
-            }
-        }
-
-        // send money to revdist
-        (bool sent,) = payable(revenueDistributor).call{value: amount}("");
-        if (!sent) revert ETHTransferFailed(revenueDistributor, amount);
-
-        emit ExpiredRevenueSkimmed(amount, num);
+    /**
+     * @notice This method claims all "expired" revenue in increments starting from last claimed expired cycle.
+     * @dev When revenue is "skimmed", it means it was expired revenue that was left unclaimed for more than the
+     *      `timeUntilExpired` duration. If skimmed, it is sent back to the RevenueDistributor contract.
+     * @return amount -> Amount of expired revenue that was skimmed.
+     */
+    function skimExpiredRevenueIncrement(uint256 numIndexes) external onlyOwner returns (uint256 amount) { // TODO: Test
+        require(numIndexes != 0, "RevenueStreamETH: numIndexes cant be 0");
+        return _skimExpiredRevenue(numIndexes);
     }
 
     /**
@@ -222,7 +229,17 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @return amount Amount of revenue that is currently claimable.
      */
     function claimable(address account) external view returns (uint256 amount) {
-        (amount,,,) = _claimable(account);
+        (amount,,,,) = _claimable(account, MAX_INT);
+    }
+    /**
+     * @notice View method that returns amount of revenue that is claimable within a range of cycles, given a specific `account`
+     *         and number of cycles/indexes you wish to increment over.
+     * @param account Address of shareholder.
+     * @param numIndexes Number of cycles to fetch claimable from.
+     * @return amount Amount of revenue that is currently claimable.
+     */
+    function claimableIncrement(address account, uint256 numIndexes) external view returns (uint256 amount) {
+        (amount,,,,) = _claimable(account, numIndexes);
     }
 
     /**
@@ -230,7 +247,16 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @return amount -> Amount of expired revenue in total.
      */
     function expiredRevenue() external view returns (uint256 amount) {
-        (amount,,) = _checkForExpiredRevenue();
+        (amount,,,) = _checkForExpiredRevenue(MAX_INT);
+    }
+
+    /**
+     * @notice This method returns the amount of "expired" revenue.
+     * @param numIndexes Number of cycles to fetch expired from last claim of expired revenue.
+     * @return amount -> Amount of expired revenue in total.
+     */
+    function expiredRevenueIncrement(uint256 numIndexes) external view returns (uint256 amount) {
+        (amount,,,) = _checkForExpiredRevenue(numIndexes);
     }
 
     /**
@@ -266,27 +292,56 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     // ----------------
 
     /**
+     * @notice Internal method for skimming expired revenue.
+     */
+    function _skimExpiredRevenue(uint256 numIndexes) internal returns (uint256 amount) {
+        uint256[] memory expiredCycles;
+        uint256 num;
+        uint256 indexes;
+        // fetch any expired cycles.
+        (amount, expiredCycles, num, indexes) = _checkForExpiredRevenue(numIndexes);
+        require(amount > 0, "No expired revenue claimable");
+
+        expiredRevClaimedIndex += indexes;
+
+        // update `expiredRevClaimed` for each cycle being skimmed.
+        for (uint256 i; i < num;) {
+            expiredRevClaimed[expiredCycles[i]] = true;
+            unchecked {
+                ++i;
+            }
+        }
+
+        // send money to revdist
+        (bool sent,) = payable(revenueDistributor).call{value: amount}("");
+        if (!sent) revert ETHTransferFailed(revenueDistributor, amount);
+
+        emit ExpiredRevenueSkimmed(amount, num);
+    }
+
+    /**
      * @notice Internal method for calculating the amount of revenue that is currently claimable for a specific `account`.
      * @param account Address of account with voting power.
      * @return amount -> Amount of ETH that is currently claimable for `account`.
      */
     function _claimable(
-        address account
+        address account,
+        uint256 numIndexes
     ) internal view returns (
         uint256 amount,
         uint256[] memory cyclesClaimable,
         uint256[] memory amountsClaimable,
-        uint256 num
+        uint256 num,
+        uint256 indexes
     ) {
         uint256 numCycles = cycles.length;
-        uint256 lastCycle = lastClaim[account];
-        uint256 i = 1;
-        uint256 cycle = cycles[numCycles - i];
+        uint256 lastClaim = lastClaimIndex[account];
 
         cyclesClaimable = new uint256[](numCycles);
         amountsClaimable = new uint256[](numCycles);
 
-        while (i < numCycles && cycle > lastCycle) {
+        for (uint256 i = lastClaim + 1; i < numCycles; ++i) {
+            uint256 cycle = cycles[i];
             uint256 currentRevenue = revenue[cycle];
 
             uint256 votingPowerAtTime = Votes(votingEscrow).getPastVotes(account, cycle);
@@ -296,12 +351,15 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
                 uint256 claimableForCycle = (currentRevenue * votingPowerAtTime) / totalPowerAtTime;
                 amount += claimableForCycle;
 
-                cyclesClaimable[i-1] = cycle;
-                amountsClaimable[i-1] = claimableForCycle;
+                cyclesClaimable[num] = cycle;
+                amountsClaimable[num] = claimableForCycle;
                 ++num;
             }
 
-            cycle = cycles[numCycles - (++i)];
+            unchecked {
+                ++indexes;
+                if (indexes >= numIndexes) break;
+            }
         }
     }
 
@@ -310,12 +368,13 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @return expired -> Amount of expired revenue in total.
      * @return expiredCycles -> Array of cycles that contain expired revenue.
      * @return num -> Number of cycles in `expiredCycles`.
+     * @return indexes -> Indexes reached.
      */
-    function _checkForExpiredRevenue() internal view returns (uint256 expired, uint256[] memory expiredCycles, uint256 num) {
+    function _checkForExpiredRevenue(uint256 numIndexes) internal view returns (uint256 expired, uint256[] memory expiredCycles, uint256 num, uint256 indexes) {
         uint256 numCycles = cycles.length;
         expiredCycles = new uint256[](numCycles);
 
-        for (uint256 i = 1; i < numCycles;) {
+        for (uint256 i = expiredRevClaimedIndex + 1; i < numCycles; ++i) {
 
             uint256 cycle = cycles[i];
             uint256 timePassed = block.timestamp - cycle; // seconds since cycle was created
@@ -338,13 +397,16 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
             }
             else {
                 // If there's no more expired cycles, return with values.
-                return (expired, expiredCycles, num);
+                break;
             }
 
             unchecked {
-                ++i;
+                ++indexes;
+                if (indexes >= numIndexes) break;
             }
         }
+
+        return (expired, expiredCycles, num, indexes);
     }
 
     /**

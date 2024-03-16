@@ -35,7 +35,7 @@ contract DeployAPI is DeployUtility {
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     function setUp() public {
-        vm.createSelectFork(UNREAL_RPC_URL);
+        vm.createSelectFork("https://rpc.unreal-orbit.gelato.digital");
         _setUp("unreal");
 
         veRWA = payable(_loadDeploymentAddress("RWAVotingEscrow"));
@@ -71,6 +71,3 @@ contract DeployAPI is DeployUtility {
         vm.stopBroadcast();
     }
 }
-
-// == Logs ==
-//   API = 0xEE08C27028409669534d2D7c990D3b9B13DF03c5

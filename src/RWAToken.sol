@@ -143,9 +143,14 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      */
     function setRoyaltyHandler(address _royaltyHandler) external onlyOwner {
         if (_royaltyHandler == address(0)) revert ZeroAddress();
-        royaltyHandler = _royaltyHandler;
+
+        isExcludedFromFees[royaltyHandler] = false;
+        canBurn[royaltyHandler] = false;
+
         isExcludedFromFees[_royaltyHandler] = true;
         canBurn[_royaltyHandler] = true;
+
+        royaltyHandler = _royaltyHandler;
     }
 
     /**
@@ -154,9 +159,14 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      */
     function setReceiver(address _receiver) external onlyOwner {
         if (_receiver == address(0)) revert ZeroAddress();
-        lzReceiver = _receiver;
+
+        isExcludedFromFees[lzReceiver] = false;
+        canMint[lzReceiver] = false;
+
         isExcludedFromFees[_receiver] = true;
         canMint[_receiver] = true;
+
+        lzReceiver = _receiver;
     }
 
     /**
@@ -165,10 +175,16 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      */
     function setVotingEscrowRWA(address _veRWA) external onlyOwner {
         if (_veRWA == address(0)) revert ZeroAddress();
-        votingEscrowRWA = _veRWA;
+
+        isExcludedFromFees[votingEscrowRWA] = false;
+        canBurn[votingEscrowRWA] = false;
+        canMint[votingEscrowRWA] = false;
+
         isExcludedFromFees[_veRWA] = true;
         canBurn[_veRWA] = true;
         canMint[_veRWA] = true;
+
+        votingEscrowRWA = _veRWA;
     }
 
     /**
@@ -249,14 +265,14 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
         // note: if automatedMarketMakerPairs[from] == true -> BUY
         // note: if automatedMarketMakerPairs[to] == true   -> SELL
 
+        if (isBlacklisted[from] && to != owner()) revert Blacklisted(from);
+        if (isBlacklisted[to]) revert Blacklisted(to);
+
         bool excludedAccount = isExcludedFromFees[from] || isExcludedFromFees[to];
 
         if (!excludedAccount) { // if not whitelisted
 
-            if (isBlacklisted[from]) revert Blacklisted(from);
-            if (isBlacklisted[to]) revert Blacklisted(to);
-
-            // if transaction is a buy or sell, take fee.
+            // if transaction is a swap, take fee.
             if(automatedMarketMakerPairs[from] || automatedMarketMakerPairs[to]) {
                 uint256 feeAmount;
 

@@ -679,19 +679,12 @@ contract RWATokenTest is Utility {
         vm.expectRevert(abi.encodeWithSelector(RWAToken.Blacklisted.selector, JOE));
         rwaToken.transfer(ALICE, amountTokens);
 
-        // Whitelist Alice then transfer from Joe -> success
-
-        vm.prank(ADMIN);
-        rwaToken.excludeFromFees(ALICE, true);
-
-        assertEq(rwaToken.isExcludedFromFees(ALICE), true);
-        assertEq(rwaToken.balanceOf(ALICE), 0);
-        assertEq(rwaToken.balanceOf(JOE), amountTokens);
+        // Joe can only send his tokens to the owner
 
         vm.prank(JOE);
-        rwaToken.transfer(ALICE, amountTokens);
+        rwaToken.transfer(ADMIN, amountTokens);
 
-        assertEq(rwaToken.balanceOf(ALICE), amountTokens);
+        assertEq(rwaToken.balanceOf(ADMIN), amountTokens);
         assertEq(rwaToken.balanceOf(JOE), 0);
     }
 }

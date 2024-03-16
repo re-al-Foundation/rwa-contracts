@@ -5,6 +5,7 @@ pragma solidity =0.8.20;
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import { Time } from "@openzeppelin/contracts/utils/types/Time.sol";
 
 // oz upgradeable imports
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
@@ -12,6 +13,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 
 // local imports
 import { IVotingEscrow } from "../interfaces/IVotingEscrow.sol";
+import { IERC6372 } from "../interfaces/IERC6372.sol";
 
 /**
  * @title Voting Escrow Vesting
@@ -29,7 +31,7 @@ import { IVotingEscrow } from "../interfaces/IVotingEscrow.sol";
  * - Claim the underlying locked tokens upon vesting completion, burning the VotingEscrow token.
  * - Manage vesting schedules and track depositors' vested tokens.
  */
-contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgradeable {
+contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgradeable, IERC6372 {
 
     // ---------------
     // State Variables
@@ -40,8 +42,6 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
         uint256 startTime;
         /// @dev lock epoch end time.
         uint256 endTime;
-        ///@dev amount of tokens locked.
-        uint256 amount;
     }
 
     /// @dev Maps `owner` address to an array of tokenIds the address deposited into contract.
@@ -72,6 +72,11 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
      * @param index Invalid index argument.
      */
     error OutOfBoundsIndex(address depositor, uint256 index);
+
+    /**
+     * @notice Error emitted if the RWAVotingEscrow contract being set on address(this) does not use the same clock mode.
+     */
+    error ClockModesMisMatch();
 
 
     // -----------
@@ -106,6 +111,9 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
      * @param _votingEscrow voting escrow contract address.
      */
     function setVotingEscrowContract(address _votingEscrow) external onlyOwner {
+        if (keccak256(abi.encode(IERC6372(_votingEscrow).CLOCK_MODE())) != keccak256(abi.encode(CLOCK_MODE()))) {
+            revert ClockModesMisMatch();
+        }
         votingEscrow = IVotingEscrow(_votingEscrow);
     }
 
@@ -118,13 +126,12 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
      */
     function deposit(uint256 tokenId) external nonReentrant {
         uint256 duration = votingEscrow.getRemainingVestingDuration(tokenId);
-        uint256 startTime = block.timestamp;
+        uint256 startTime = clock();
         uint256 endTime = startTime + duration;
-        uint256 amount = votingEscrow.getLockedAmount(tokenId);
 
         _addTokenToDepositorEnumeration(msg.sender, tokenId);
         // Store the vesting schedule for the token in `vestingSchedules`
-        vestingSchedules[tokenId] = VestingSchedule(startTime, endTime, amount);
+        vestingSchedules[tokenId] = VestingSchedule(startTime, endTime);
         // set new vesting duration to 0 on nft contract -> vesting contract should not have voting power
         votingEscrow.updateVestingDuration(tokenId, 0);
         // transfer NFT from depositor to this contract
@@ -147,9 +154,11 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
         uint256 endTime = tokenSchedule.endTime;
         uint256 remainingTime;
 
-        if (endTime > block.timestamp) {
+        uint48 currentTime = clock();
+
+        if (endTime > currentTime) {
             unchecked {
-                remainingTime = endTime - block.timestamp;
+                remainingTime = endTime - currentTime;
             }
         }
 
@@ -163,7 +172,7 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
 
     /**
      * @dev Claims the underlying locked tokens of a vested VotingEscrow token, effectively burning the VotingEscrow
-     * token. The function can only be called once the vesting period has completed.
+     * token. If the function is called before the vesting period has completed, a tax will be invoked.
      *
      * @param receiver The address to receive the underlying locked tokens.
      * @param tokenId The identifier of the VotingEscrow token to be claimed.
@@ -179,9 +188,11 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
         uint256 endTime = tokenSchedule.endTime;
         uint256 remainingTime;
 
-        if (endTime > block.timestamp) {
+        uint48 currentTime = clock();
+
+        if (endTime > currentTime) {
             unchecked {
-                remainingTime = endTime - block.timestamp;
+                remainingTime = endTime - currentTime;
             }
         }
 
@@ -232,6 +243,26 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
      */
     function getDepositedTokens(address account) external view returns (uint256[] memory) {
         return depositedTokens[account];
+    }
+
+
+    // --------------
+    // Public Methods
+    // --------------
+
+    /**
+     * @notice Returns the current block.timestamp.
+     */
+    function clock() public view virtual override returns (uint48) {
+        return Time.timestamp();
+    }
+
+    /**
+     * @dev Machine-readable description of the clock as specified in EIP-6372.
+     */
+    // solhint-disable-next-line func-name-mixedcase
+    function CLOCK_MODE() public pure virtual override returns (string memory) {
+        return "mode=timestamp";
     }
 
 

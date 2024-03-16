@@ -180,6 +180,10 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      * @param _admin The assigned owner of this contract.
      */
     function initialize(address _lockedToken, address _vestingContract, address _endpoint, address _admin) external initializer {
+        require(_lockedToken != address(0), "address(0) is not acceptable for lockedToken");
+        require(_vestingContract != address(0), "address(0) is not acceptable for vesting contract");
+        require(_admin != address(0), "address(0) is not acceptable for admin");
+
         __ERC721_init("RWA Voting Escrow", "veRWA");
         __Ownable_init(_admin);
         __Votes_init();

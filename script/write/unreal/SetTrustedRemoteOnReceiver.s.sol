@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // local imports
 import { RealReceiver } from "../../../src/RealReceiver.sol";
@@ -16,29 +17,25 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script deploys RealReceiver to Bsc Testnet.
  */
-contract SetTrustedRemoteOnReceiver is Script {
+contract SetTrustedRemoteOnReceiver is DeployUtility {
 
-    // ~ Contracts ~
-
-    RealReceiver public realReceiver = RealReceiver(0x36b6240FD63D5A4fb095AbF7cC8476659C76071C); // unreal
-
-    // ~ Variables ~
-
-    uint16 public sourceEndpointId = MUMBAI_CHAINID;
-
-    address public migrator = 0x7b480d219F68dA5c630534de8bFD0219Bd7BCFaB;
+    RealReceiver public realReceiver;
+    address public migrator;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     function setUp() public {
-        vm.createSelectFork(UNREAL_RPC_URL);
+        vm.createSelectFork("https://rpc.unreal-orbit.gelato.digital");
+        _setUp("unreal");
+        realReceiver = RealReceiver(_loadDeploymentAddress("RealReceiver"));
+        migrator = _loadDeploymentAddress("CrossChainMigrator");
     }
 
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        realReceiver.setTrustedRemoteAddress(sourceEndpointId, abi.encodePacked(migrator));
+        realReceiver.setTrustedRemoteAddress(MUMBAI_CHAINID, abi.encodePacked(address(migrator)));
 
         vm.stopBroadcast();
     }

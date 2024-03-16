@@ -57,7 +57,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     /// @notice Stores contract reverence for ERC-20 token PEARL.
     IERC20 public pearl;
 
-
     // ------
     // Events
     // ------
@@ -263,47 +262,48 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         uint256 tokensForEth = amountForLp / 2;
         amountForLp -= tokensForEth;
 
-        _swapTokensForETH(tokensForEth);
+        _swapTokensForETH(tokensForEth, _getQuote(tokensForEth));
         _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
 
         emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
     }
 
-    /**
-     * @notice This internal method takes `tokenAmount` of tokens and swaps it for ETH.
-     * @param tokenAmount Amount of $RWA tokens being swapped/sold for ETH.
-     */
-    function _swapTokensForETH(uint256 tokenAmount) internal {
-
-        // a. Get quote
+    function _getQuote(uint256 amountIn) internal returns (uint256 amountOut) {
         IQuoterV2.QuoteExactInputSingleParams memory quoteParams = IQuoterV2.QuoteExactInputSingleParams({
             tokenIn: address(rwaToken),
             tokenOut: address(WETH),
-            amountIn: tokenAmount,
+            amountIn: amountIn,
             fee: poolFee,
             sqrtPriceLimitX96: 0
         });
-        (uint256 amountOut,,,) = quoter.quoteExactInputSingle(quoteParams);
+        (amountOut,,,) = quoter.quoteExactInputSingle(quoteParams);
+    }
 
-        // b. build swap params
+    /**
+     * @notice This internal method takes `amountIn` of tokens and swaps it for ETH.
+     * @param amountIn Amount of $RWA tokens being swapped/sold for ETH.
+     */
+    function _swapTokensForETH(uint256 amountIn, uint256 minOut) internal {
+
+        // build swap params
         ISwapRouter.ExactInputSingleParams memory swapParams = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(rwaToken),
             tokenOut: address(WETH),
             fee: poolFee,
             recipient: address(this),
             deadline: block.timestamp,
-            amountIn: tokenAmount,
-            amountOutMinimum: amountOut,
+            amountIn: amountIn,
+            amountOutMinimum: minOut,
             sqrtPriceLimitX96: 0
         });
 
-        // c. swap
-        rwaToken.approve(address(swapRouter), tokenAmount);
-
+        rwaToken.approve(address(swapRouter), amountIn);
         uint256 preBal = WETH.balanceOf(address(this));
+
+        // swap
         swapRouter.exactInputSingle(swapParams);
 
-        require(preBal + amountOut == WETH.balanceOf(address(this)), "RoyaltyHandler: Insufficient WETH received");
+        require(preBal + minOut == WETH.balanceOf(address(this)), "RoyaltyHandler: Insufficient WETH received");
     }
 
     /**

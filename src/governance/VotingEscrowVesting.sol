@@ -3,13 +3,13 @@ pragma solidity =0.8.20;
 
 // oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
-import { ReentrancyGuard } from "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { Time } from "@openzeppelin/contracts/utils/types/Time.sol";
 
 // oz upgradeable imports
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 // local imports
 import { IVotingEscrow } from "../interfaces/IVotingEscrow.sol";
@@ -21,7 +21,7 @@ import { IERC6372 } from "../interfaces/IERC6372.sol";
  * @notice The VotingEscrowVesting contract manages the vesting schedules for tokens locked in the VotingEscrow system.
  * It allows users to deposit their VotingEscrow tokens, undergo a vesting period, and then either withdraw them back or
  * claim the underlying locked tokens upon vesting completion.
- * @dev This contract uses the ReentrancyGuard to prevent reentrant calls. It interfaces with the VotingEscrow contract
+ * @dev This contract uses the ReentrancyGuardUpgradeable to prevent reentrant calls. It interfaces with the VotingEscrow contract
  * to manage the locked tokens. The contract tracks vesting schedules and depositors' information, providing functions
  * to deposit, withdraw, and claim tokens based on their vesting schedules.
  *
@@ -31,7 +31,7 @@ import { IERC6372 } from "../interfaces/IERC6372.sol";
  * - Claim the underlying locked tokens upon vesting completion, burning the VotingEscrow token.
  * - Manage vesting schedules and track depositors' vested tokens.
  */
-contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgradeable, IERC6372 {
+contract VotingEscrowVesting is ReentrancyGuardUpgradeable, OwnableUpgradeable, UUPSUpgradeable, IERC6372 {
 
     // ---------------
     // State Variables
@@ -99,6 +99,7 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
     function initialize(address _admin) external initializer {
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
+        __ReentrancyGuard_init();
     }
 
 
@@ -131,7 +132,7 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
 
         _addTokenToDepositorEnumeration(msg.sender, tokenId);
         // Store the vesting schedule for the token in `vestingSchedules`
-        vestingSchedules[tokenId] = VestingSchedule(startTime, endTime);
+        vestingSchedules[tokenId] = VestingSchedule({ startTime: startTime, endTime: endTime });
         // set new vesting duration to 0 on nft contract -> vesting contract should not have voting power
         votingEscrow.updateVestingDuration(tokenId, 0);
         // transfer NFT from depositor to this contract
@@ -164,8 +165,6 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
 
         _removeTokenFromDepositorEnumeration(msg.sender, tokenId);
 
-        delete vestingSchedules[tokenId];
-
         votingEscrow.updateVestingDuration(tokenId, remainingTime);
         votingEscrow.transferFrom(address(this), receiver, tokenId);
     }
@@ -197,8 +196,6 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
         }
 
         _removeTokenFromDepositorEnumeration(msg.sender, tokenId);
-
-        delete vestingSchedules[tokenId];
 
         votingEscrow.updateVestingDuration(tokenId, remainingTime);
         votingEscrow.burn(receiver, tokenId);
@@ -307,6 +304,7 @@ contract VotingEscrowVesting is ReentrancyGuard, OwnableUpgradeable, UUPSUpgrade
 
         delete depositors[tokenId];
         delete depositedTokensIndex[tokenId];
+        delete vestingSchedules[tokenId];
 
         tokens.pop();
     }

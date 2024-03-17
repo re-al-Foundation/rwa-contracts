@@ -3,7 +3,6 @@ pragma solidity ^0.8.19;
 
 // oz imports
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
-import { IERC721Receiver } from "@openzeppelin/contracts/token/ERC721/IERC721Receiver.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
@@ -81,6 +80,10 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
         address _initDelegatorBase,
         address _admin
     ) external initializer {
+        require(_admin != address(0));
+        require(_initDelegatorBase != address(0));
+        require(_veRWA != address(0));
+
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
 
@@ -102,9 +105,11 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
      */
     function deployDelegator(uint256 _tokenId, address _delegatee, uint256 _duration) external nonReentrant returns (address newDelegator) {
         require(canDelegate[msg.sender] || msg.sender == owner(), "DelegateFactory: Not authorized");
+        require(_delegatee != address(0), "delegatee cannot be address(0)");
+        require(_duration != 0, "duration must be greater than 0");
 
         // take token
-        veRWA.safeTransferFrom(msg.sender, address(this), _tokenId);
+        veRWA.transferFrom(msg.sender, address(this), _tokenId);
 
         // create delegator
         FetchableBeaconProxy newDelegatorBeacon = new FetchableBeaconProxy(
@@ -212,14 +217,6 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
     function getDelegatorsArray() external view returns (address[] memory) {
         return delegators;
     }
-
-    /**
-     * @notice Allows address(this) to receive ERC721 tokens.
-     */
-    function onERC721Received(address, address, uint256, bytes calldata) external pure returns (bytes4) {
-        return IERC721Receiver.onERC721Received.selector;
-    }
-
 
     // ----------------
     // Internal Methods

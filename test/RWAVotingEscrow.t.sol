@@ -149,13 +149,13 @@ contract RWAVotingEscrowTest is Utility {
     // -------
 
     /// @notice Helper method for calculate early-burn fees.
-    function _calculateFee(uint256 duration) internal view returns (uint16 fee) {
-        fee = uint16((veRWA.getMaxEarlyUnlockFee() * duration) / veRWA.MAX_VESTING_DURATION());
+    function _calculateFee(uint256 duration) internal view returns (uint256 fee) {
+        fee = (veRWA.getMaxEarlyUnlockFee() * duration) / veRWA.MAX_VESTING_DURATION();
     }
 
     /// @notice Helper method for calculate early-burn penalties post fee.
     function _calculatePenalty(uint256 amount, uint256 duration) internal view returns (uint256 penalty) {
-        penalty = (amount * _calculateFee(duration) / 100_00);
+        penalty = (amount * _calculateFee(duration) / (100 * 1e18));
     }
 
 
@@ -1033,6 +1033,7 @@ contract RWAVotingEscrowTest is Utility {
             uint208(rwaToken.balanceOf(JOE)),
             duration
         );
+        vm.stopPrank();
 
         Checkpoints.Trace208 memory votingPowerCheckpoints;
         Checkpoints.Trace208 memory totalVotingPowerCheckpoints;
@@ -1074,11 +1075,16 @@ contract RWAVotingEscrowTest is Utility {
 
         // ~ Burn ~
 
-        vm.startPrank(JOE);
+        vm.prank(ALICE);
+        vm.expectRevert();
         veRWA.burn(JOE, tokenId);
-        vm.stopPrank();
+
+        vm.prank(JOE);
+        veRWA.burn(JOE, tokenId);
 
         uint256 feeTaken = _calculatePenalty(amount, duration);
+
+        emit log_named_uint("fee", feeTaken);
 
         // ~ Post-state check 2 ~
 
@@ -1140,6 +1146,7 @@ contract RWAVotingEscrowTest is Utility {
         uint256 skipTo = duration / 2;
 
         uint256 penalty = _calculatePenalty(amount, skipTo);
+        emit log_named_uint("penalty", penalty);
 
         vm.startPrank(JOE);
         rwaToken.approve(address(veRWA), amount);
@@ -1336,6 +1343,9 @@ contract RWAVotingEscrowTest is Utility {
         uint256 duration = 36 * 30 days;
 
         uint256 penalty = _calculatePenalty(amount, duration - skipTo);
+        emit log_named_uint("penalty", penalty);
+
+        assertGt(penalty, 0);
 
         vm.startPrank(JOE);
         rwaToken.approve(address(veRWA), amount);

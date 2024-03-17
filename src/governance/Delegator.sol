@@ -3,6 +3,7 @@ pragma solidity ^0.8.19;
 
 // oz imports
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/Initializable.sol";
 import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
@@ -14,7 +15,7 @@ import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
  *         This contract will be created by the DelegateFactory and will be assigned a delegatee.
  *         Upon creation, a veRWA NFT will be deposited in which the voting power is delegated to the delegatee.
  */
-contract Delegator is OwnableUpgradeable {
+contract Delegator is OwnableUpgradeable, ReentrancyGuardUpgradeable {
 
     // ---------------
     // State Variables
@@ -106,7 +107,7 @@ contract Delegator is OwnableUpgradeable {
     /**
      * @notice This method is used to transfer the `delegatedToken` back to the `creator`.
      */
-    function withdrawDelegatedToken() external {
+    function withdrawDelegatedToken() external nonReentrant {
         require(msg.sender == delegateFactory || msg.sender == owner(), "Delegator: Not authorized");
 
         Votes(address(veRWA)).delegate(address(this));

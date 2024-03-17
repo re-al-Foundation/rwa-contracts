@@ -58,7 +58,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         /// @notice RealReceiver contract address. Facilitates migration messages.
         address endpointReceiver;
         /// @notice Max early-unlock fee.
-        uint16 maxEarlyUnlockFee;
+        uint256 maxEarlyUnlockFee;
         /// @notice ERC-20 contract address of token. Default is $RWA token.
         IERC20 lockedToken;
         /// @notice VotingEscrowVesting contract address.
@@ -91,42 +91,42 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
 
     /**
      * @notice Event emitted when _createLock() is executed.
-     * @param _tokenId Token identifier of newly minted token.
-     * @param _lockedAmount Amount of `lockedToken` locked.
-     * @param _duration Duration of new lock.
+     * @param tokenId Token identifier of newly minted token.
+     * @param lockedAmount Amount of `lockedToken` locked.
+     * @param duration Duration of new lock.
      */
-    event LockCreated(uint256 indexed _tokenId, uint208 _lockedAmount, uint256 _duration);
+    event LockCreated(uint256 indexed tokenId, uint208 lockedAmount, uint256 duration);
 
     /**
      * @notice Event emitted when merge() is executed.
-     * @param _tokenId Token identifier of token being merged.
-     * @param _intoTokenId Token identifier of token that is consuming `_tokenId`.
+     * @param tokenId Token identifier of token being merged.
+     * @param intoTokenId Token identifier of token that is consuming `tokenId`.
      */
-    event lockMerged(uint256 indexed _tokenId, uint256 indexed _intoTokenId);
+    event lockMerged(uint256 indexed tokenId, uint256 indexed intoTokenId);
 
     /**
      * @notice Event emitted when split() is executed.
-     * @param _tokenId Token identifier of token being split.
-     * @param _shares An array of share proportions for splitting the token. 
+     * @param tokenId Token identifier of token being split.
+     * @param shares An array of share proportions for splitting the token. 
      */
-    event lockSplit(uint256 indexed _tokenId, uint256[] _shares);
+    event lockSplit(uint256 indexed tokenId, uint256[] shares);
 
     /**
      * @notice Event emitted when burn() is executed.
-     * @param _tokenId Token identifier of token burned.
-     * @param _remainingTime The remaining time left on lock. If > 0, there will be a penalty incurred by account.
-     * @param _fee The percentage used to calculate `_penalty`.
-     * @param _penalty Amount of tokens being burned if the lock was destroyed earlier than promised duration.
+     * @param tokenId Token identifier of token burned.
+     * @param remainingTime The remaining time left on lock. If > 0, there will be a penalty incurred by account.
+     * @param fee The percentage used to calculate `penalty`.
+     * @param penalty Amount of tokens being burned if the lock was destroyed earlier than promised duration.
      * @param unlocked Amount of tokens unlocked and therefore transferred to account.
      */
-    event lockBurned(uint256 indexed _tokenId, uint256 _remainingTime, uint16 _fee, uint256 _penalty, uint256 unlocked);
+    event lockBurned(uint256 indexed tokenId, uint256 remainingTime, uint256 fee, uint256 penalty, uint256 unlocked);
 
     /**
      * @notice Event emitted when a successful migration is fulfilled.
-     * @param _migrator Account that migrated.
-     * @param _tokenId Token identifier minted to `_migrator`.
+     * @param migrator Account that migrated.
+     * @param tokenId Token identifier minted to `migrator`.
      */
-    event MigrationFulfilled(address indexed _migrator, uint256 indexed _tokenId);
+    event MigrationFulfilled(address indexed migrator, uint256 indexed tokenId);
 
 
     // ------
@@ -156,6 +156,11 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      * @notice This error is emitted when an account attempts to crate a lock with 0 locked balance.
      */
     error ZeroLockBalance();
+
+    /**
+     * @notice This error is emitted when a user atempts to merge a token into itself.
+     */
+    error SelfMerge();
 
 
     // -----------
@@ -193,7 +198,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         $.lockedToken = IERC20(_lockedToken);
         $.vestingContract = _vestingContract;
         $.endpointReceiver = _endpoint;
-        $.maxEarlyUnlockFee = 50_00; // 50%
+        $.maxEarlyUnlockFee = 50 * 1e18; // 50%
     }
 
 
@@ -290,16 +295,18 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      * @param tokenId The identifier of the VotingEscrow token to be burned.
      */
     function burn(address receiver, uint256 tokenId) external {
+        _checkAuthorized(_requireOwned(tokenId), msg.sender, tokenId);
+
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
         uint256 remainingTime = $._remainingVestingDuration[tokenId];
         uint256 payout = $._lockedBalance[tokenId];
 
-        uint16 fee;
+        uint256 fee;
         uint256 penalty;
         if (remainingTime != 0) {
             // calculate early unlock tax
             fee = _calculateEarlyFee(remainingTime);
-            penalty = (payout * fee) / 100_00;
+            penalty = (payout * fee) / (100 * 1e18);
 
             payout = payout - penalty;
 
@@ -336,6 +343,8 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      * @param intoTokenId The identifier of the VotingEscrow token that tokenId will be merged into.
      */
     function merge(uint256 tokenId, uint256 intoTokenId) external {
+        if (tokenId == intoTokenId) revert SelfMerge();
+
         address owner = _requireOwned(tokenId);
         address targetOwner = _requireOwned(intoTokenId);
 
@@ -403,6 +412,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             uint256 share = shares[i];
             // locked balance for this NFT is percentage of shares * total locked balance
             uint256 _lockedBalance = share * lockedBalance / totalShares;
+            if (lockedBalance == 0) revert ZeroLockBalance();
             // fetch new tokenId to mint
             uint256 newTokenId = _incrementAndGetTokenId();
             // store new tokenId in tokenIds array
@@ -411,6 +421,9 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             $._mintingTimestamp[newTokenId] = mintingTimestamp;
             // mint new token
             _mint(owner, newTokenId);
+            if (owner != msg.sender && !_isAuthorized(owner, msg.sender, newTokenId)) {
+                _approve(msg.sender, newTokenId, owner);
+            }
             // update lock info for new token
             _updateLock(newTokenId, _lockedBalance, remainingVestingDuration);
             // subtract locked balance from total balance
@@ -419,6 +432,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
                 ++i;
             }
         }
+        if (remainingBalance == 0) revert ZeroLockBalance();
         // update old token with remaining balance
         _updateLock(tokenId, remainingBalance, remainingVestingDuration);
         emit lockSplit (tokenId, shares);
@@ -519,7 +533,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         return _getVotingEscrowStorage()._remainingVestingDuration[tokenId];
     }
 
-    function getMaxEarlyUnlockFee() external view returns (uint16) {
+    function getMaxEarlyUnlockFee() external view returns (uint256) {
         return _getVotingEscrowStorage().maxEarlyUnlockFee;
     }
 
@@ -717,9 +731,9 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      *
      * @return fee -> Penalty fee calculated.
      */
-    function _calculateEarlyFee(uint256 _duration) internal view returns (uint16 fee) {
+    function _calculateEarlyFee(uint256 _duration) internal view returns (uint256 fee) {
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
-        fee = uint16(($.maxEarlyUnlockFee * _duration) / MAX_VESTING_DURATION);
+        fee = ($.maxEarlyUnlockFee * _duration) / MAX_VESTING_DURATION;
     }
 
     /**

@@ -3,22 +3,24 @@ pragma solidity ^0.8.19;
 
 // oz imports
 import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
+import { Ownable } from "@openzeppelin/contracts/access/Ownable.sol";
 
 import { ISwapRouter } from "../interfaces/ISwapRouter.sol";
 import { IWETH } from "../interfaces/IWETH.sol";
 
-contract ExactInputWrapper {
+contract ExactInputWrapper is Ownable {
 
     ISwapRouter public swapRouter;
-    IWETH public WETH;
+    IWETH public immutable WETH;
 
-    constructor(address _router, address _weth) {
+    constructor(address _router, address _weth) Ownable(msg.sender) {
         swapRouter = ISwapRouter(_router);
         WETH = IWETH(_weth);
     }
 
-    receive() external payable {}
+    receive() external payable {
+        require(msg.sender == address(swapRouter) || msg.sender == address(WETH), "NA");
+    }
 
     function exactInputForETH(
         bytes memory path,
@@ -52,5 +54,10 @@ contract ExactInputWrapper {
 
         (bool success,) = recipient.call{value:amountOut}("");
         require(success, "transfer of ETH failed");
+    }
+
+    function updateSwapRouter(address _router) external onlyOwner {
+        require(_router != address(0), "Invalid address");
+        swapRouter = ISwapRouter(_router);
     }
 }

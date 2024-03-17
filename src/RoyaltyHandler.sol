@@ -113,6 +113,9 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         address _quoter,
         address _boxManager
     ) external initializer {
+        require(_admin != address(0));
+        require(_revDist != address(0));
+
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
 

@@ -527,14 +527,14 @@ contract MainDeploymentTest is Utility {
         require(success, "ETH unsuccessful");
     }
 
-    /// @dev Helper method for calculate early-burn fees.
-    function _calculateFee(uint256 duration) internal view returns (uint16 fee) {
-        fee = uint16((veRWA.getMaxEarlyUnlockFee() * duration) / veRWA.MAX_VESTING_DURATION());
+    /// @notice Helper method for calculate early-burn fees.
+    function _calculateFee(uint256 duration) internal view returns (uint256 fee) {
+        fee = (veRWA.getMaxEarlyUnlockFee() * duration) / veRWA.MAX_VESTING_DURATION();
     }
 
-    /// @dev Helper method for calculate early-burn penalties post fee.
+    /// @notice Helper method for calculate early-burn penalties post fee.
     function _calculatePenalty(uint256 amount, uint256 duration) internal view returns (uint256 penalty) {
-        penalty = (amount * _calculateFee(duration) / 100_00);
+        penalty = (amount * _calculateFee(duration) / (100 * 1e18));
     }
 
     /// @dev deal doesn't work with USTB since the storage layout is different

@@ -66,6 +66,12 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
      */
     error MigrationFailed(uint16 packetType);
 
+    /**
+     * @notice This error is emitted when there's an invalid packet type that is received.
+     * @param packetType packet type that was received and deemed invalid. 
+     */
+    error InvalidPacketType(uint16 packetType);
+
     
     // -----------
     // Constructor
@@ -94,6 +100,9 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
         address _rwaToken,
         address _admin
     ) external initializer {
+        require(_admin != address(0));
+        require(_srcChainId != uint16(0));
+
         __Ownable_init(_admin);
         __NonblockingLzApp_init(_admin);
         __UUPSUpgradeable_init();
@@ -150,7 +159,8 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
 
         if (packetType == SEND_NFT) _migrateNFT(payload);
         else if (packetType == SEND_NFT_BATCH) _migrateNFTBatch(payload);
-        else _migrateTokens(payload);
+        else if (packetType == SEND) _migrateTokens(payload);
+        else revert InvalidPacketType(packetType);
     }
 
     /**

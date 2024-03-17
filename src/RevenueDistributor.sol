@@ -120,6 +120,9 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         address _revStreamETH,
         address _veRwa
     ) external initializer {
+        require(_admin != address(0));
+        require(_veRwa != address(0));
+
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
 
@@ -185,10 +188,9 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         bytes[] calldata _data
     ) external isDistributor returns (uint256[] memory _amountsOut) {
         uint256 len = _tokens.length;
-        require(
-            (len == _amounts.length) == (_targets.length == _data.length),
-            "Invalid length"
-        );
+        require(len == _amounts.length,"Invalid length");
+        require(_amounts.length == _targets.length,"Invalid length");
+        require(_targets.length == _data.length,"Invalid length");
         _amountsOut = new uint256[](len);
 
         uint256 totalDeposit;
@@ -352,7 +354,6 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         // check if this is a pre-approved contract for swapping/converting
         require(fetchSelector[_target] == bytes4(_data[0:4]) && fetchSelector[_target] != bytes4(0), "invalid selector");
 
-        IERC20(_tokenIn).forceApprove(_target, 0);
         IERC20(_tokenIn).forceApprove(_target, _amount);
 
         (bool _success, ) = _target.call(_data);

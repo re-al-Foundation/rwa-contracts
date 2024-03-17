@@ -40,7 +40,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
     // ---------------
 
     /// @notice max vesting duration.
-    uint256 private constant MAX_DURATION = 36 * (30 days);
+    uint256 private constant MAX_VESTING_DURATION = VotingMath.MAX_VESTING_DURATION;
     /// @notice Packet type for ERC-20 token migration message.
     uint16 private constant SEND = 0;
     /// @notice Packet type for NFT migration message.
@@ -72,8 +72,6 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         uint256 maxPayout;
     }
 
-    /// @notice Private var for storing lock data locally. Avoid stack-too-deep errors
-    LockCache private lCache;
     /// @notice boost start time for passiveIncomeNFT locks.
     uint256 private BOOST_START;
     /// @notice boost end time for passiveIncomeNFT locks.
@@ -92,7 +90,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
     /**
      * @notice This error is emitted when a user attempts to mirgate an expired NFT.
      */
-    error ExpiredNFT(uint256 _tokenId);
+    error ExpiredNFT(uint256 tokenId);
 
 
     // ------
@@ -101,19 +99,25 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
 
     /**
      * @notice This event is emitted when there's a successful execution of `migrateNFT`.
-     * @param _account Address of migrator.
-     * @param _tokenId Token identifier that was migrated.
-     * @param _amount Amount of RWA that will be minted on destination chain for this new veRWA token.
-     * @param _vp Voting power that will be granted with the new veRWA token.
+     * @param account Address of migrator.
+     * @param tokenId Token identifier that was migrated.
+     * @param amount Amount of RWA that will be minted on destination chain for this new veRWA token.
+     * @param vp Voting power that will be granted with the new veRWA token.
      */
-    event MigrationMessageSent_PINFT(address indexed _account, uint256 indexed _tokenId, uint256 _amount, uint256 _vp);
+    event MigrationMessageSent_PINFT(address indexed account, uint256 indexed tokenId, uint256 amount, uint256 vp);
 
     /**
      * @notice This event is emitted when there's a successful execution of `migrateTokens`.'
-     * @param _account Adress of migrator.
-     * @param _amount Amount of ERC-20 tokens migrated.
+     * @param account Adress of migrator.
+     * @param amount Amount of ERC-20 tokens migrated.
      */
-    event MigrationInFlight_TNGBL(address indexed _account, uint256 _amount);
+    event MigrationInFlight_TNGBL(address indexed account, uint256 amount);
+
+    /**
+     * @notice This event is emitted when migration is toggled on/off.
+     * @param newState If true, migration is enabled, otherwise false.
+     */
+    event MigrationToggled(bool indexed newState);
 
     
     // -----------
@@ -147,6 +151,9 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         uint16 _remoteChainId,
         address _admin
     ) external initializer {
+        require(_admin != address(0));
+        require(_remoteChainId != uint16(0));
+
         __Ownable_init(_admin);
         __NonblockingLzApp_init(_admin);
         __UUPSUpgradeable_init();
@@ -221,8 +228,8 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
 
         uint256 duration = endTime - block.timestamp;
 
-        if (duration > MAX_DURATION) {
-            duration = MAX_DURATION;
+        if (duration > MAX_VESTING_DURATION) {
+            duration = MAX_VESTING_DURATION;
         }
         
         _lzSend(
@@ -270,6 +277,8 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
             // Transfer NFT into this contract. Keep custody
             passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenIds[i]);
 
+            LockCache memory lCache;
+
             (lCache.startTime,
             lCache.endTime,
             lCache.lockedAmount,
@@ -295,8 +304,8 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
 
             durations[i] = lCache.endTime - block.timestamp;
 
-            if (durations[i] > MAX_DURATION) {
-                durations[i] = MAX_DURATION;
+            if (durations[i] > MAX_VESTING_DURATION) {
+                durations[i] = MAX_VESTING_DURATION;
             }
 
             emit MigrationMessageSent_PINFT(
@@ -305,7 +314,6 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
                 lockedAmounts[i],
                 SafeCast.toUint208(lockedAmounts[i].calculateVotingPower(durations[i]))
             );
-            _clearLockCache();
 
             unchecked {
                 ++i;
@@ -367,11 +375,9 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
 
         uint256 totalRewardAmount = (lockedAmount * (multiplier - 1e18)) / 1e18;
 
-        (uint256 amount,) = passiveIncomeNFT.claimableIncome(tokenId);
-
         require(block.timestamp >= endTime, "CrossChainMigrator: not expired");
 
-        amount = lockedAmount + totalRewardAmount;
+        uint256 amount = lockedAmount + totalRewardAmount;
 
         if (amount > claimed) {
             unchecked {
@@ -396,6 +402,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      */
     function toggleMigration() external onlyOwner {
         migrationActive = !migrationActive;
+        emit MigrationToggled(migrationActive);
     }
 
     /**
@@ -517,6 +524,10 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
     // Internal Methods
     // ----------------
 
+    function _migrateNFT() internal {
+
+    }
+
     /**
      * @notice This method burns the TNGBL balance in this contracts.
      */
@@ -525,18 +536,6 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
 
         tngblToken.approve(address(this), amount);
         tngblToken.burnFrom(address(this), amount);
-    }
-
-    /**
-     * @notice This method resets `lCache` to zero values.
-     */
-    function _clearLockCache() private {
-        lCache.startTime = 0;
-        lCache.endTime = 0;
-        lCache.lockedAmount = 0;
-        lCache.multiplier = 0;
-        lCache.claimed = 0;
-        lCache.maxPayout = 0;
     }
 
     /**

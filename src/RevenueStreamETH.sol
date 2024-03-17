@@ -10,6 +10,7 @@ import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
 import { AccessControlUpgradeable } from "@openzeppelin/contracts-upgradeable/access/AccessControlUpgradeable.sol";
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
+import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 // local imports
 import { IRevenueStreamETH } from "./interfaces/IRevenueStreamETH.sol";
@@ -20,7 +21,7 @@ import { IRevenueStreamETH } from "./interfaces/IRevenueStreamETH.sol";
  * @notice This contract facilitates the distribution of claimable revenue to veRWA shareholders.
  *         This contract will facilitate the distribution of ETH.
  */
-contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradeable {
+contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
 
     // ---------------
     // State Variables
@@ -31,7 +32,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     uint256[] public cycles;
     /// @dev The duration between deposit and when the revenue in the cycle becomes expired.
     uint256 public timeUntilExpired;
-
+    /// @dev The last index in `cycles` that was skimmed for expired revenue.
     uint256 public expiredRevClaimedIndex;
     /// @dev Mapping from cycle to amount revenue deposited into contract.
     mapping(uint256 cycle => uint256 amount) public revenue;
@@ -110,8 +111,13 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
         address _votingEscrow,
         address _admin
     ) external initializer {
+        require(_distributor != address(0));
+        require(_votingEscrow != address(0));
+        require(_admin != address(0));
+
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
+        __ReentrancyGuard_init();
 
         votingEscrow = _votingEscrow;
         revenueDistributor = _distributor;
@@ -128,7 +134,9 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     /**
      * @notice This method allows address(this) to receive ETH.
      */
-    receive() external payable {}
+    receive() external payable {
+        require(msg.sender == revenueDistributor, "RevenueStreamETH: Not authorized");
+    }
 
     /**
      * @notice This method is used to deposit ETH into the contract to be claimed by shareholders.
@@ -165,8 +173,8 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @param numIndexes Number of revenue cycles the msg.sender wants to claim in one transaction.
      *        If the amount of cycles is substantial, it's recommended to claim in more than one increment.
      */
-    function claimETHIncrement(address account, uint256 numIndexes) public returns (uint256 amount) { // TODO: Test
-        require(account == msg.sender, "RevenueStreamETH: Not authorized"); // TODO: Switch to custom error
+    function claimETHIncrement(address account, uint256 numIndexes) public nonReentrant returns (uint256 amount) {
+        require(account == msg.sender, "RevenueStreamETH: Not authorized");
         require(numIndexes != 0, "RevenueStreamETH: numIndexes cant be 0");
 
         uint256 cycle = currentCycle();
@@ -294,7 +302,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     /**
      * @notice Internal method for skimming expired revenue.
      */
-    function _skimExpiredRevenue(uint256 numIndexes) internal returns (uint256 amount) {
+    function _skimExpiredRevenue(uint256 numIndexes) internal nonReentrant returns (uint256 amount) {
         uint256[] memory expiredCycles;
         uint256 num;
         uint256 indexes;

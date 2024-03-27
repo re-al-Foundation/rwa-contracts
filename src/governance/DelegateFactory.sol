@@ -10,6 +10,7 @@ import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extension
 
 // local imports
 import { Delegator } from "./Delegator.sol";
+import { IDelegator } from "../interfaces/IDelegator.sol";
 import { FetchableBeaconProxy } from "../proxy/FetchableBeaconProxy.sol";
 
 /**
@@ -129,8 +130,7 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
 
         // deposit token into delegator
         veRWA.approve(newDelegator, _tokenId);
-        (bool success,) = newDelegator.call(abi.encodeWithSignature("depositDelegatorToken(uint256)", _tokenId));
-        require(success, "deposit unsuccessful");
+        IDelegator(newDelegator).depositDelegatorToken(_tokenId);
 
         emit DelegatorCreated(newDelegator);
     }
@@ -145,8 +145,7 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
             address delegator = delegators[i];
             if (isExpiredDelegator(delegator)) {
                 // call withdrawDelegatedToken
-                (bool success,) = delegator.call(abi.encodeWithSignature("withdrawDelegatedToken()"));
-                require(success, "withdraw unsuccessful");
+                IDelegator(delegator).withdrawDelegatedToken();
 
                 // delete delegator from contract
                 delete isDelegator[delegator];

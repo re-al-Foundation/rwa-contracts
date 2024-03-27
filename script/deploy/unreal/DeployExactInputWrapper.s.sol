@@ -61,6 +61,7 @@ contract DeployExactInputWrapper is DeployUtility {
 
         // ~ Logs ~
 
+        _saveDeploymentAddress("ExactInputWrapper", address(wrapper));
         console2.log("wrapper =", address(wrapper));
 
         vm.stopBroadcast();

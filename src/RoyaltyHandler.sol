@@ -16,6 +16,8 @@ import { IQuoterV2 } from "./interfaces/IQuoterV2.sol";
 import { ILiquidBoxManager } from "./interfaces/ILiquidBoxManager.sol";
 import { ILiquidBox } from "./interfaces/ILiquidBox.sol";
 import { IGaugeV2ALM } from "./interfaces/IGaugeV2ALM.sol";
+import { IRWAToken } from "./interfaces/IRWAToken.sol";
+import { ITNGBLV3Oracle } from "./interfaces/ITNGBLV3Oracle.sol";
 
 /**
  * @title RoyaltyHandler
@@ -56,6 +58,14 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     IGaugeV2ALM public gaugeV2ALM;
     /// @notice Stores contract reverence for ERC-20 token PEARL.
     IERC20 public pearl;
+    /// @notice Stores address of distributor in the occasion it isn't equal to owner.
+    address public distributor;
+    /// @notice Stores contract reference to TNGBLV3Oracle.
+    ITNGBLV3Oracle public oracle;
+    /// @notice Stores percentage deviation aka tolerated slippage for calculating minOut.
+    uint256 public percentageDeviation;
+    /// @notice Observe look-up used for oracle quoting.
+    uint32 public secondsAgo;
 
     // ------
     // Events
@@ -111,10 +121,13 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         address _weth,
         address _router,
         address _quoter,
-        address _boxManager
+        address _boxManager,
+        address _oracle
     ) external initializer {
         require(_admin != address(0));
         require(_revDist != address(0));
+        require(_rwaToken != address(0));
+        require(_weth != address(0));
 
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
@@ -125,12 +138,14 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         swapRouter = ISwapRouter(_router);
         quoter = IQuoterV2(_quoter);
         boxManager = ILiquidBoxManager(_boxManager);
+        oracle = ITNGBLV3Oracle(_oracle);
 
         burnPortion = 2; // 2/5
         revSharePortion = 2; // 2/5
         lpPortion = 1; // 1/5
 
         poolFee = 100;
+        secondsAgo = 300;
     }
 
 
@@ -139,12 +154,54 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     // ----------------
 
     /**
-     * @notice This method allows a permissioned admin to distribute all $RWA royalties collected in this contract.
+     * @notice This method distributes all $RWA royalties collected in this contract.
      */
     function distributeRoyalties() external {
         uint256 amount = rwaToken.balanceOf(address(this));
         require(amount != 0, "RoyaltyHandler: insufficient balance");
-        _handleRoyalties(amount);
+
+        (uint256 amountToBurn, uint256 amountForRevShare, uint256 amountForLp, uint256 tokensForEth) 
+            = getRoyaltyDistributions(amount);
+
+        // burn
+        IRWAToken(address(rwaToken)).burn(amountToBurn);
+
+        // rev share
+        rwaToken.safeTransfer(revDistributor, amountForRevShare);
+
+        // lp
+        _swapTokensForETH(tokensForEth, _getQuote(tokensForEth));
+        _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
+
+        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
+    }
+
+    /**
+     * @notice This method allows a permissioned admin to distribute all $RWA royalties collected in this contract,
+     *         but also allows an argument to specify the minimum WETH out from the tokensForEth swap. 
+     * @param amountToDistribute amount of RWA to distribute. 
+     * @param minOut Minimum amount of WETH expected when making the swap from RWA to WETH prior to depositing this pair into the ALM.
+     */
+    function distributeRoyaltiesMinOut(uint256 amountToDistribute, uint256 minOut) external {
+        require(msg.sender == owner() || msg.sender == distributor, "RoyaltyHandler: NA");
+
+        uint256 amount = amountToDistribute;
+        require(rwaToken.balanceOf(address(this)) >= amount, "RoyaltyHandler: insufficient balance");
+        
+        (uint256 amountToBurn, uint256 amountForRevShare, uint256 amountForLp, uint256 tokensForEth) 
+            = getRoyaltyDistributions(amount);
+
+        // burn
+        IRWAToken(address(rwaToken)).burn(amountToBurn);
+
+        // rev share
+        rwaToken.safeTransfer(revDistributor, amountForRevShare);
+
+        // lp
+        _swapTokensForETH(tokensForEth, minOut);
+        _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
+
+        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
     }
 
     /**
@@ -160,6 +217,36 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         lpPortion = _lpPortion;
 
         emit DistributionUpdated(_burnPortion, _revSharePortion, _lpPortion);
+    }
+
+    /**
+     * @notice Allows owner to update tolerated slippage when fetching quotes from oracle
+     * @param _percentageDeviation New percentage deviation.
+     */
+    function setPercentageDeviation(uint256 _percentageDeviation) external onlyOwner {
+        require(_percentageDeviation <= oracle.POOL_FEE_01(), "RoyaltyHandler: Too high");
+        percentageDeviation = _percentageDeviation;
+    }
+
+    /**
+     * @notice Allows owner to update `secondsAgo` variable.
+     */
+    function setSecondsAgo(uint32 _secondsAgo) external onlyOwner {
+        secondsAgo = _secondsAgo;
+    }
+
+    /**
+     * @notice Allows owner to assign distributor role to another address.
+     */
+    function updateDistributor(address _distributor) external onlyOwner {
+        distributor = _distributor;
+    }
+
+    /**
+     * @notice Allows owner to update `oracle` state variable.
+     */
+    function updateOracle(address _oracle) external onlyOwner {
+        oracle = ITNGBLV3Oracle(_oracle);
     }
 
     /**
@@ -209,7 +296,14 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param _fee pool fee.
      */
     function updateFee(uint24 _fee) external onlyOwner {
-        require(_fee == 100 || _fee == 500 || _fee == 3000 || _fee == 10000, "RoyaltyHandler: Invalid fee");
+        require(
+            _fee == oracle.POOL_FEE_001() ||
+            _fee == oracle.POOL_FEE_005() ||
+            _fee == oracle.POOL_FEE_03() ||
+            _fee == oracle.POOL_FEE_01() ||
+            _fee == oracle.POOL_FEE_1(),
+            "RoyaltyHandler: Invalid fee"
+        );
         poolFee = _fee;
     }
 
@@ -238,48 +332,54 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         return gaugeV2ALM.earnedReward(address(this));
     }
 
+    // --------------
+    // Public Methods
+    // --------------
+
+    /**
+     * @notice This view method returns the different allocations of `rwaToken` royalties when distributeRoyalties 
+     *         is executed with a specified `amount` of RWA.
+     * @param amount Amount of RWA royalties to distribute.
+     * @return amountToBurn Amount of RWA being burned.
+     * @return amountForRevShare Amount of RWA being allocated to veRWA holders.
+     * @return amountForLp Amount of RWA being allocated to the Liquidity Manager.
+     * @return tokensForEth Amount of RWA being swapped for WETH.
+     * @dev amountToBurn + amountForRevShare + amountForLp + tokensForEth == amount
+     */
+    function getRoyaltyDistributions(uint256 amount) public view returns (
+        uint256 amountToBurn, 
+        uint256 amountForRevShare, 
+        uint256 amountForLp, 
+        uint256 tokensForEth
+    ) {
+        uint256 totalFee = burnPortion + revSharePortion + lpPortion;
+
+        amountToBurn = (amount * burnPortion) / totalFee; // 2/5 default
+        amountForRevShare = (amount * revSharePortion) / totalFee; // 2/5 default
+        amountForLp = amount - amountToBurn - amountForRevShare; // 1/5 default
+
+        tokensForEth = amountForLp / 2;
+        amountForLp -= tokensForEth;
+    }
+
     
     // ----------------
     // Internal Methods
     // ----------------
 
     /**
-     * @notice This internal method is used to distribute the royalties collected by this contract.
-     * @param amount Amount to distribute.
+     * @notice This internal method is used to fetch minimum amount quotes for swaps
      */
-    function _handleRoyalties(uint256 amount) internal {
-        uint256 totalFee = burnPortion + revSharePortion + lpPortion;
-
-        uint256 amountToBurn = (amount * burnPortion) / totalFee; // 2/5 default
-        uint256 amountForRevShare = (amount * revSharePortion) / totalFee; // 2/5 default
-        uint256 amountForLp = amount - amountToBurn - amountForRevShare; // 1/5 default
-
-        // burn
-        (bool success,) = address(rwaToken).call(abi.encodeWithSignature("burn(uint256)", amountToBurn));
-        require(success, "RoyaltyHandler: burn unsuccessful");
-
-        // rev share
-        rwaToken.safeTransfer(revDistributor, amountForRevShare);
-
-        // lp
-        uint256 tokensForEth = amountForLp / 2;
-        amountForLp -= tokensForEth;
-
-        _swapTokensForETH(tokensForEth, _getQuote(tokensForEth));
-        _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
-
-        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
-    }
-
     function _getQuote(uint256 amountIn) internal returns (uint256 amountOut) {
-        IQuoterV2.QuoteExactInputSingleParams memory quoteParams = IQuoterV2.QuoteExactInputSingleParams({
-            tokenIn: address(rwaToken),
-            tokenOut: address(WETH),
-            amountIn: amountIn,
-            fee: poolFee,
-            sqrtPriceLimitX96: 0
-        });
-        (amountOut,,,) = quoter.quoteExactInputSingle(quoteParams);
+        uint256 amountIn = amountIn - ((amountIn * (poolFee + percentageDeviation)) / oracle.POOL_FEE_100());
+
+        amountOut = oracle.consultWithFee(
+            address(rwaToken),
+            uint128(amountIn),
+            address(WETH),
+            secondsAgo,
+            poolFee
+        );
     }
 
     /**
@@ -299,14 +399,13 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
             amountOutMinimum: minOut,
             sqrtPriceLimitX96: 0
         });
-
-        rwaToken.approve(address(swapRouter), amountIn);
         uint256 preBal = WETH.balanceOf(address(this));
 
         // swap
+        rwaToken.approve(address(swapRouter), amountIn);
         swapRouter.exactInputSingle(swapParams);
 
-        require(preBal + minOut == WETH.balanceOf(address(this)), "RoyaltyHandler: Insufficient WETH received");
+        require(WETH.balanceOf(address(this)) > preBal, "RoyaltyHandler: Insufficient WETH received");
     }
 
     /**

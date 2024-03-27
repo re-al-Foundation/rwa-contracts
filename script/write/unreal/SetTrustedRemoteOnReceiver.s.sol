@@ -10,7 +10,12 @@ import { RealReceiver } from "../../../src/RealReceiver.sol";
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
-/// @dev To run: forge script script/write/unreal/SetTrustedRemoteOnReceiver.s.sol:SetTrustedRemoteOnReceiver --broadcast --legacy -vvvv
+/** 
+    @dev To run: 
+    forge script script/write/unreal/SetTrustedRemoteOnReceiver.s.sol:SetTrustedRemoteOnReceiver --broadcast --legacy \
+    --gas-estimate-multiplier 200 -vvvv \
+    --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+*/
 
 /**
  * @title SetTrustedRemoteOnReceiver

@@ -415,6 +415,14 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
     }
 
     /**
+     * @notice This method allows a permissioned admin to update the `piCalculator` address.
+     */
+    function setPassiveIncomeCalculator(address _newContract) external onlyOwner {
+        require(_newContract != address(0), "invalid input");
+        piCalculator = PassiveIncomeCalculator(_newContract);
+    }
+
+    /**
      * @notice This method allows a permissioned admin to update the `passiveIncomeNFT` address.
      * @dev This is mainly for testnet since the current mainnet PI NFT contract will not change.
      */

@@ -123,7 +123,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
         revenueDistributor = _distributor;
 
         timeUntilExpired = 6 * (30 days); // 6 months to claim before expired
-        cycles.push(block.timestamp);
+        cycles.push(1);
     }
 
 
@@ -134,9 +134,9 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     /**
      * @notice This method allows address(this) to receive ETH.
      */
-    receive() external payable {
-        require(msg.sender == revenueDistributor, "RevenueStreamETH: Not authorized");
-    }
+    // receive() external payable {
+    //     require(msg.sender == revenueDistributor, "RevenueStreamETH: Not authorized");
+    // }
 
     /**
      * @notice This method is used to deposit ETH into the contract to be claimed by shareholders.

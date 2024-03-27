@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // local imports
 import { RevenueDistributor } from "../../../src/RevenueDistributor.sol";
@@ -9,17 +10,22 @@ import { RevenueDistributor } from "../../../src/RevenueDistributor.sol";
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
-/// @dev To run: forge script script/deploy/unreal/UpgradeRevDistributor.s.sol:UpgradeRevDistributor --broadcast --verify --legacy -vvvv
+/** 
+    @dev To run: 
+    forge script script/deploy/unreal/UpgradeRevDistributor.s.sol:UpgradeRevDistributor --broadcast --legacy \
+    --gas-estimate-multiplier 200 \
+    --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+*/
 
 /**
  * @title UpgradeRevDistributor
  * @author Chase Brown
  * @notice This script deploys a new RevenueDistributor contract and upgrades the current contract on unreal.
  */
-contract UpgradeRevDistributor is Script {
+contract UpgradeRevDistributor is DeployUtility {
 
     // ~ Contracts ~
-    RevenueDistributor public revDistributor = RevenueDistributor(payable(UNREAL_REV_DISTRIBUTOR));
+    RevenueDistributor public revDistributor;
 
     // ~ Variables ~
 
@@ -28,6 +34,10 @@ contract UpgradeRevDistributor is Script {
 
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
+        _setUp("unreal");
+
+        revDistributor = RevenueDistributor(payable(_loadDeploymentAddress("RevenueDistributor")));
+        console2.log("Fetched RevenueDistributor", address(revDistributor));
     }
 
     function run() public {

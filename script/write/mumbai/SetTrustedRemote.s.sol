@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
-import {Script, console2} from "forge-std/Script.sol";
+import { console2 } from "forge-std/Script.sol";
+import { DeployUtility } from "../../base/DeployUtility.sol";
+
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -19,15 +21,15 @@ import "../../../test/utils/Constants.sol";
  * @author Chase Brown
  * @notice This script calls setTrustedRemoteAddress on the Mumbai Migator contract
  */
-contract SetTrustedRemote is Script {
+contract SetTrustedRemote is DeployUtility {
 
     // ~ Contracts ~
 
     // core contracts
-    CrossChainMigrator public migrator = CrossChainMigrator(0xD42F6Ce9fc98440c518A01749d6fB526CAd52E11);
+    CrossChainMigrator public migrator;
 
     uint16 public remoteEndpointId = UNREAL_CHAINID;
-    address public receiver = 0x36b6240FD63D5A4fb095AbF7cC8476659C76071C;
+    address public receiver;
 
     // ~ Variables ~
 
@@ -39,11 +41,18 @@ contract SetTrustedRemote is Script {
 
     function setUp() public {
         vm.createSelectFork(MUMBAI_RPC_URL);
+        _setUp("unreal");
+        receiver = _loadDeploymentAddress("RealReceiver");
+        migrator = CrossChainMigrator(_loadDeploymentAddress("CrossChainMigrator"));
+
+        console2.log("fetched receiver", address(receiver));
+        console2.log("fetched migrator", address(migrator));
     }
 
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
+        migrator.setReceiver(receiver);
         migrator.setTrustedRemoteAddress(remoteEndpointId, abi.encodePacked(address(receiver)));
 
         vm.stopBroadcast();

@@ -16,6 +16,7 @@ import { ERC721EnumerableUpgradeable } from "@openzeppelin/contracts-upgradeable
 // local interfaces
 import { IVotingEscrow } from "../interfaces/IVotingEscrow.sol";
 import { IVoter } from "../interfaces/IVoter.sol";
+import { IRWAToken } from "../interfaces/IRWAToken.sol";
 
 // local libraries
 import { VotingMath } from "./VotingMath.sol";
@@ -102,14 +103,14 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      * @param tokenId Token identifier of token being merged.
      * @param intoTokenId Token identifier of token that is consuming `tokenId`.
      */
-    event lockMerged(uint256 indexed tokenId, uint256 indexed intoTokenId);
+    event LockMerged(uint256 indexed tokenId, uint256 indexed intoTokenId);
 
     /**
      * @notice Event emitted when split() is executed.
      * @param tokenId Token identifier of token being split.
      * @param shares An array of share proportions for splitting the token. 
      */
-    event lockSplit(uint256 indexed tokenId, uint256[] shares);
+    event LockSplit(uint256 indexed tokenId, uint256[] shares);
 
     /**
      * @notice Event emitted when burn() is executed.
@@ -119,7 +120,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      * @param penalty Amount of tokens being burned if the lock was destroyed earlier than promised duration.
      * @param unlocked Amount of tokens unlocked and therefore transferred to account.
      */
-    event lockBurned(uint256 indexed tokenId, uint256 remainingTime, uint256 fee, uint256 penalty, uint256 unlocked);
+    event LockBurned(uint256 indexed tokenId, uint256 remainingTime, uint256 fee, uint256 penalty, uint256 unlocked);
 
     /**
      * @notice Event emitted when a successful migration is fulfilled.
@@ -161,6 +162,12 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      * @notice This error is emitted when a user atempts to merge a token into itself.
      */
     error SelfMerge();
+
+    /**
+     * @notice This errorr is emitted when a deposit is being made for a token with a remaining
+     * vesting duration less than MIN_VESTING_DURATION.
+     */
+    error InsufficientVestingDuration(uint256 duration);
 
 
     // -----------
@@ -248,8 +255,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         tokenId = _createLock(_receiver, uint208(_lockedBalance), _duration);
 
         // mints tokens to this contract
-        (bool success,) = address($.lockedToken).call(abi.encodeWithSignature("mint(uint256)", _lockedBalance));
-        require(success, "mint unsuccessful");
+        IRWAToken(address($.lockedToken)).mint(_lockedBalance);
 
         emit MigrationFulfilled(_receiver, tokenId);
     }
@@ -276,8 +282,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             tokenIds[i] = _createLock(_receiver, uint208(_lockedBalances[i]), _durations[i]);
 
             // mints tokens to this contract
-            (bool success,) = address($.lockedToken).call(abi.encodeWithSignature("mint(uint256)", _lockedBalances[i]));
-            require(success, "mint unsuccessful");
+            IRWAToken(address($.lockedToken)).mint(_lockedBalances[i]);
 
             emit MigrationFulfilled(_receiver, tokenIds[i]);
 
@@ -311,15 +316,14 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             payout = payout - penalty;
 
             // burn penalty
-            (bool success,) = address($.lockedToken).call(abi.encodeWithSignature("burn(uint256)", penalty));
-            require(success, "burn unsuccessful");
+            IRWAToken(address($.lockedToken)).burn(penalty);
         }
         
         _updateLock(tokenId, 0, 0);
         _burn(tokenId);
         $.lockedToken.safeTransfer(receiver, payout);
 
-        emit lockBurned(tokenId, remainingTime, fee, penalty, payout);
+        emit LockBurned(tokenId, remainingTime, fee, penalty, payout);
     }
 
     /**
@@ -331,6 +335,10 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      */
     function depositFor(uint256 tokenId, uint256 amount) external {
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
+        uint256 remainingVestingDuration = $._remainingVestingDuration[tokenId];
+        if (remainingVestingDuration < MIN_VESTING_DURATION) {
+            revert InsufficientVestingDuration(remainingVestingDuration);
+        }
         _updateLock(tokenId, $._lockedBalance[tokenId] + amount, $._remainingVestingDuration[tokenId]);
         $.lockedToken.safeTransferFrom(_msgSender(), address(this), amount);
     }
@@ -361,7 +369,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         _updateLock(intoTokenId, combinedLockBalance, remainingVestingDuration);
 
         _burn(tokenId);
-        emit lockMerged(tokenId, intoTokenId);
+        emit LockMerged(tokenId, intoTokenId);
     }
 
     /**
@@ -435,7 +443,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         if (remainingBalance == 0) revert ZeroLockBalance();
         // update old token with remaining balance
         _updateLock(tokenId, remainingBalance, remainingVestingDuration);
-        emit lockSplit (tokenId, shares);
+        emit LockSplit (tokenId, shares);
     }
 
     /**

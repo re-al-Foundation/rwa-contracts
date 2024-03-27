@@ -120,8 +120,6 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
         isExcludedFromFees[address(0)] = true;
 
         fee = 5;
-        canMint[_admin] = true;
-        canBurn[_admin] = true;
     }
 
 

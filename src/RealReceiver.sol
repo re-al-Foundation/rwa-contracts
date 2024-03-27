@@ -8,6 +8,10 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 // tangible imports
 import { NonblockingLzAppUpgradeable } from "@tangible-foundation-contracts/layerzero/lzApp/NonblockingLzAppUpgradeable.sol";
 
+// local imports
+import { IRWAToken } from "./interfaces/IRWAToken.sol";
+import { IRWAVotingEscrow } from "./interfaces/IRWAVotingEscrow.sol";
+
 // LayerZero imports
 import { BytesLib } from "./libraries/BytesLib.sol";
 
@@ -58,13 +62,6 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
     // ------
     // Errors
     // ------
-
-    /**
-     * @notice This error is emitted when there's a failed migration or mint message.
-     * @dev This is emitted if the message to veRwaNFT or rwaToken to complete migration or mint fails.
-     * @param packetType Type of migration that fails; NFT, Batch NFT, or ERC-20 token.
-     */
-    error MigrationFailed(uint16 packetType);
 
     /**
      * @notice This error is emitted when there's an invalid packet type that is received.
@@ -172,11 +169,7 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
             abi.decode(payload, (uint16, bytes, uint256, uint256));
 
         address to = toAddressBytes.toAddress(0);
-
-        (bool success,) = address(veRwaNFT).call(
-            abi.encodeWithSignature("migrate(address,uint256,uint256)", to, amount, duration)
-        );
-        if (!success) revert MigrationFailed(SEND_NFT);
+        IRWAVotingEscrow(address(veRwaNFT)).migrate(to, amount, duration);
 
         emit MigrationMessageReceived(SEND_NFT, to, payload);
     }
@@ -190,11 +183,7 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
             abi.decode(payload, (uint16, bytes, uint256[], uint256[]));
 
         address to = toAddressBytes.toAddress(0);
-
-        (bool success,) = address(veRwaNFT).call(
-            abi.encodeWithSignature("migrateBatch(address,uint256[],uint256[])", to, amounts, durations)
-        );
-        if (!success) revert MigrationFailed(SEND_NFT_BATCH);
+        IRWAVotingEscrow(address(veRwaNFT)).migrateBatch(to, amounts, durations);
 
         emit MigrationMessageReceived(SEND_NFT_BATCH, to, payload);
     }
@@ -208,11 +197,7 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
             abi.decode(payload, (uint16, bytes, uint256));
 
         address to = toAddressBytes.toAddress(0);
-
-        (bool success,) = address(rwaToken).call(
-            abi.encodeWithSignature("mintFor(address,uint256)", to, amount)
-        );
-        if (!success) revert MigrationFailed(SEND);
+        IRWAToken(address(rwaToken)).mintFor(to, amount);
 
         emit MigrationMessageReceived(SEND, to, payload);
     }

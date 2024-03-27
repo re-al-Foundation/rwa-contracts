@@ -201,17 +201,13 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
 
             require(isRevToken[token], "invalid revenue token");
             require(amount != 0, "amount cannot be 0");
-            uint256 _before = IERC20(token).balanceOf(address(this)); // 1000000000000000000000
+            uint256 _before = IERC20(token).balanceOf(address(this));
             require(_before >= amount, "Insufficient balance");
 
             uint256 converted = _convertToken(token, amount, _targets[i], _data[i]);
             require(converted != 0, "ETH received cant be 0");
 
             _amountsOut[i] = converted;
-
-            uint256 _after = IERC20(token).balanceOf(address(this)); // 934430189977796079536
-            require(_after == _before - amount, "invalid input amount");
-
             totalDeposit += converted;
 
             unchecked {

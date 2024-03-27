@@ -36,8 +36,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     IERC20 public rwaToken;
     /// @notice Stores the address of the SwapRouter contract.
     ISwapRouter public swapRouter;
-    /// @notice Stores the address of the QuoterV2 contract.
-    IQuoterV2 public quoter;
     /// @notice Stores the address of the local WETH token contract.
     IERC20 public WETH;
     /// @notice Stores the address to the veRWA RevenueDistributor.
@@ -111,8 +109,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param _rwaToken RWAToken contract address.
      * @param _weth WETH contract address.
      * @param _router SwapRouter contract address.
-     * @param _quoter QuoterV2 contract address.
      * @param _boxManager LiquidBoxManager contract address.
+     * @param _oracle TngblV3Oracle contract address.
      */
     function initialize(
         address _admin,
@@ -120,7 +118,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         address _rwaToken,
         address _weth,
         address _router,
-        address _quoter,
         address _boxManager,
         address _oracle
     ) external initializer {
@@ -136,7 +133,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         rwaToken = IERC20(_rwaToken);
         WETH = IERC20(_weth);
         swapRouter = ISwapRouter(_router);
-        quoter = IQuoterV2(_quoter);
         boxManager = ILiquidBoxManager(_boxManager);
         oracle = ITNGBLV3Oracle(_oracle);
 
@@ -282,13 +278,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      */
     function setSwapRouter(address _swapRouter) external onlyOwner {
         swapRouter = ISwapRouter(_swapRouter);
-    }
-
-    /**
-     * @notice This method is used to update the `quoter` variable.
-     */
-    function setQuoter(address _quoter) external onlyOwner {
-        quoter = IQuoterV2(_quoter);
     }
 
     /**

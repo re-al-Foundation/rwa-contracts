@@ -38,9 +38,6 @@ contract UpdatePearlAddresses is DeployUtility {
     // ~ Variables ~
 
     address public WETH9 = 0x0C68a3C11FB3550e50a4ed8403e873D367A8E361; // Note: If changes, redeploy RoyaltyHandler
-    address public SWAP_ROUTER = 0x0a42599e0840aa292C76620dC6d4DAfF23DB5236;
-    address public QUOTER = 0x6B6dA57BA5E77Ed5504Fe778449056fbb18020D5;
-    address public BOXMANAGER = 0xce777A3e9D2F6B80D4Ff2297346Ef572636d8FCE;
 
     address public USTB = 0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD;
     address public PEARL = 0xCE1581d7b4bA40176f0e219b2CaC30088Ad50C7A;
@@ -68,17 +65,16 @@ contract UpdatePearlAddresses is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        royaltyHandler.setALMBoxManager(BOXMANAGER);
-        royaltyHandler.setPearl(PEARL);
-        royaltyHandler.setQuoter(QUOTER);
-        royaltyHandler.setSwapRouter(SWAP_ROUTER);
+        royaltyHandler.setALMBoxManager(UNREAL_BOX_MANAGER);
+        royaltyHandler.setPearl(UNREAL_PEARL);
+        royaltyHandler.setSwapRouter(UNREAL_SWAP_ROUTER);
 
         //revDistributor.addRevenueToken(USTB);
 
-        rwaToken.setRoyaltyHandler(address(royaltyHandler));
+        //rwaToken.setRoyaltyHandler(address(royaltyHandler));
 
-        revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")));
-        rwaToken.excludeFromFees(SWAP_ROUTER, true);
+        //revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")));
+        //rwaToken.excludeFromFees(SWAP_ROUTER, true);
 
         vm.stopBroadcast();
     }

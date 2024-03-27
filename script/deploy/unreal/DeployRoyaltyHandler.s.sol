@@ -42,9 +42,6 @@ contract DeployRoyaltyHandler is DeployUtility {
 
     // ~ Variables ~
 
-    address public WETH9 = 0x0C68a3C11FB3550e50a4ed8403e873D367A8E361;
-    address public SWAP_ROUTER = 0x0a42599e0840aa292C76620dC6d4DAfF23DB5236;
-    address public QUOTER = 0x6B6dA57BA5E77Ed5504Fe778449056fbb18020D5;
     address public BOXMANAGER = 0xce777A3e9D2F6B80D4Ff2297346Ef572636d8FCE;
 
     address public USTB = 0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD;
@@ -81,10 +78,10 @@ contract DeployRoyaltyHandler is DeployUtility {
                 adminAddress,
                 address(revDistributor),
                 address(rwaToken),
-                WETH9,
-                SWAP_ROUTER,
-                QUOTER,
-                BOXMANAGER
+                UNREAL_WETH,
+                UNREAL_SWAP_ROUTER,
+                UNREAL_BOX_MANAGER,
+                UNREAL_TNGBLV3ORACLE
             )
         );
         console2.log("royaltyHandler", address(royaltyHandlerProxy));
@@ -94,8 +91,8 @@ contract DeployRoyaltyHandler is DeployUtility {
 
         rwaToken.setRoyaltyHandler(address(royaltyHandler));
 
-        revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")));
-        rwaToken.excludeFromFees(SWAP_ROUTER, true);
+        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")));
+        rwaToken.excludeFromFees(UNREAL_SWAP_ROUTER, true);
 
         _saveDeploymentAddress("RoyaltyHandler", address(royaltyHandler));
 

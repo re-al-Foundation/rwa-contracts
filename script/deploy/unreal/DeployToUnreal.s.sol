@@ -185,7 +185,8 @@ contract DeployToUnreal is DeployUtility {
                 WETH9,
                 SWAP_ROUTER,
                 QUOTER,
-                BOXMANAGER
+                UNREAL_BOX_MANAGER,
+                UNREAL_TNGBLV3ORACLE
             )
         );
         console2.log("royaltyHandler", address(royaltyHandlerProxy));

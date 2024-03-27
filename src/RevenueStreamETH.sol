@@ -132,13 +132,6 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     // ----------------
 
     /**
-     * @notice This method allows address(this) to receive ETH.
-     */
-    // receive() external payable {
-    //     require(msg.sender == revenueDistributor, "RevenueStreamETH: Not authorized");
-    // }
-
-    /**
      * @notice This method is used to deposit ETH into the contract to be claimed by shareholders.
      * @dev Can only be called by an address granted the `DEPOSITOR_ROLE`.
      */

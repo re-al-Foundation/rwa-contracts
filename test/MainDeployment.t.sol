@@ -202,7 +202,6 @@ contract MainDeploymentTest is Utility {
                 address(rwaToken),
                 UNREAL_WETH,
                 address(swapRouter),
-                address(quoter),
                 UNREAL_BOX_MANAGER,
                 UNREAL_TNGBLV3ORACLE
             )
@@ -4743,37 +4742,37 @@ contract MainDeploymentTest is Utility {
     //     assertEq(amountOut, amountReceived);
     // }
 
-    function test_mainDeployment_royaltyHandler_distributeRoyalties_Integration() public {
-        uint256 amountIn = 1 ether;
-        RWAToken rwa = RWAToken(0x7F455b0345C161aBc8Ca8FA2bF801Df4914F481C);
-        RoyaltyHandler rHandler = RoyaltyHandler(0xe9F9C3a4963ECbFAd6A5d0B4E240C30dcdaB869d);
+    // function test_mainDeployment_royaltyHandler_distributeRoyalties_Integration() public { // TODO Uncomment when new pool is created
+    //     uint256 amountIn = 1 ether;
+    //     RWAToken rwa = RWAToken(0x7F455b0345C161aBc8Ca8FA2bF801Df4914F481C);
+    //     RoyaltyHandler rHandler = RoyaltyHandler(0xe9F9C3a4963ECbFAd6A5d0B4E240C30dcdaB869d);
 
-        uint256 preBal = rwa.balanceOf(address(rHandler));
+    //     uint256 preBal = rwa.balanceOf(address(rHandler));
 
-        vm.startPrank(rwa.owner());
-        RoyaltyHandler newImp = new RoyaltyHandler();
-        rHandler.upgradeToAndCall(address(newImp), "");
+    //     vm.startPrank(rwa.owner());
+    //     RoyaltyHandler newImp = new RoyaltyHandler();
+    //     rHandler.upgradeToAndCall(address(newImp), "");
 
-        rwa.mintFor(address(rHandler), amountIn);
-        rHandler.updateOracle(UNREAL_TNGBLV3ORACLE);
-        rHandler.setSecondsAgo(1800);
-        rHandler.setPercentageDeviation(100);
-        vm.stopPrank();
+    //     rwa.mintFor(address(rHandler), amountIn);
+    //     rHandler.updateOracle(UNREAL_TNGBLV3ORACLE);
+    //     rHandler.setSecondsAgo(1800);
+    //     rHandler.setPercentageDeviation(100);
+    //     vm.stopPrank();
 
-        uint256 preSupply = rwa.totalSupply();
+    //     uint256 preSupply = rwa.totalSupply();
 
-        // ~ Pre-state check ~
+    //     // ~ Pre-state check ~
     
-        assertEq(rwa.balanceOf(address(rHandler)), preBal + amountIn);
+    //     assertEq(rwa.balanceOf(address(rHandler)), preBal + amountIn);
 
-        // ~ distribute ~
+    //     // ~ distribute ~
 
-        rHandler.distributeRoyalties();
+    //     rHandler.distributeRoyalties();
 
-        // ~ Post-state check ~
+    //     // ~ Post-state check ~
     
-        assertEq(rwa.balanceOf(address(rHandler)), 0);
-    }
+    //     assertEq(rwa.balanceOf(address(rHandler)), 0);
+    // }
 
     function test_mainDeployment_royaltyHandler_distributeRoyaltiesMinOut() public {
         // ~ Config ~

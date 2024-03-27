@@ -5,32 +5,32 @@ import { console2 } from "forge-std/Script.sol";
 import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // local imports
-import { RevenueDistributor } from "../../../src/RevenueDistributor.sol";
+import { RWAVotingEscrow } from "../../../src/governance/RWAVotingEscrow.sol";
 
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
 /** 
     @dev To run: 
-    forge script script/deploy/unreal/UpgradeRevDistributor.s.sol:UpgradeRevDistributor --broadcast --legacy \
+    forge script script/deploy/unreal/UpgradeRWAVotingEscrow.s.sol:UpgradeRWAVotingEscrow --broadcast --legacy \
     --gas-estimate-multiplier 200 \
     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
     @dev To verify manually: 
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
-    src/RevenueDistributor.sol:RevenueDistributor \
+    src/governance/RWAVotingEscrow.sol:RWAVotingEscrow \
     --verifier blockscout --verifier-url https://unreal.blockscout.com/api
 */
 
 /**
- * @title UpgradeRevDistributor
+ * @title UpgradeRWAVotingEscrow
  * @author Chase Brown
- * @notice This script deploys a new RevenueDistributor contract and upgrades the current contract on unreal.
+ * @notice This script deploys a new RWAVotingEscrow contract and upgrades the current contract on unreal.
  */
-contract UpgradeRevDistributor is DeployUtility {
+contract UpgradeRWAVotingEscrow is DeployUtility {
 
     // ~ Contracts ~
-    RevenueDistributor public revDistributor;
+    RWAVotingEscrow public revDistributor;
 
     // ~ Variables ~
 
@@ -41,15 +41,15 @@ contract UpgradeRevDistributor is DeployUtility {
         vm.createSelectFork(UNREAL_RPC_URL);
         _setUp("unreal");
 
-        revDistributor = RevenueDistributor(payable(_loadDeploymentAddress("RevenueDistributor")));
-        console2.log("Fetched RevenueDistributor", address(revDistributor));
+        revDistributor = RWAVotingEscrow(payable(_loadDeploymentAddress("RWAVotingEscrow")));
+        console2.log("Fetched RWAVotingEscrow", address(revDistributor));
     }
 
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         
-        RevenueDistributor newRevDistributor = new RevenueDistributor();
-        revDistributor.upgradeToAndCall(address(newRevDistributor), "");
+        RWAVotingEscrow newRWAve = new RWAVotingEscrow();
+        revDistributor.upgradeToAndCall(address(newRWAve), "");
 
         vm.stopBroadcast();
     }

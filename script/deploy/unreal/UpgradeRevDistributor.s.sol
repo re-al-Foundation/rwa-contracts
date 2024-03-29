@@ -37,6 +37,18 @@ contract UpgradeRevDistributor is DeployUtility {
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
+    address public constant SWAP_ROUTER = 0xa752C9Cd89FE0F9D07c8dC79A7564b45F904b344;
+
+    bytes4 public selector_exactInputSingle = 
+        bytes4(keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))"));
+    bytes4 public selector_exactInputSingleFeeOnTransfer = 
+        bytes4(keccak256("exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))"));
+    bytes4 public selector_exactInput = 
+        bytes4(keccak256("exactInput((bytes,address,uint256,uint256,uint256))"));
+    bytes4 public selector_exactInputFeeOnTransfer = 
+        bytes4(keccak256("exactInputFeeOnTransfer((bytes,address,uint256,uint256,uint256))"));
+
+
     function setUp() public {
         vm.createSelectFork(UNREAL_RPC_URL);
         _setUp("unreal");
@@ -50,6 +62,11 @@ contract UpgradeRevDistributor is DeployUtility {
         
         RevenueDistributor newRevDistributor = new RevenueDistributor();
         revDistributor.upgradeToAndCall(address(newRevDistributor), "");
+
+        revDistributor.setSelectorForTarget(SWAP_ROUTER, selector_exactInputSingle, true);
+        revDistributor.setSelectorForTarget(SWAP_ROUTER, selector_exactInputSingleFeeOnTransfer, true);
+        revDistributor.setSelectorForTarget(SWAP_ROUTER, selector_exactInput, true);
+        revDistributor.setSelectorForTarget(SWAP_ROUTER, selector_exactInputFeeOnTransfer, true);
 
         vm.stopBroadcast();
     }

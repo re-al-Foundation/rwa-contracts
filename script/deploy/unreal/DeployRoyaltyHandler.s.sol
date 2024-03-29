@@ -91,7 +91,7 @@ contract DeployRoyaltyHandler is DeployUtility {
 
         rwaToken.setRoyaltyHandler(address(royaltyHandler));
 
-        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")));
+        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")), true);
         rwaToken.excludeFromFees(UNREAL_SWAP_ROUTER, true);
 
         _saveDeploymentAddress("RoyaltyHandler", address(royaltyHandler));

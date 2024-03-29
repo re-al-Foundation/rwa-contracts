@@ -12,6 +12,7 @@ import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/O
 // local imports
 import { IRevenueStream } from "./interfaces/IRevenueStream.sol";
 import { IRevenueStreamETH } from "./interfaces/IRevenueStreamETH.sol";
+import { IWETH } from "./interfaces/IWETH.sol";
 import { RevenueStreamETH } from "./RevenueStreamETH.sol";
 
 /**
@@ -36,11 +37,13 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     /// @dev Mapping used to fetch whether a `revenueToken` address is a supported revenue token.
     mapping(address revenueToken => bool) public isRevToken;
     /// @dev Stores a supported selector, given the `target` address. Prevents misuse.
-    mapping(address target => bytes4) public fetchSelector;
+    mapping(address target => mapping(bytes4 selector => bool approved)) public fetchSelector;
     /// @dev RevenueStream contract address where ETH will be distributed to if an ETH revenue stream exists.
     RevenueStreamETH public revStreamETH;
     /// @dev Destination contract address for veRWA NFT contract on REAL.
     address public veRwaNFT;
+    /// @dev Stores local WETH address.
+    IWETH public WETH;
 
     
     // ---------
@@ -118,7 +121,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     function initialize(
         address _admin,
         address _revStreamETH,
-        address _veRwa
+        address _veRwa,
+        address _weth
     ) external initializer {
         require(_admin != address(0));
         require(_veRwa != address(0));
@@ -128,6 +132,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
 
         revStreamETH = RevenueStreamETH(payable(_revStreamETH));
         veRwaNFT = _veRwa;
+        WETH = IWETH(_weth);
     }
 
 
@@ -144,7 +149,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
 
     /**
      * @notice Converts a specific revenue token to ETH and distribute to revenue stream.
-     * @dev To avoid misuse, the selector used in `_data` must match fetchSelector[`_target`].
+     * @dev To avoid misuse, the selector used in `_data` must be approved via fetchSelector[`_target`][bytes4('_data'[0:4])].
      * @param _token Token to convert to ETH before distributing.
      * @param _amount Amount to convert for `_token`.
      * @param _target Target address for conversion.
@@ -174,7 +179,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
 
     /**
      * @notice Converts a batch of revenue tokens to ETH and distribute to revenue stream.
-     * @dev To avoid misuse, the selector used in `_data` must match fetchSelector[`_target`].
+     * @dev To avoid misuse, the selector used in `_data` must be approved via fetchSelector[`_target`][bytes4('_data'[0:4])].
      * @param _tokens Tokens to convert to ETH before distributing.
      * @param _amounts Amounts to convert for each token.
      * @param _targets Target address for conversion(s).
@@ -236,6 +241,13 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /**
+     * @notice Permissioned method
+     */
+    function setWeth(address _weth) external onlyOwner {
+        WETH = IWETH(_weth);
+    }
+
+    /**
      * @notice This method is used to assign a new address to the global var `revStreamETH`.
      * @dev Should only be used in the event we're updating the distribution destination address.
      * @param _newRevStream Contract address of new RevenueStreamETH contract.
@@ -294,8 +306,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      *        _target == address(uniswapV2Router)
      *        _selector == bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"))
      */
-    function setSelectorForTarget(address _target, bytes4 _selector) external onlyOwner {
-        fetchSelector[_target] = _selector;
+    function setSelectorForTarget(address _target, bytes4 _selector, bool isApproved) external onlyOwner {
+        fetchSelector[_target][_selector] = isApproved;
     }
 
     /**
@@ -346,16 +358,22 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         address _target,
         bytes calldata _data
     ) internal returns (uint256 _amountOut) {
-        uint256 _before = address(this).balance;
+        uint256 preBalWETH = WETH.balanceOf(address(this));
         // check if this is a pre-approved contract for swapping/converting
-        require(fetchSelector[_target] == bytes4(_data[0:4]) && fetchSelector[_target] != bytes4(0), "invalid selector");
+        require(fetchSelector[_target][bytes4(_data[0:4])], "invalid selector");
 
         IERC20(_tokenIn).forceApprove(_target, _amount);
-
         (bool _success, ) = _target.call(_data);
         require(_success, "low swap level call failed");
+        IERC20(_tokenIn).forceApprove(_target, 0);
 
-        _amountOut = address(this).balance - _before;
+        uint256 postBalWETH = WETH.balanceOf(address(this));
+        _amountOut = postBalWETH - preBalWETH;
+
+        require(_amountOut != 0, "no WETH received");
+
+        WETH.withdraw(postBalWETH);
+
         emit RevTokenConverted(_tokenIn, _amount, _amountOut);
     }
 

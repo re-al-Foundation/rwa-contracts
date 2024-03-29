@@ -259,7 +259,7 @@ contract DeployToUnreal is DeployUtility {
         revDistributor.addRevenueToken(UNREAL_MORE); // MORE - Borrowing fees
         revDistributor.addRevenueToken(USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
         // add necessary selectors for swaps
-        revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")));
+        revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")), true);
 
         // RWAToken config
         rwaToken.setVotingEscrowRWA(address(veRWA));

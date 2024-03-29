@@ -27,7 +27,7 @@ contract DeployExactInputWrapper is DeployUtility {
     // ~ Contracts ~
 
     // core contracts
-    address public router = payable(UNREAL_SWAP_ROUTER);
+    address public router = payable(0xa752C9Cd89FE0F9D07c8dC79A7564b45F904b344);
     address public WETH = payable(UNREAL_WETH);
 
     RevenueDistributor public revDistributor;
@@ -57,7 +57,7 @@ contract DeployExactInputWrapper is DeployUtility {
         );
 
         // set as target on RevDist
-        revDistributor.setSelectorForTarget(address(wrapper), selector_exactInputWrapper);
+        revDistributor.setSelectorForTarget(address(wrapper), selector_exactInputWrapper, true);
 
         // ~ Logs ~
 

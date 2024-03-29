@@ -48,7 +48,6 @@ import { IVoter } from "../src/interfaces/IVoter.sol";
 import { ITNGBLV3Oracle } from "../src/interfaces/ITNGBLV3Oracle.sol";
 
 // helpers
-import { ExactInputWrapper } from "../src/helpers/ExactInputWrapper.sol";
 import { VotingEscrowRWAAPI } from "../src/helpers/VotingEscrowRWAAPI.sol";
 
 // local helper imports
@@ -78,7 +77,6 @@ contract MainDeploymentTest is Utility {
 
     // helper
     LZEndpointMock public endpoint;
-    ExactInputWrapper public exactInputWrapper;
 
     // proxies
     ERC1967Proxy public veRWAProxy;
@@ -95,7 +93,7 @@ contract MainDeploymentTest is Utility {
     // ~ Variables ~
 
     address public WETH;
-    address public UNREAL_PAIR_MANAGER = 0x63Cd04630E9C6eCa572Fd39863B63ce6117eC86b;
+    address public UNREAL_PAIR_MANAGER = 0x95e3664633A8650CaCD2c80A0F04fb56F65DF300;
 
     address public DAI_MOCK;
     address public USDC_MOCK;
@@ -107,12 +105,17 @@ contract MainDeploymentTest is Utility {
     IQuoterV2 public quoter = IQuoterV2(UNREAL_QUOTERV2);
     ISwapRouter public swapRouter = ISwapRouter(UNREAL_SWAP_ROUTER);
 
-    bytes4 public selector_exactInput = 
-        //bytes4(keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))"));
-        bytes4(keccak256("multicall(bytes[])"));
+    bytes4 public selector_exactInputSingle = 
+        bytes4(keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))"));
 
-    bytes4 public selector_exactInputWrapper = 
-        bytes4(keccak256("exactInputForETH(bytes,address,address,uint256,uint256,uint256)"));
+    bytes4 public selector_exactInputSingleFeeOnTransfer = 
+        bytes4(keccak256("exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))"));
+
+    bytes4 public selector_exactInput = 
+        bytes4(keccak256("exactInput((bytes,address,uint256,uint256,uint256))"));
+
+    bytes4 public selector_exactInputFeeOnTransfer = 
+        bytes4(keccak256("exactInputFeeOnTransfer((bytes,address,uint256,uint256,uint256))"));
 
     function setUp() public {
 
@@ -185,7 +188,8 @@ contract MainDeploymentTest is Utility {
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
                 address(0),
-                address(veRWA)
+                address(veRWA),
+                WETH
             )
         );
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));
@@ -254,9 +258,6 @@ contract MainDeploymentTest is Utility {
         );
         api = VotingEscrowRWAAPI(address(apiProxy));
 
-        // Deploy wrapper
-        exactInputWrapper = new ExactInputWrapper(address(swapRouter), WETH);
-
         // ~ Config ~
 
         // for testing, deploy mock for DAI
@@ -281,8 +282,11 @@ contract MainDeploymentTest is Utility {
         revDistributor.addRevenueToken(UNREAL_MORE); // MORE - Borrowing fees
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
         // add necessary selectors for swaps
-        revDistributor.setSelectorForTarget(address(exactInputWrapper), selector_exactInputWrapper);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputSingle);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputSingleFeeOnTransfer);
         revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInput);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputFeeOnTransfer);
+
         vm.stopPrank();
 
         // pair manager must create RWA/WETH pair
@@ -397,7 +401,7 @@ contract MainDeploymentTest is Utility {
         pair = IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).createPool(USDC_MOCK, DAI_MOCK, 100);
         IPearlV2PoolFactory(UNREAL_PEARLV2_FACTORY).initializePoolPrice(pair, uint160(initPrice));
 
-        amount0 = 100 * 10**6;
+        amount0 = 100 * 10**18;
         amount1 = 100 * 10**18;
 
         deal(USDC_MOCK, address(this), amount0);
@@ -406,8 +410,8 @@ contract MainDeploymentTest is Utility {
         IERC20(DAI_MOCK).approve(UNREAL_NFTMANAGER, amount1);
 
         params = INonfungiblePositionManager.MintParams({
-            token0: DAI_MOCK,
-            token1: USDC_MOCK,
+            token0: USDC_MOCK,
+            token1: DAI_MOCK,
             fee: 100,
             tickLower: -10,
             tickUpper: 10,
@@ -3235,7 +3239,7 @@ contract MainDeploymentTest is Utility {
             tokenIn: address(DAI_MOCK),
             tokenOut: WETH,
             fee: 100,
-            recipient: address(swapRouter),
+            recipient: address(revDistributor),
             deadline: block.timestamp + 100,
             amountIn: amountIn,
             amountOutMinimum: 0,
@@ -3255,16 +3259,16 @@ contract MainDeploymentTest is Utility {
                 swapParams.sqrtPriceLimitX96
             );
 
-        bytes memory data2 =
-            abi.encodeWithSignature(
-                "unwrapWETH9(uint256,address)",
-                0, // minimum out
-                address(revDistributor)
-            );
+        // bytes memory data2 =
+        //     abi.encodeWithSignature(
+        //         "unwrapWETH9(uint256,address)",
+        //         0, // minimum out
+        //         address(revDistributor)
+        //     );
         
-        bytes[] memory multicallData = new bytes[](2);
-        multicallData[0] = data1;
-        multicallData[1] = data2;
+        // bytes[] memory multicallData = new bytes[](2);
+        // multicallData[0] = data1;
+        // multicallData[1] = data2;
 
         // ~ Pre-state check ~
 
@@ -3278,7 +3282,7 @@ contract MainDeploymentTest is Utility {
             address(DAI_MOCK),
             amountIn,
             address(swapRouter),
-            abi.encodeWithSignature("multicall(bytes[])", multicallData)
+            data1
         );
         vm.stopPrank();
 
@@ -3316,14 +3320,14 @@ contract MainDeploymentTest is Utility {
             tokenIn: address(DAI_MOCK),
             tokenOut: WETH,
             fee: 100,
-            recipient: address(swapRouter),
+            recipient: address(revDistributor),
             deadline: block.timestamp,
             amountIn: amountIn,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
-        bytes memory data1 = 
+        bytes memory dataDAI = 
             abi.encodeWithSignature(
                 "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
                 swapParamsDAI.tokenIn,
@@ -3336,31 +3340,20 @@ contract MainDeploymentTest is Utility {
                 swapParamsDAI.sqrtPriceLimitX96
             );
 
-        bytes memory data2 =
-            abi.encodeWithSignature(
-                "unwrapWETH9(uint256,address)",
-                0, // minimum out
-                address(revDistributor)
-            );
-        
-        bytes[] memory multicallDataDAI = new bytes[](2);
-        multicallDataDAI[0] = data1;
-        multicallDataDAI[1] = data2;
-
         // RWA -> WETH using UniV3
 
         ISwapRouter.ExactInputSingleParams memory swapParamsRWA = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(rwaToken),
             tokenOut: WETH,
             fee: 100,
-            recipient: address(swapRouter),
+            recipient: address(revDistributor),
             deadline: block.timestamp,
             amountIn: amountIn,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
-        data1 = abi.encodeWithSignature(
+        bytes memory dataRWA = abi.encodeWithSignature(
                 "exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))",
                 swapParamsRWA.tokenIn,
                 swapParamsRWA.tokenOut,
@@ -3372,30 +3365,20 @@ contract MainDeploymentTest is Utility {
                 swapParamsRWA.sqrtPriceLimitX96
             );
 
-        data2 = abi.encodeWithSignature(
-                "unwrapWETH9(uint256,address)",
-                0, // minimum out
-                address(revDistributor)
-            );
-        
-        bytes[] memory multicallDataRWA = new bytes[](2);
-        multicallDataRWA[0] = data1;
-        multicallDataRWA[1] = data2;
-
         // USTB -> WETH using UniV3
 
         ISwapRouter.ExactInputSingleParams memory swapParamsUSTB = ISwapRouter.ExactInputSingleParams({
             tokenIn: UNREAL_USTB,
             tokenOut: WETH,
             fee: 100,
-            recipient: address(swapRouter),
+            recipient: address(revDistributor),
             deadline: block.timestamp,
             amountIn: amountIn,
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
 
-        data1 = abi.encodeWithSignature(
+        bytes memory dataUSTB = abi.encodeWithSignature(
                 "exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))",
                 swapParamsUSTB.tokenIn,
                 swapParamsUSTB.tokenOut,
@@ -3407,26 +3390,16 @@ contract MainDeploymentTest is Utility {
                 swapParamsUSTB.sqrtPriceLimitX96
             );
 
-        data2 = abi.encodeWithSignature(
-                "unwrapWETH9(uint256,address)",
-                0, // minimum out
-                address(revDistributor)
-            );
-        
-        bytes[] memory multicallDataUSTB = new bytes[](2);
-        multicallDataUSTB[0] = data1;
-        multicallDataUSTB[1] = data2;
-
         // swap config
 
         address[] memory tokens = new address[](3);
-        tokens[0] = address(rwaToken);
-        tokens[1] = address(UNREAL_USTB);
-        tokens[2] = address(DAI_MOCK);
+        tokens[0] = address(DAI_MOCK);
+        tokens[1] = address(rwaToken);
+        tokens[2] = address(UNREAL_USTB);
 
         uint256[] memory amounts = new uint256[](3);
         amounts[0] = amountIn;
-        amounts[1] = IERC20(address(UNREAL_USTB)).balanceOf(address(revDistributor));
+        amounts[1] = amountIn;
         amounts[2] = amountIn;
 
         address[] memory targets = new address[](3);
@@ -3435,12 +3408,9 @@ contract MainDeploymentTest is Utility {
         targets[2] = address(swapRouter);
 
         bytes[] memory data = new bytes[](3);
-        data[0] = 
-            abi.encodeWithSignature("multicall(bytes[])", multicallDataRWA);
-        data[1] = 
-            abi.encodeWithSignature("multicall(bytes[])", multicallDataUSTB);
-        data[2] = 
-            abi.encodeWithSignature("multicall(bytes[])", multicallDataDAI);
+        data[0] = dataDAI;
+        data[1] = dataRWA;
+        data[2] = dataUSTB;
 
         // ~ Pre-state check ~
 
@@ -4581,35 +4551,7 @@ contract MainDeploymentTest is Utility {
 
     // ~ ExactInputWrapper test ~
 
-    function test_mainDeployment_exactInputWrapper_exactInputForETH() public {
-
-        // ~ Config ~
-
-        uint256 amountUSDC = 10 * 10**6;
-
-        // deal some USDC
-        deal(address(USDC_MOCK), address(this), amountUSDC);
-
-        // get quote
-        (uint256 quoteETHFromUSDC,,,) = quoter.quoteExactInput(
-            abi.encodePacked(address(USDC_MOCK), uint24(100), address(DAI_MOCK), uint24(100), WETH),
-            amountUSDC
-        );
-
-        emit log_named_uint("ETH quoted", quoteETHFromUSDC);
-
-        IERC20(address(USDC_MOCK)).approve(address(exactInputWrapper), amountUSDC);
-        exactInputWrapper.exactInputForETH(
-            abi.encodePacked(address(USDC_MOCK), uint24(100), address(DAI_MOCK), uint24(100), WETH),
-            address(USDC_MOCK),
-            address(this),
-            block.timestamp + 100,
-            amountUSDC,
-            quoteETHFromUSDC
-        );
-    }
-
-    function test_mainDeployment_convertRewardTokenBatch_exactInputForETH() public {
+    function test_mainDeployment_convertRewardTokenBatch_multihop() public {
 
         // ~ Config ~
 
@@ -4648,20 +4590,30 @@ contract MainDeploymentTest is Utility {
 
         // ~ Execute RevenueDistributor::convertRewardToken ~
 
+        ISwapRouter.ExactInputParams memory swapParamsUSDC = ISwapRouter.ExactInputParams({
+            path: abi.encodePacked(address(USDC_MOCK), uint24(100), address(DAI_MOCK), uint24(100), WETH),
+            recipient: address(revDistributor),
+            deadline: block.timestamp,
+            amountIn: amountUSDC,
+            amountOutMinimum: quoteETHFromUSDC
+        });
+
+        bytes memory data = 
+            abi.encodeWithSignature(
+                "exactInput((bytes,address,uint256,uint256,uint256))",
+                swapParamsUSDC.path,
+                swapParamsUSDC.recipient,
+                swapParamsUSDC.deadline,
+                swapParamsUSDC.amountIn,
+                swapParamsUSDC.amountOutMinimum
+            );
+
         vm.startPrank(ADMIN);
         revDistributor.convertRewardToken(
             address(USDC_MOCK),
             amountUSDC,
-            address(exactInputWrapper),
-            abi.encodeWithSignature(
-                "exactInputForETH(bytes,address,address,uint256,uint256,uint256)",
-                abi.encodePacked(address(USDC_MOCK), uint24(100), address(DAI_MOCK), uint24(100), WETH),
-                address(USDC_MOCK),
-                address(revDistributor),
-                block.timestamp + 100,
-                amountUSDC,
-                quoteETHFromUSDC
-            )
+            address(swapRouter),
+            data
         );
         vm.stopPrank();
 

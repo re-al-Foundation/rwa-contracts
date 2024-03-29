@@ -369,7 +369,9 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
 
         _amountOut = WETH.balanceOf(address(this)) - preBalWETH;
 
-        WETH.withdraw(_amountOut);
+        require(_amountOut != 0, "no WETH received");
+
+        WETH.withdraw(WETH.balanceOf(address(this)));
 
         emit RevTokenConverted(_tokenIn, _amount, _amountOut);
     }

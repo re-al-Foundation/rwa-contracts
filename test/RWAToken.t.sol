@@ -129,7 +129,8 @@ contract RWATokenTest is Utility {
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
                 address(revStream),
-                address(veRWA)
+                address(veRWA),
+                address(0)
             )
         );
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));

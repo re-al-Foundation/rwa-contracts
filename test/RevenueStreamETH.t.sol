@@ -114,7 +114,8 @@ contract RWARevenueStreamETHTest is Utility {
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
                 address(revStreamBeacon),
-                address(veRWA)
+                address(veRWA),
+                address(0)
             )
         );
         revDistributor = RevenueDistributor(payable(address(revDistributorProxy)));

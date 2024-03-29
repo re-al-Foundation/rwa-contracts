@@ -57,7 +57,7 @@ contract DeployExactInputWrapper is DeployUtility {
         );
 
         // set as target on RevDist
-        revDistributor.setSelectorForTarget(address(wrapper), selector_exactInputWrapper);
+        revDistributor.setSelectorForTarget(address(wrapper), selector_exactInputWrapper, true);
 
         // ~ Logs ~
 

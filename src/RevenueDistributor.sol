@@ -42,7 +42,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     RevenueStreamETH public revStreamETH;
     /// @dev Destination contract address for veRWA NFT contract on REAL.
     address public veRwaNFT;
-
+    /// @dev Stores local WETH address.
     IWETH public WETH;
 
     
@@ -241,6 +241,13 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /**
+     * @notice Permissioned method
+     */
+    function setWeth(address _weth) external onlyOwner {
+        WETH = IWETH(_weth);
+    }
+
+    /**
      * @notice This method is used to assign a new address to the global var `revStreamETH`.
      * @dev Should only be used in the event we're updating the distribution destination address.
      * @param _newRevStream Contract address of new RevenueStreamETH contract.
@@ -299,8 +306,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      *        _target == address(uniswapV2Router)
      *        _selector == bytes4(keccak256("swapExactTokensForETH(uint256,uint256,address[],address,uint256)"))
      */
-    function setSelectorForTarget(address _target, bytes4 _selector) external onlyOwner {
-        fetchSelector[_target][_selector] = true;
+    function setSelectorForTarget(address _target, bytes4 _selector, bool isApproved) external onlyOwner {
+        fetchSelector[_target][_selector] = isApproved;
     }
 
     /**
@@ -367,7 +374,6 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         emit RevTokenConverted(_tokenIn, _amount, _amountOut);
     }
 
-    event Debug(bytes4);
     /**
      * @notice Overriden from UUPSUpgradeable
      * @dev Restricts ability to upgrade contract to `DEFAULT_ADMIN_ROLE`

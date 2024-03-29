@@ -282,10 +282,10 @@ contract MainDeploymentTest is Utility {
         revDistributor.addRevenueToken(UNREAL_MORE); // MORE - Borrowing fees
         revDistributor.addRevenueToken(UNREAL_USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
         // add necessary selectors for swaps
-        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputSingle);
-        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputSingleFeeOnTransfer);
-        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInput);
-        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputFeeOnTransfer);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputSingle, true);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputSingleFeeOnTransfer, true);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInput, true);
+        revDistributor.setSelectorForTarget(address(swapRouter), selector_exactInputFeeOnTransfer, true);
 
         vm.stopPrank();
 
@@ -4598,15 +4598,7 @@ contract MainDeploymentTest is Utility {
             amountOutMinimum: quoteETHFromUSDC
         });
 
-        bytes memory data = 
-            abi.encodeWithSignature(
-                "exactInput((bytes,address,uint256,uint256,uint256))",
-                swapParamsUSDC.path,
-                swapParamsUSDC.recipient,
-                swapParamsUSDC.deadline,
-                swapParamsUSDC.amountIn,
-                swapParamsUSDC.amountOutMinimum
-            );
+        bytes memory data = abi.encodeCall(ISwapRouter.exactInput, swapParamsUSDC);
 
         vm.startPrank(ADMIN);
         revDistributor.convertRewardToken(

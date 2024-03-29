@@ -367,11 +367,12 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         require(_success, "low swap level call failed");
         IERC20(_tokenIn).forceApprove(_target, 0);
 
-        _amountOut = WETH.balanceOf(address(this)) - preBalWETH;
+        uint256 postBalWETH = WETH.balanceOf(address(this));
+        _amountOut = postBalWETH - preBalWETH;
 
         require(_amountOut != 0, "no WETH received");
 
-        WETH.withdraw(WETH.balanceOf(address(this)));
+        WETH.withdraw(postBalWETH);
 
         emit RevTokenConverted(_tokenIn, _amount, _amountOut);
     }

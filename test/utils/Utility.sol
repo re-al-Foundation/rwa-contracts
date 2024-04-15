@@ -10,10 +10,8 @@ contract Utility is Test{
 
     // ~ RPCs ~
 
-    string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");
-    string public POLYGON_RPC_URL = vm.envString("POLYGON_RPC_URL");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
-
+    
 
     // ~ Actors ~
 
@@ -34,10 +32,6 @@ contract Utility is Test{
     // ~ Constants ~
 
     IERC20Metadata public constant MUMBAI_WETH = IERC20Metadata(0xA6FA4fB5f76172d178d61B04b0ecd319C5d1C0aa);
-
-    // IERC20Metadata public constant MUMBAI_USTB = IERC20Metadata(0xbFB1dB179d9710Ed05F6dfCEd279205156EA3684);
-    // IERC20Metadata public constant MUMBAI_USDC = IERC20Metadata(0x4b64cCe8Af0f1983fb990B152fb2Ff637d26B636);
-    // IERC20Metadata public constant MUMBAI_DAI  = IERC20Metadata(0x001B3B4d0F3714Ca98ba10F6042DaEbF0B1B7b6F);
 
 
     // ~ Precision ~
@@ -108,5 +102,4 @@ contract Utility is Test{
             fail();
         }
     }
-
 }

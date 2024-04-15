@@ -261,6 +261,9 @@ contract DeployToUnreal is DeployUtility {
         // add necessary selectors for swaps
         revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")), true);
 
+        // revStreamETH config
+        // TODO: Opt out of rebase on USTB
+
         // RWAToken config
         rwaToken.setVotingEscrowRWA(address(veRWA));
         rwaToken.setReceiver(address(receiver));

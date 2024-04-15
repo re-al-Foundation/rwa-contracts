@@ -532,10 +532,6 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
     // Internal Methods
     // ----------------
 
-    function _migrateNFT() internal {
-
-    }
-
     /**
      * @notice This method burns the TNGBL balance in this contracts.
      */

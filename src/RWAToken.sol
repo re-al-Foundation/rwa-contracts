@@ -22,7 +22,6 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     /// @notice If true, `account` is excluded from fees (aka whitelisted).
     mapping(address account => bool) public isExcludedFromFees;
     /// @notice If true, `account` is blacklisted from buying, selling, or transferring tokens.
-    /// @dev Unless the recipient or sender is whitelisted.
     mapping(address account => bool) public isBlacklisted;
     /// @notice If true, address can burn tokens.
     mapping(address => bool) public canBurn;
@@ -87,6 +86,21 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @notice This error is emitted from an invalid address(0) input.
      */
     error ZeroAddress();
+
+    /**
+     * @notice This error is emitted when a caller is not authorized.
+     */
+    error NotAuthorized(address caller);
+
+    /**
+     * @notice This error is emitted when the max suply is exceeded.
+     */
+    error MaxSupplyExceeded();
+
+    /**
+     * @notice This error is emitted when a tax is applied, but no RoyaltyHandler address is stored.
+     */
+    error RoyaltyHandlerNotAssigned();
 
 
     // -----------
@@ -224,7 +238,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @param amount Amount of tokens to burn.
      */
     function burn(uint256 amount) public {
-        require(canBurn[msg.sender], "RWAToken: Not authorized");
+        if (!canBurn[msg.sender]) revert NotAuthorized(msg.sender);
         _burn(msg.sender, amount);
     }
 
@@ -233,7 +247,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @param amount Amount of tokens to mint.
      */
     function mint(uint256 amount) external {
-        require(canMint[msg.sender], "RWAToken: Not authorized");
+        if (!canMint[msg.sender]) revert NotAuthorized(msg.sender);
         _mint(msg.sender, amount);
     }
 
@@ -243,7 +257,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @param amount Amount of tokens to mint.
      */
     function mintFor(address who, uint256 amount) external {
-        require(canMint[msg.sender], "RWAToken: Not authorized");
+        if (!canMint[msg.sender]) revert NotAuthorized(msg.sender);
         _mint(who, amount);
     }
 
@@ -279,13 +293,13 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
                 feeAmount = (amount * fee) / 100;       
                 amount -= feeAmount;
 
-                require(royaltyHandler != address(0), "RWAToken: No royalty handler assigned");
+                if (royaltyHandler == address(0)) revert RoyaltyHandlerNotAssigned();
                 super._update(from, royaltyHandler, feeAmount);
             }
         }
 
         super._update(from, to, amount);
-        require(totalSupply() <= MAX_SUPPLY, "RWAToken: max. supply exceeded");
+        if (totalSupply() > MAX_SUPPLY) revert MaxSupplyExceeded();
     }
 
     /**

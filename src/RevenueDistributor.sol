@@ -115,12 +115,11 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     /**
      * @notice Initializes RevenueDistributor
      * @param _admin Address to be assigned as default admin.
-     * @param _revStreamETH Contract address for RevenueStreamETH contract
      * @param _veRwa Address of VotingEscrowRWA contract.
+     * @param _weth Address of WETH.
      */
     function initialize(
         address _admin,
-        address _revStreamETH,
         address _veRwa,
         address _weth
     ) external initializer {
@@ -130,7 +129,6 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
 
-        revStreamETH = RevenueStreamETH(payable(_revStreamETH));
         veRwaNFT = _veRwa;
         WETH = IWETH(_weth);
     }

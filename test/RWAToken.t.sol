@@ -10,7 +10,7 @@ import { Checkpoints } from "@openzeppelin/contracts/utils/structs/Checkpoints.s
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 // local imports
-import { RevenueStream } from "../src/RevenueStream.sol";
+import { RevenueStreamETH } from "../src/RevenueStreamETH.sol";
 import { RevenueDistributor } from "../src/RevenueDistributor.sol";
 import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
 import { VotingEscrowVesting } from "../src/governance/VotingEscrowVesting.sol";
@@ -38,7 +38,7 @@ contract RWATokenTest is Utility {
 
     // ~ Contracts ~
 
-    RevenueStream public revStream;
+    RevenueStreamETH public revStream;
     RevenueDistributor public revDistributor;
     RWAVotingEscrow public veRWA;
     VotingEscrowVesting public vesting;
@@ -108,9 +108,6 @@ contract RWATokenTest is Utility {
 
         // ~ Revenue Distributor Deployment ~
 
-        // Deploy base contract for beacon
-        revStream = new RevenueStream();
-
         // Deploy revDistributor contract
         revDistributor = new RevenueDistributor();
 
@@ -119,7 +116,6 @@ contract RWATokenTest is Utility {
             address(revDistributor),
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
-                address(revStream),
                 address(veRWA),
                 address(0)
             )
@@ -171,7 +167,7 @@ contract RWATokenTest is Utility {
         // ~ Config ~
 
         // vm.prank(ADMIN);
-        // revStream = RevenueStream(revDistributor.createNewRevStream(address(rwaToken)));
+        // revStream = RevenueStreamETH(revDistributor.createNewRevStream(address(rwaToken)));
 
         // set votingEscrow on vesting contract
         vm.prank(ADMIN);

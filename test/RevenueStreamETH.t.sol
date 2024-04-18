@@ -9,7 +9,6 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 import { Checkpoints } from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
 // local imports
-import { RevenueStream } from "../src/RevenueStream.sol";
 import { RevenueStreamETH } from "../src/RevenueStreamETH.sol";
 import { RevenueDistributor } from "../src/RevenueDistributor.sol";
 import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
@@ -33,7 +32,6 @@ contract RWARevenueStreamETHTest is Utility {
 
     // ~ Contracts ~
 
-    RevenueStream public revStreamBeacon;
     RevenueStreamETH public revStream;
     RevenueDistributor public revDistributor;
     RWAVotingEscrow public veRWA;
@@ -103,8 +101,6 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Revenue Distributor Deployment ~
 
-        revStreamBeacon = new RevenueStream();
-
         // Deploy revDistributor contract
         revDistributor = new RevenueDistributor();
 
@@ -113,7 +109,6 @@ contract RWARevenueStreamETHTest is Utility {
             address(revDistributor),
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
-                address(revStreamBeacon),
                 address(veRWA),
                 address(0)
             )
@@ -161,16 +156,14 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Config ~
 
         // set votingEscrow on vesting contract
-        vm.prank(ADMIN);
+        vm.startPrank(ADMIN);
         vesting.setVotingEscrowContract(address(veRWA));
+        revDistributor.updateRevenueStream(payable(address(revStream)));
 
         // Grant minter role to address(this) & veRWA
-        vm.startPrank(ADMIN);
         rwaToken.setVotingEscrowRWA(address(veRWA));
         rwaToken.setReceiver(address(this)); // for testing
-        vm.stopPrank();
 
-        vm.startPrank(ADMIN);
         rwaToken.excludeFromFees(address(veRWA), true);
         rwaToken.excludeFromFees(JOE, true);
         vm.stopPrank();

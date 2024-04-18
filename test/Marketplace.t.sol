@@ -15,7 +15,7 @@ import { RWAToken } from "../src/RWAToken.sol";
 import { Marketplace } from "../src/Marketplace.sol";
 import { VotingMath } from "../src/governance/VotingMath.sol";
 import { RevenueDistributor } from "../src/RevenueDistributor.sol";
-import { RevenueStream } from "../src/RevenueStream.sol";
+import { RevenueStreamETH } from "../src/RevenueStreamETH.sol";
 
 // local helper imports
 import "./utils/Utility.sol";
@@ -36,7 +36,7 @@ contract MarketplaceTest is Utility {
     RWAToken public rwaToken;
     Marketplace public marketplace;
     RevenueDistributor public revDistributor;
-    RevenueStream public revStream;
+    RevenueStreamETH public revStream;
 
     // helper
     ERC20Mock public mockToken;
@@ -98,7 +98,7 @@ contract MarketplaceTest is Utility {
         veRWA = RWAVotingEscrow(address(veRWAProxy));
 
         // Deploy rev stream implementation
-        revStream = new RevenueStream();
+        revStream = new RevenueStreamETH();
 
         // Deploy revDistributor contract
         revDistributor = new RevenueDistributor();
@@ -108,7 +108,6 @@ contract MarketplaceTest is Utility {
             address(revDistributor),
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
-                address(revStream), // rev stream
                 address(veRWA),
                 address(0)
             )

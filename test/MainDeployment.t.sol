@@ -184,7 +184,6 @@ contract MainDeploymentTest is Utility {
             address(revDistributor),
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
-                address(0),
                 address(veRWA),
                 WETH
             )

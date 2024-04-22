@@ -158,8 +158,10 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     function setRoyaltyHandler(address _royaltyHandler) external onlyOwner {
         if (_royaltyHandler == address(0)) revert ZeroAddress();
 
-        isExcludedFromFees[royaltyHandler] = false;
-        canBurn[royaltyHandler] = false;
+        if (royaltyHandler != address(0)) {
+            isExcludedFromFees[royaltyHandler] = false;
+            canBurn[royaltyHandler] = false;
+        }
 
         isExcludedFromFees[_royaltyHandler] = true;
         canBurn[_royaltyHandler] = true;
@@ -174,8 +176,10 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     function setReceiver(address _receiver) external onlyOwner {
         if (_receiver == address(0)) revert ZeroAddress();
 
-        isExcludedFromFees[lzReceiver] = false;
-        canMint[lzReceiver] = false;
+        if (lzReceiver != address(0)) {
+            isExcludedFromFees[lzReceiver] = false;
+            canMint[lzReceiver] = false;
+        }
 
         isExcludedFromFees[_receiver] = true;
         canMint[_receiver] = true;
@@ -190,9 +194,11 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     function setVotingEscrowRWA(address _veRWA) external onlyOwner {
         if (_veRWA == address(0)) revert ZeroAddress();
 
-        isExcludedFromFees[votingEscrowRWA] = false;
-        canBurn[votingEscrowRWA] = false;
-        canMint[votingEscrowRWA] = false;
+        if (votingEscrowRWA != address(0)) {
+            isExcludedFromFees[votingEscrowRWA] = false;
+            canBurn[votingEscrowRWA] = false;
+            canMint[votingEscrowRWA] = false;
+        }
 
         isExcludedFromFees[_veRWA] = true;
         canBurn[_veRWA] = true;

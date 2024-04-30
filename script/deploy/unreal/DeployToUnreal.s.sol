@@ -267,7 +267,7 @@ contract DeployToUnreal is DeployUtility {
         rwaToken.setVotingEscrowRWA(address(veRWA));
         rwaToken.setReceiver(address(receiver));
         rwaToken.excludeFromFees(address(revDistributor), true);
-        rwaToken.excludeFromFees(SWAP_ROUTER, true);
+        //rwaToken.excludeFromFees(SWAP_ROUTER, true);
         rwaToken.setRoyaltyHandler(address(royaltyHandler));
         
         // RoyaltyHandler config

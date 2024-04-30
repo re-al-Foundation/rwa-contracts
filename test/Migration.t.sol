@@ -222,7 +222,7 @@ contract MigrationTest is Utility {
         vm.prank(ADMIN);
         migrator.toggleMigration();
 
-        vm.pauseGasMetering();
+        //vm.pauseGasMetering();
     }
 
 
@@ -292,6 +292,7 @@ contract MigrationTest is Utility {
 
     /// @notice Verifies proper state changes when CrossChainMigrator::migrateNFT is executed.
     function test_migrator_migrateNFT_single() public {
+        vm.pauseGasMetering();
         
         // ~ Config ~
 
@@ -476,6 +477,7 @@ contract MigrationTest is Utility {
 
     /// @notice Verifies proper state changes when CrossChainMigrator::migrateNFTBatch is executed.
     function test_migrator_migrateNFTBatch_single() public {
+        vm.pauseGasMetering();
 
         // ~ Config ~
 
@@ -749,6 +751,8 @@ contract MigrationTest is Utility {
     /// @notice Verifies the usage of Layer Zero's advanced adapter params settings allowing
     ///         us to airdrop native ETH to our migrators on the destination chain.
     function test_migrator_migrateNFTBatch_airdrop() public {
+        vm.pauseGasMetering();
+        
         // ~ Config ~
 
         uint256 numTokens = 10;

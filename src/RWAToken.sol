@@ -288,7 +288,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
         if (isBlacklisted[from] && to != owner()) revert Blacklisted(from);
         if (isBlacklisted[to]) revert Blacklisted(to);
 
-        bool excludedAccount = isExcludedFromFees[from] || isExcludedFromFees[to];
+        bool excludedAccount = isExcludedFromFees[from] || isExcludedFromFees[to] || isExcludedFromFees[msg.sender];
 
         if (!excludedAccount) { // if not whitelisted
 

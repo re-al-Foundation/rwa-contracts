@@ -362,6 +362,11 @@ contract MainDeploymentTest is Utility {
         });
         INonfungiblePositionManager(UNREAL_NFTMANAGER).mint(params);
 
+        if (royaltyHandler.poolFee() != 100) {
+            vm.prank(ADMIN);
+            royaltyHandler.updateFee(100);
+        }
+
         // ~ note For testing, create USTB/WETH pool ~
 
         vm.prank(UNREAL_PAIR_MANAGER);

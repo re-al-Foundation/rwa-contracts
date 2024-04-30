@@ -170,7 +170,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         require(_amountOut != 0, "insufficient output amount");
 
         uint256 _after = IERC20(_token).balanceOf(address(this));
-        require(_after == _before - _amount, "invalid input amount");
+        require(_after >= _before - _amount, "invalid input amount");
         
         _distributeETH();
     }

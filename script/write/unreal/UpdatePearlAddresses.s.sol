@@ -42,8 +42,14 @@ contract UpdatePearlAddresses is DeployUtility {
     address public USTB = 0x83feDBc0B85c6e29B589aA6BdefB1Cc581935ECD;
     address public PEARL = 0xCE1581d7b4bA40176f0e219b2CaC30088Ad50C7A;
 
-    address public passiveIncomeNFTV1 = POLYGON_PI_NFT;
-    address public tngblToken = POLYGON_TNGBL_TOKEN;
+    bytes4 public selector_exactInputSingle = 
+        bytes4(keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))"));
+    bytes4 public selector_exactInputSingleFeeOnTransfer = 
+        bytes4(keccak256("exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))"));
+    bytes4 public selector_exactInput = 
+        bytes4(keccak256("exactInput((bytes,address,uint256,uint256,uint256))"));
+    bytes4 public selector_exactInputFeeOnTransfer = 
+        bytes4(keccak256("exactInputFeeOnTransfer((bytes,address,uint256,uint256,uint256))"));
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
@@ -73,7 +79,10 @@ contract UpdatePearlAddresses is DeployUtility {
 
         //rwaToken.setRoyaltyHandler(address(royaltyHandler));
 
-        //revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")));
+        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInputSingle, true);
+        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInputSingleFeeOnTransfer, true);
+        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInput, true);
+        revDistributor.setSelectorForTarget(UNREAL_SWAP_ROUTER, selector_exactInputFeeOnTransfer, true);
         //rwaToken.excludeFromFees(SWAP_ROUTER, true);
 
         vm.stopBroadcast();

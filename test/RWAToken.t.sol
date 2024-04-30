@@ -27,6 +27,7 @@ import { IUniswapV2Router02 } from "../src/interfaces/IUniswapV2Router02.sol";
 import { IUniswapV2Router01 } from "../src/interfaces/IUniswapV2Router01.sol";
 import { IUniswapV2Pair } from "../src/interfaces/IUniswapV2Pair.sol";
 import { IUniswapV2Factory } from "../src/interfaces/IUniswapV2Factory.sol";
+import { IQuoterV2 } from "../src/interfaces/IQuoterV2.sol";
 
 /**
  * @title RWATokenTest
@@ -745,7 +746,5 @@ contract RWATokenTest is Utility {
         vm.prank(JOE);
         vm.expectRevert(abi.encodeWithSelector(RWAToken.NotAuthorized.selector, JOE));
         rwaToken.mintFor(JOE, 1);
-    }
-
-    
+    } 
 }

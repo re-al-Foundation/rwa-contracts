@@ -92,6 +92,16 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      */
     error ExpiredNFT(uint256 tokenId);
 
+    /**
+     * @notice This error is emitted when a migration is attempted and `migrationActive` is false.
+     */
+    error MigrationNotActive();
+
+    /**
+     * @notice This error is emitted when address(0) is found in an input variable.
+     */
+    error ZeroAddress();
+
 
     // ------
     // Events
@@ -197,7 +207,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         address zroPaymentAddress,
         bytes calldata adapterParams
     ) payable external {
-        require(migrationActive, "CrossChainMigrator: Migration is not active");
+        if (!migrationActive) revert MigrationNotActive();
 
         // Transfer NFT into this contract. Keep custody
         passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenId);
@@ -268,7 +278,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         address zroPaymentAddress,
         bytes calldata adapterParams
     ) payable external nonReentrant {
-        require(migrationActive, "CrossChainMigrator: Migration is not active");
+        if (!migrationActive) revert MigrationNotActive();
 
         uint256[] memory lockedAmounts = new uint256[](_tokenIds.length);
         uint256[] memory durations = new uint256[](_tokenIds.length);
@@ -351,7 +361,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         address zroPaymentAddress,
         bytes calldata adapterParams
     ) external payable {
-        require(migrationActive, "CrossChainMigrator: Migration is not active");
+        if (!migrationActive) revert MigrationNotActive();
         require(tngblToken.balanceOf(msg.sender) >= _amount, "CrossChainMigrator: Insufficient balance");
 
         tngblToken.transferFrom(msg.sender, address(this), _amount);
@@ -365,6 +375,13 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         emit MigrationInFlight_TNGBL(msg.sender, _amount);
     }
 
+    /**
+     * @notice This permissioned method allows the owner to burn PassiveIncome NFTs in this contract.
+     * @dev During migration, this contract takes custody of PI NFTs and will eventually be burned (when expired).
+     * In the process of burning the PI NFT, TNGBL tokens will be claimed from the lock, and those will
+     * also be burned.
+     * @param tokenId PassiveIncomeNFT token identifier to burn.
+     */
     function burnToken(uint256 tokenId) external onlyOwner {
         require(passiveIncomeNFT.ownerOf(tokenId) == address(this), "CrossChainMigrator: not owner");
 
@@ -410,7 +427,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      * @dev This is mainly for testnet since the current mainnet TNGBL contract will not change.
      */
     function setTngblAddress(address _newContract) external onlyOwner {
-        require(_newContract != address(0), "invalid input");
+        if (_newContract == address(0)) revert ZeroAddress();
         tngblToken = ERC20Burnable(_newContract);
     }
 
@@ -418,7 +435,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      * @notice This method allows a permissioned admin to update the `piCalculator` address.
      */
     function setPassiveIncomeCalculator(address _newContract) external onlyOwner {
-        require(_newContract != address(0), "invalid input");
+        if (_newContract == address(0)) revert ZeroAddress();
         piCalculator = PassiveIncomeCalculator(_newContract);
     }
 
@@ -427,7 +444,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      * @dev This is mainly for testnet since the current mainnet PI NFT contract will not change.
      */
     function setPassiveIncomeNFTAddress(address _newContract) external onlyOwner {
-        require(_newContract != address(0), "invalid input");
+        if (_newContract == address(0)) revert ZeroAddress();
         passiveIncomeNFT = PassiveIncomeNFT(_newContract);
     }
 
@@ -442,7 +459,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      * @notice This method allows a permissioned admin to update the `receiver` state variable.
      */
     function setReceiver(address _newReceiver) external onlyOwner {
-        require(_newReceiver != address(0), "CrossChainMigrator: Invalid input");
+        if (_newReceiver == address(0)) revert ZeroAddress();
         receiver = _newReceiver;
     }
 

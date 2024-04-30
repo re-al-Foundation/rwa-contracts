@@ -35,7 +35,6 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     struct MarketItem {
         uint256 tokenId;
         address seller;
-        address owner;
         address paymentToken;
         uint256 price;
         bool listed;
@@ -49,7 +48,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
     address public revDistributor; // TODO: RevDistributor?
 
-    mapping(address => bool) public isPaymentToken;
+    mapping(address => bool) public isPaymentToken; // TODO: Multiple payment tokens?
     mapping(uint256 => MarketItem) public idToMarketItem;
     //mapping(address => Collection) public _itemsByOwner;
     mapping(address => address[]) private _routerPaths;
@@ -87,6 +86,18 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     );
 
     event MarketItemDelisted(uint256 indexed tokenId);
+
+    // ------
+    // Errors
+    // ------
+
+    error InvalidPaymentToken(address token);
+
+    error InvalidTokenId(uint256 tokenId);
+
+    error CallerIsNotOwner(address caller);
+
+    error CallerIsNotSeller(address caller);
 
 
     // -----------
@@ -132,30 +143,26 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * The item itself will be transferred to the marketplace.
      */
     function listMarketItem(uint256 tokenId, address paymentToken, uint256 price) external nonReentrant {
-        require(isPaymentToken[paymentToken] || paymentToken == address(0), "invalid payment token");
-        address seller = msg.sender;
+        if (!isPaymentToken[paymentToken] && paymentToken == address(0)) revert InvalidPaymentToken(paymentToken);
         address owner = nftContract.ownerOf(tokenId);
-        require(
-            owner == seller ||
-                (owner == address(this) &&
-                    idToMarketItem[tokenId].seller == seller),
-            "caller is not the owner"
-        );
+        if (
+            owner != msg.sender && // If caller is not owner
+            (owner == address(this) && idToMarketItem[tokenId].seller != msg.sender) // and the listing isnt being updated
+        ) revert CallerIsNotOwner(msg.sender);
 
         idToMarketItem[tokenId] = MarketItem(
             tokenId,
-            seller,
-            address(this),
+            msg.sender,
             paymentToken,
             price,
             true
         );
 
-        if (seller == owner) {
-            nftContract.transferFrom(seller, address(this), tokenId);
-            emit MarketItemCreated(tokenId, seller, paymentToken, price);
+        if (msg.sender == owner) {
+            nftContract.transferFrom(msg.sender, address(this), tokenId);
+            emit MarketItemCreated(tokenId, msg.sender, paymentToken, price);
         } else {
-            emit MarketItemUpdated(tokenId, seller, paymentToken, price);
+            emit MarketItemUpdated(tokenId, msg.sender, paymentToken, price);
         }
     }
 
@@ -168,13 +175,14 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
         address seller = item.seller;
 
-        require(item.tokenId == tokenId, "unlisted token");
         require(seller == msg.sender, "caller is not the seller");
 
-        nftContract.transferFrom(address(this), seller, tokenId);
+        if (item.tokenId != tokenId) revert InvalidTokenId(tokenId);
+        if (seller != msg.sender) revert CallerIsNotSeller(msg.sender);
+
+        nftContract.transferFrom(address(this), msg.sender, tokenId);
 
         item.seller = address(0);
-        item.owner = seller;
         item.listed = false;
 
         emit MarketItemDelisted(tokenId);

@@ -140,8 +140,9 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         revSharePortion = 2; // 2/5
         lpPortion = 1; // 1/5
 
-        poolFee = 100;
+        poolFee = 3000;
         secondsAgo = 300;
+        percentageDeviation = 200;
     }
 
 
@@ -356,6 +357,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     // Internal Methods
     // ----------------
 
+    event Debug(uint256);
+
     /**
      * @notice This internal method is used to fetch minimum amount quotes for swaps
      */
@@ -369,6 +372,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
             secondsAgo,
             poolFee
         );
+
+        emit Debug(amountOut);
     }
 
     /**

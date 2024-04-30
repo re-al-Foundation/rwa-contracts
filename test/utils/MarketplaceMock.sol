@@ -8,4 +8,6 @@ contract MarketplaceMock {
         address from,
         address to
     ) external {}
+
+    function afterBurnToken(uint256 tokenId) external {}
 }

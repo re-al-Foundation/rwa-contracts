@@ -267,6 +267,29 @@ contract MigrationTest is Utility {
     // Unit Tests
     // ----------
 
+    function test_migrator_initializer() public {
+        CrossChainMigrator newMigrator = new CrossChainMigrator(address(endpoint));
+        ERC1967Proxy newMigratorProxy = new ERC1967Proxy(
+            address(newMigrator),
+            abi.encodeWithSelector(CrossChainMigrator.initialize.selector,
+                address(passiveIncomeNFTV1),
+                address(piCalculator),
+                address(tngblToken),
+                address(receiver),
+                uint16(block.chainid),
+                ADMIN
+            )
+        );
+        newMigrator = CrossChainMigrator(address(newMigratorProxy));
+
+        assertEq(newMigrator.useCustomAdapterParams(), true);
+        assertEq(address(newMigrator.passiveIncomeNFT()), address(passiveIncomeNFTV1));
+        assertEq(address(newMigrator.piCalculator()), address(piCalculator));
+        assertEq(address(newMigrator.tngblToken()), address(tngblToken));
+        assertEq(newMigrator.receiver(), address(receiver));
+        assertEq(newMigrator.remoteChainId(), block.chainid);
+    }
+
     /// @notice Verifies proper state changes when CrossChainMigrator::migrateNFT is executed.
     function test_migrator_migrateNFT_single() public {
         
@@ -335,8 +358,26 @@ contract MigrationTest is Utility {
 
         emit log_address(passiveIncomeNFTV1.ownerOf(tokenId));
 
+        // restrictions test -> Joe attempts to migrate when migrationActive is false
+        vm.prank(ADMIN);
+        migrator.toggleMigration();
+        assertEq(migrator.migrationActive(), false);
         vm.startPrank(JOE);
         passiveIncomeNFTV1.approve(address(migrator), tokenId);
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.MigrationNotActive.selector));
+        migrator.migrateNFT{value:amountETH}(
+            tokenId,
+            JOE,
+            payable(JOE),
+            address(0),
+            adapterParams
+        );
+        vm.stopPrank();
+        vm.prank(ADMIN);
+        migrator.toggleMigration();
+        assertEq(migrator.migrationActive(), true);
+
+        vm.startPrank(JOE);
         migrator.migrateNFT{value:amountETH}(
             tokenId,
             JOE,
@@ -508,10 +549,29 @@ contract MigrationTest is Utility {
 
         // ~ Execute migrateNFT ~
 
+        // restrictions test -> Joe attempts to migrate when migrationActive is false
+        vm.prank(ADMIN);
+        migrator.toggleMigration();
+        assertEq(migrator.migrationActive(), false);
         vm.startPrank(JOE);
         for (uint256 i; i < numTokens; ++i) {
             passiveIncomeNFTV1.approve(address(migrator), tokenIds[i]);
         }
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.MigrationNotActive.selector));
+        migrator.migrateNFTBatch{value:amountETH}(
+            tokenIds,
+            JOE,
+            payable(JOE),
+            address(0),
+            adapterParams
+        );
+        vm.stopPrank();
+        vm.prank(ADMIN);
+        migrator.toggleMigration();
+        assertEq(migrator.migrationActive(), true);
+
+        // migrate batch successfully
+        vm.startPrank(JOE);
         migrator.migrateNFTBatch{value:amountETH}(
             tokenIds,
             JOE,
@@ -581,7 +641,6 @@ contract MigrationTest is Utility {
         vm.deal(JOE, amountETH);
 
         uint256 preBal = rwaToken.balanceOf(JOE);
-        //uint256 preSupplyTngbl = tngblToken.totalSupply();
 
         // ~ Pre-state check ~
 
@@ -590,8 +649,27 @@ contract MigrationTest is Utility {
 
         // ~ Execute migrateNFT ~
 
+        // restrictions test -> Joe attempts to migrate when migrationActive is false
+        vm.prank(ADMIN);
+        migrator.toggleMigration();
+        assertEq(migrator.migrationActive(), false);
         vm.startPrank(JOE);
         tngblToken.approve(address(migrator), amountTokens);
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.MigrationNotActive.selector));
+        migrator.migrateTokens{value:amountETH}(
+            amountTokens,
+            JOE,
+            payable(JOE),
+            address(0),
+            adapterParams
+        );
+        vm.stopPrank();
+        vm.prank(ADMIN);
+        migrator.toggleMigration();
+        assertEq(migrator.migrationActive(), true);
+
+        // migrate succesffully
+        vm.startPrank(JOE);
         migrator.migrateTokens{value:amountETH}(
             amountTokens,
             JOE,
@@ -605,7 +683,6 @@ contract MigrationTest is Utility {
 
         assertEq(tngblToken.balanceOf(JOE), 0);
         assertEq(tngblToken.balanceOf(address(migrator)), amountTokens);
-        //assertEq(tngblToken.totalSupply(), preSupplyTngbl - amountTokens);
         assertEq(rwaToken.balanceOf(JOE), preBal + amountTokens);
     }
 
@@ -863,6 +940,7 @@ contract MigrationTest is Utility {
         assertEq(address(ALICE).balance, amountAirdrop);
     }
 
+    /// @notice Verifies proper state changes when CrossChainMigrator::burnTngbl is executed.
     function test_migrator_burnTngbl() public {
 
         // ~ Config ~
@@ -884,6 +962,206 @@ contract MigrationTest is Utility {
 
         assertEq(tngblToken.balanceOf(address(migrator)), 0);
         assertEq(tngblToken.totalSupply(), preSupplyTngbl - amountTokens);
+    }
+
+    /// @notice Verifies restrictions for CrossChainMigrator::burnTngbl.
+    function test_migrator_burnTngbl_restrictions() public {
+        // Only owner can call burnTngbl()
+        vm.prank(JOE);
+        vm.expectRevert();
+        migrator.burnTngbl();
+    }
+
+    /// @notice Verifies proper state changes when CrossChainMigrator::burnToken is executed.
+    function test_migrator_burnToken() public {
+        // ~ Config ~
+
+        amountToLock = 1_000 ether;
+        durationInMonths = 10; // months
+        totalDuration = (uint256(durationInMonths) * 30 days);
+        uint256 tokenId = _mintPassiveIncomeNFT(JOE, amountToLock, durationInMonths);
+
+        (uint256 startTime,
+        uint256 endTime,
+        uint256 lockedAmount,
+        uint256 multiplier,
+        /** claimed */,
+        uint256 maxPayout) = passiveIncomeNFTV1.locks(tokenId);
+
+        // create adapterParams for custom gas.
+        adapterParams = abi.encodePacked(uint16(1), uint256(200000));
+
+        // get quote for fees
+        (amountETH,) = migrator.estimateMigrateNFTFee(
+            uint16(block.chainid),
+            abi.encodePacked(JOE),
+            lockedAmount + maxPayout,
+            endTime - startTime,
+            false,
+            adapterParams
+        );
+
+        vm.deal(JOE, amountETH);
+
+        // ~ Pre-state check ~
+
+        assertEq(passiveIncomeNFTV1.ownerOf(tokenId), JOE);
+
+        // ~ Execute migrateNFT ~
+
+        vm.startPrank(JOE);
+        passiveIncomeNFTV1.approve(address(migrator), tokenId);
+        migrator.migrateNFT{value:amountETH}(
+            tokenId,
+            JOE,
+            payable(JOE),
+            address(0),
+            adapterParams
+        );
+        vm.stopPrank();
+
+        // ~ Post-state check 1 ~
+
+        assertEq(passiveIncomeNFTV1.ownerOf(tokenId), address(migrator));
+
+        // ~ Execute burnToken ~
+
+        vm.warp(endTime);
+        vm.prank(ADMIN);
+        migrator.burnToken(tokenId);
+
+        // ~ Post-state check 1 ~
+
+        vm.expectRevert();
+        passiveIncomeNFTV1.ownerOf(tokenId);
+    }
+
+    /// @notice Verifies restrictions for CrossChainMigrator::burnToken.
+    function test_migrator_burnToken_restrictions() public {
+        // Only owner can call burnToken()
+        vm.prank(JOE);
+        vm.expectRevert();
+        migrator.burnToken(1);
+    }
+
+    /// @notice Verifies proper state changes when CrossChainMigrator.setTngblAddress is executed.
+    function test_migrator_setTngblAddress() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(address(migrator.tngblToken()), address(tngblToken));
+
+        // ~ Execute setTngblAddress ~
+
+        vm.prank(ADMIN);
+        migrator.setTngblAddress(address(2));
+
+        // ~ Pre-state check ~
+
+        assertEq(address(migrator.tngblToken()), address(2));
+    }
+
+    /// @notice Verifies restrictions when CrossChainMigrator.setTngblAddress is executed.
+    function test_migrator_setTngblAddress_restrictions() public {
+        // Only owner can call setTngblAddress
+        vm.prank(JOE);
+        vm.expectRevert();
+        migrator.setTngblAddress(address(2));
+
+        // Input cannot be address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.ZeroAddress.selector));
+        migrator.setTngblAddress(address(0));
+    }
+
+    /// @notice Verifies proper state changes when CrossChainMigrator.setPassiveIncomeCalculator is executed.
+    function test_migrator_setPassiveIncomeCalculator() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(address(migrator.piCalculator()), address(piCalculator));
+
+        // ~ Execute setPassiveIncomeCalculator ~
+
+        vm.prank(ADMIN);
+        migrator.setPassiveIncomeCalculator(address(2));
+
+        // ~ Pre-state check ~
+
+        assertEq(address(migrator.piCalculator()), address(2));
+    }
+
+    /// @notice Verifies restrictions when CrossChainMigrator.setPassiveIncomeCalculator is executed.
+    function test_migrator_setPassiveIncomeCalculator_restrictions() public {
+        // Only owner can call setPassiveIncomeCalculator
+        vm.prank(JOE);
+        vm.expectRevert();
+        migrator.setPassiveIncomeCalculator(address(2));
+
+        // Input cannot be address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.ZeroAddress.selector));
+        migrator.setPassiveIncomeCalculator(address(0));
+    }
+
+    /// @notice Verifies proper state changes when CrossChainMigrator.setPassiveIncomeNFTAddress is executed.
+    function test_migrator_setPassiveIncomeNFTAddress() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(address(migrator.passiveIncomeNFT()), address(passiveIncomeNFTV1));
+
+        // ~ Execute setPassiveIncomeNFTAddress ~
+
+        vm.prank(ADMIN);
+        migrator.setPassiveIncomeNFTAddress(address(2));
+
+        // ~ Pre-state check ~
+
+        assertEq(address(migrator.passiveIncomeNFT()), address(2));
+    }
+
+    /// @notice Verifies restrictions when CrossChainMigrator.setPassiveIncomeNFTAddress is executed.
+    function test_migrator_setPassiveIncomeNFTAddress_restrictions() public {
+        // Only owner can call setPassiveIncomeNFTAddress
+        vm.prank(JOE);
+        vm.expectRevert();
+        migrator.setPassiveIncomeNFTAddress(address(2));
+
+        // Input cannot be address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.ZeroAddress.selector));
+        migrator.setPassiveIncomeNFTAddress(address(0));
+    }
+
+    /// @notice Verifies proper state changes when CrossChainMigrator.setReceiver is executed.
+    function test_migrator_setReceiver() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(address(migrator.receiver()), address(receiver));
+
+        // ~ Execute setReceiver ~
+
+        vm.prank(ADMIN);
+        migrator.setReceiver(address(2));
+
+        // ~ Pre-state check ~
+
+        assertEq(address(migrator.receiver()), address(2));
+    }
+
+    /// @notice Verifies restrictions when CrossChainMigrator.setReceiver is executed.
+    function test_migrator_setReceiver_restrictions() public {
+        // Only owner can call setReceiver
+        vm.prank(JOE);
+        vm.expectRevert();
+        migrator.setReceiver(address(2));
+
+        // Input cannot be address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.ZeroAddress.selector));
+        migrator.setReceiver(address(0));
     }
 }
 

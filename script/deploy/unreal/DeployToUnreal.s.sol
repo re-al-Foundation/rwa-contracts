@@ -184,7 +184,6 @@ contract DeployToUnreal is DeployUtility {
                 address(rwaToken),
                 WETH9,
                 SWAP_ROUTER,
-                QUOTER,
                 UNREAL_BOX_MANAGER,
                 UNREAL_TNGBLV3ORACLE
             )

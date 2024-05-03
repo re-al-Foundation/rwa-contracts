@@ -14,6 +14,8 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 
 // local imports
 import { RWAVotingEscrow } from "./governance/RWAVotingEscrow.sol";
+import { CommonErrors } from "./interfaces/CommonErrors.sol";
+import { CommonValidations } from "./libraries/CommonValidations.sol";
 import "./interfaces/IRouter.sol";
 import "./utils/Collection.sol";
 import "./utils/SafeCollection.sol";
@@ -27,6 +29,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     using SafeERC20 for IERC20;
     using SafeCollection for Collection;
     using SafeCollection for mapping(address => Collection);
+    using CommonValidations for *;
 
     // ---------------
     // State Variables
@@ -37,6 +40,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         address seller;
         address paymentToken;
         uint256 price;
+        uint256 remainingTime;
         bool listed;
     }
 
@@ -155,11 +159,13 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
             msg.sender,
             paymentToken,
             price,
+            nftContract.getRemainingVestingDuration(tokenId),
             true
         );
 
         if (msg.sender == owner) {
             nftContract.transferFrom(msg.sender, address(this), tokenId);
+            nftContract.updateVestingDuration(tokenId, 0); // marketplace should not have voting power
             emit MarketItemCreated(tokenId, msg.sender, paymentToken, price);
         } else {
             emit MarketItemUpdated(tokenId, msg.sender, paymentToken, price);
@@ -180,6 +186,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         if (item.tokenId != tokenId) revert InvalidTokenId(tokenId);
         if (seller != msg.sender) revert CallerIsNotSeller(msg.sender);
 
+        nftContract.updateVestingDuration(tokenId, item.remainingTime);
         nftContract.transferFrom(address(this), msg.sender, tokenId);
 
         item.seller = address(0);

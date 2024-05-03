@@ -129,6 +129,19 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      */
     event MigrationFulfilled(address indexed migrator, uint256 indexed tokenId);
 
+    /**
+     * @notice This event is emitted when the vesting duration of a token is updated.
+     * @param tokenId Token being manipulated.
+     * @param vestingDuration New vesting duration that is set for token.
+     */
+    event VestingDurationUpdated(uint256 indexed tokenId, uint256 vestingDuration);
+
+    /**
+     * @notice This event is emitted when a new `endpointReceiver` is set.
+     * @param newRealReceiver New address stored in `endpointReceiver`.
+     */
+    event RealReceiverSet(address indexed newRealReceiver);
+
 
     // ------
     // Errors
@@ -467,6 +480,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             _checkAuthorized(ownerOf(tokenId), _msgSender(), tokenId);
         }
         _updateLock(tokenId, $._lockedBalance[tokenId], vestingDuration);
+        emit VestingDurationUpdated(tokenId, vestingDuration);
     }
 
     /**
@@ -475,6 +489,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      */
     function updateEndpointReceiver(address _newEndpointReceiver) external onlyOwner {
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
+        emit RealReceiverSet(_newEndpointReceiver);
         $.endpointReceiver = _newEndpointReceiver;
     }
 

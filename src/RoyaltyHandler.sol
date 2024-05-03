@@ -70,14 +70,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     // ------
 
     /**
-     * @notice This event is emitted when `updateFees` is executed.
-     * @param burnPortion New burn fee.
-     * @param revSharePortion New fee taken for veRWA revenue share.
-     * @param lpPortion New fee taken for adding liquidity.
-     */
-    event DistributionUpdated(uint8 burnPortion, uint8 revSharePortion, uint8 lpPortion);
-
-    /**
      * @notice This event is emitted when `_handleRoyalties` is executed.
      * @dev `sentToRevDist` + `burned` + `addedToLiq` will not equal `totalAmount`. Delta was sold for ETH to
      *      add to liquidity.
@@ -87,6 +79,74 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param addedToLiq Amount of RWA added to liquidity.
      */
     event RoyaltiesDistributed(uint256 totalAmount, uint256 sentToRevDist, uint256 burned, uint256 addedToLiq);
+
+    /**
+     * @notice This event is emitted when `updateFees` is executed.
+     * @param burnPortion New burn fee.
+     * @param revSharePortion New fee taken for veRWA revenue share.
+     * @param lpPortion New fee taken for adding liquidity.
+     */
+    event DistributionUpdated(uint8 burnPortion, uint8 revSharePortion, uint8 lpPortion);
+
+    /**
+     * @notice This event is emitted when a new `percentageDeviation` is set.
+     * @param newPercentageDeviation New value stored in `percentageDeviation`.
+     */
+    event PercentageDeviationSet(uint256 newPercentageDeviation);
+
+    /**
+     * @notice This event is emitted when a new `secondsAgo` is set.
+     * @param newSecondsAgo New value stored in `secondsAgo`.
+     */
+    event SecondsAgoSet(uint32 newSecondsAgo);
+
+    /**
+     * @notice This event is emitted when a new `distributor` is set.
+     * @param newDistributor New value stored in `distributor`.
+     */
+    event DistributorSet(address indexed newDistributor);
+
+    /**
+     * @notice This event is emitted when a new `oracle` is set.
+     * @param newOracle New value stored in `oracle`.
+     */
+    event OracleSet(address indexed newOracle);
+
+    /**
+     * @notice This event is emitted when a new `box` is set.
+     * @param newALMBox New value stored in `box`.
+     */
+    event ALMBoxSet(address indexed newALMBox);
+
+    /**
+     * @notice This event is emitted when a new `boxManager` is set.
+     * @param newBoxManager New value stored in `boxManager`.
+     */
+    event BoxManagerSet(address indexed newBoxManager);
+
+    /**
+     * @notice This event is emitted when a new `gaugeV2ALM` is set.
+     * @param newGaugeV2ALM New value stored in `gaugeV2ALM`.
+     */
+    event GaugeV2ALMSet(address indexed newGaugeV2ALM);
+
+    /**
+     * @notice This event is emitted when a new `pearl` is set.
+     * @param newPearlAddress New value stored in `pearl`.
+     */
+    event PearlAddressSet(address indexed newPearlAddress);
+
+    /**
+     * @notice This event is emitted when a new `swapRouter` is set.
+     * @param newSwapRouter New value stored in `swapRouter`.
+     */
+    event SwapRouterSet(address indexed newSwapRouter);
+
+    /**
+     * @notice This event is emitted when a new `poolFee` is set.
+     * @param newPoolFee New value stored in `poolFee`.
+     */
+    event PoolFeeSet(uint24 newPoolFee);
 
 
     // -----------
@@ -208,12 +268,11 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param _revSharePortion New fee taken for veRWA revenue share.
      * @param _lpPortion New fee taken for adding liquidity.
      */
-    function updateDistribution(uint8 _burnPortion, uint8 _revSharePortion, uint8 _lpPortion) external onlyOwner {   
+    function updateDistribution(uint8 _burnPortion, uint8 _revSharePortion, uint8 _lpPortion) external onlyOwner {
+        emit DistributionUpdated(_burnPortion, _revSharePortion, _lpPortion);
         burnPortion = _burnPortion;
         revSharePortion = _revSharePortion;
         lpPortion = _lpPortion;
-
-        emit DistributionUpdated(_burnPortion, _revSharePortion, _lpPortion);
     }
 
     /**
@@ -222,6 +281,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      */
     function setPercentageDeviation(uint256 _percentageDeviation) external onlyOwner {
         require(_percentageDeviation <= oracle.POOL_FEE_01(), "RoyaltyHandler: Too high");
+        emit PercentageDeviationSet(_percentageDeviation);
         percentageDeviation = _percentageDeviation;
     }
 
@@ -229,6 +289,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice Allows owner to update `secondsAgo` variable.
      */
     function setSecondsAgo(uint32 _secondsAgo) external onlyOwner {
+        emit SecondsAgoSet(_secondsAgo);
         secondsAgo = _secondsAgo;
     }
 
@@ -236,6 +297,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice Allows owner to assign distributor role to another address.
      */
     function updateDistributor(address _distributor) external onlyOwner {
+        emit DistributorSet(_distributor);
         distributor = _distributor;
     }
 
@@ -243,6 +305,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice Allows owner to update `oracle` state variable.
      */
     function updateOracle(address _oracle) external onlyOwner {
+        emit OracleSet(_oracle);
         oracle = ITNGBLV3Oracle(_oracle);
     }
 
@@ -250,6 +313,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `box` variable.
      */
     function setALMBox(address _box) external onlyOwner {
+        emit ALMBoxSet(_box);
         box = _box;
     }
     
@@ -257,6 +321,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `boxManager` variable.
      */
     function setALMBoxManager(address _boxManager) external onlyOwner {
+        emit BoxManagerSet(_boxManager);
         boxManager = ILiquidBoxManager(_boxManager);
     }
 
@@ -264,6 +329,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `gaugeV2ALM` variable.
      */
     function setGaugeV2ALM(address _gaugeV2) external onlyOwner {
+        emit GaugeV2ALMSet(_gaugeV2);
         gaugeV2ALM = IGaugeV2ALM(_gaugeV2);
     }
 
@@ -271,6 +337,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `pearl` variable.
      */
     function setPearl(address _pearl) external onlyOwner {
+        emit PearlAddressSet(_pearl);
         pearl = IERC20(_pearl);
     }
 
@@ -278,6 +345,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `swapRouter` variable.
      */
     function setSwapRouter(address _swapRouter) external onlyOwner {
+        emit SwapRouterSet(_swapRouter);
         swapRouter = ISwapRouter(_swapRouter);
     }
 
@@ -294,6 +362,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
             _fee == oracle.POOL_FEE_1(),
             "RoyaltyHandler: Invalid fee"
         );
+        emit PoolFeeSet(_fee);
         poolFee = _fee;
     }
 
@@ -311,7 +380,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      */
     function harvestPearlRewards() external onlyOwner returns (uint256) {
         uint256 preBal = IERC20(pearl).balanceOf(address(this));
-        gaugeV2ALM.collectReward();
+        gaugeV2ALM.claimFees();
         return IERC20(pearl).balanceOf(address(this)) - preBal;
     }
 

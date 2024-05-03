@@ -57,6 +57,42 @@ contract VotingEscrowVesting is ReentrancyGuardUpgradeable, OwnableUpgradeable, 
 
 
     // ------
+    // Events
+    // ------
+
+    /**
+     * @notice This event is emitted when a new votingEscrow token is deposited into this contract.
+     * @param tokenId Token identifier of token that was deposited.
+     * @param endTime timestamp of when token can be claimed with 0 vesting duration left.
+     * If user keeps token in contract until this time, they can burn the token without penalty.
+     */
+    event TokenDeposited(uint256 indexed tokenId, uint256 endTime);
+
+    /**
+     * @notice This event is emitted when a votingEscrow token is withdrawn from this contract.
+     * @param recipient Address where token was transferred to.
+     * @param tokenId Token identifier of token withdrawn.
+     * @param remainingTime Remaining time needed to vest the token to complete vesting duration.
+     */
+    event TokenWithdrawn(address indexed recipient, uint256 indexed tokenId, uint256 remainingTime);
+
+    /**
+     * @notice This event is emitted when a votingEscrow token is claimed from this contract and burned.
+     * @param recipient The address to receive the underlying locked tokens.
+     * @param tokenId Token identifier of token burned.
+     * @param remainingTime Remaining time needed to vest the token to complete vesting duration.
+     * If greater than 0, a penalty is applied.
+     */
+    event TokenClaimedAndBurned(address indexed recipient, uint256 indexed tokenId, uint256 remainingTime);
+
+    /**
+     * @notice This event is emitted when a new `votingEscrow` is set.
+     * @param newVotingEscrow New address stored in `votingEscrow`.
+     */
+    event VotingEscrowSet(address indexed newVotingEscrow);
+
+
+    // ------
     // Errors
     // ------
 
@@ -115,6 +151,7 @@ contract VotingEscrowVesting is ReentrancyGuardUpgradeable, OwnableUpgradeable, 
         if (keccak256(abi.encode(IERC6372(_votingEscrow).CLOCK_MODE())) != keccak256(abi.encode(CLOCK_MODE()))) {
             revert ClockModesMisMatch();
         }
+        emit VotingEscrowSet(_votingEscrow);
         votingEscrow = IVotingEscrow(_votingEscrow);
     }
 
@@ -137,6 +174,8 @@ contract VotingEscrowVesting is ReentrancyGuardUpgradeable, OwnableUpgradeable, 
         votingEscrow.updateVestingDuration(tokenId, 0);
         // transfer NFT from depositor to this contract
         votingEscrow.transferFrom(msg.sender, address(this), tokenId);
+
+        emit TokenDeposited(tokenId, endTime);
     }
 
     /**
@@ -167,6 +206,8 @@ contract VotingEscrowVesting is ReentrancyGuardUpgradeable, OwnableUpgradeable, 
 
         votingEscrow.updateVestingDuration(tokenId, remainingTime);
         votingEscrow.transferFrom(address(this), receiver, tokenId);
+
+        emit TokenWithdrawn(receiver, tokenId, remainingTime);
     }
 
     /**
@@ -199,6 +240,8 @@ contract VotingEscrowVesting is ReentrancyGuardUpgradeable, OwnableUpgradeable, 
 
         votingEscrow.updateVestingDuration(tokenId, remainingTime);
         votingEscrow.burn(receiver, tokenId);
+
+        emit TokenClaimedAndBurned(receiver, tokenId, remainingTime);
     }
 
     /**

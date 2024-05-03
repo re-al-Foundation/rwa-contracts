@@ -74,6 +74,12 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      */
     event ExpiredRevenueSkimmed(uint256 amount, uint256 numCycles);
 
+    /**
+     * @notice This event is emitted when a new `timeUntilExpired` is set.
+     * @param newTimeUntilExpired New value stored in `timeUntilExpired`.
+     */
+    event TimeUntilExpiredSet(uint256 newTimeUntilExpired);
+
 
     // ------
     // Errors
@@ -157,7 +163,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @param account Address of shareholder that is claiming rewards.
      */
     function claimETH(address account) external returns (uint256 amount) {
-        claimETHIncrement(account, MAX_INT);
+        amount = claimETHIncrement(account, MAX_INT);
     }
 
     /**
@@ -221,6 +227,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @param _duration New duration until revenue is deemed "expired".
      */
     function setExpirationForRevenue(uint256 _duration) external onlyOwner {
+        emit TimeUntilExpiredSet(_duration);
         timeUntilExpired = _duration;
     }
 

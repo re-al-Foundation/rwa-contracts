@@ -71,6 +71,24 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      */
     event FeeUpdated(uint256 oldFee, uint256 newFee);
 
+    /**
+     * @notice This event is emitted when a new `royaltyHandler` is set.
+     * @param newRoyaltyHandler New address stored in `royaltyHandler`.
+     */
+    event RoyaltyHandlerSet(address indexed newRoyaltyHandler);
+
+    /**
+     * @notice This event is emitted when a new `lzReceiver` is set.
+     * @param newRealReceiver New address stored in `lzReceiver`.
+     */
+    event RealReceiverSet(address indexed newRealReceiver);
+
+    /**
+     * @notice This event is emitted when a new `votingEscrowRWA` is set.
+     * @param newRWAVotingEscrow New address stored in `votingEscrowRWA`.
+     */
+    event RWAVotingEscrowSet(address indexed newRWAVotingEscrow);
+
 
     // ------
     // Errors
@@ -166,6 +184,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
         isExcludedFromFees[_royaltyHandler] = true;
         canBurn[_royaltyHandler] = true;
 
+        emit RoyaltyHandlerSet(_royaltyHandler);
         royaltyHandler = _royaltyHandler;
     }
 
@@ -184,6 +203,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
         isExcludedFromFees[_receiver] = true;
         canMint[_receiver] = true;
 
+        emit RealReceiverSet(_receiver);
         lzReceiver = _receiver;
     }
 
@@ -204,6 +224,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
         canBurn[_veRWA] = true;
         canMint[_veRWA] = true;
 
+        emit RWAVotingEscrowSet(_veRWA);
         votingEscrowRWA = _veRWA;
     }
 

@@ -129,6 +129,30 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      */
     event MigrationToggled(bool indexed newState);
 
+    /**
+     * @notice This event is emitted when a new `tngblToken` is set.
+     * @param newTNGBLToken New value stored in `tngblToken`.
+     */
+    event TNGBLTokenSet(address indexed newTNGBLToken);
+
+    /**
+     * @notice This event is emitted when a new `piCalculator` is set.
+     * @param newPassiveIncomeCalculator New value stored in `piCalculator`.
+     */
+    event PassiveIncomeCalculatorSet(address indexed newPassiveIncomeCalculator);
+
+    /**
+     * @notice This event is emitted when a new `passiveIncomeNFT` is set.
+     * @param newPassiveIncomeNFT New value stored in `passiveIncomeNFT`.
+     */
+    event PassiveIncomeNFTSet(address indexed newPassiveIncomeNFT);
+
+    /**
+     * @notice This event is emitted when a new `receiver` is set.
+     * @param newRealReceiver New value stored in `receiver`.
+     */
+    event RealReceiverSet(address indexed newRealReceiver);
+
     
     // -----------
     // Constructor
@@ -428,6 +452,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      */
     function setTngblAddress(address _newContract) external onlyOwner {
         if (_newContract == address(0)) revert ZeroAddress();
+        emit TNGBLTokenSet(_newContract);
         tngblToken = ERC20Burnable(_newContract);
     }
 
@@ -436,6 +461,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      */
     function setPassiveIncomeCalculator(address _newContract) external onlyOwner {
         if (_newContract == address(0)) revert ZeroAddress();
+        emit PassiveIncomeCalculatorSet(_newContract);
         piCalculator = PassiveIncomeCalculator(_newContract);
     }
 
@@ -445,14 +471,8 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      */
     function setPassiveIncomeNFTAddress(address _newContract) external onlyOwner {
         if (_newContract == address(0)) revert ZeroAddress();
+        emit PassiveIncomeNFTSet(_newContract);
         passiveIncomeNFT = PassiveIncomeNFT(_newContract);
-    }
-
-    /**
-     * @notice This method allows a permissioned admin to burn the balance of TNGBL in this contract.
-     */
-    function burnTngbl() external onlyOwner {
-        _burnTngbl();
     }
 
     /**
@@ -460,7 +480,15 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      */
     function setReceiver(address _newReceiver) external onlyOwner {
         if (_newReceiver == address(0)) revert ZeroAddress();
+        emit RealReceiverSet(_newReceiver);
         receiver = _newReceiver;
+    }
+
+    /**
+     * @notice This method allows a permissioned admin to burn the balance of TNGBL in this contract.
+     */
+    function burnTngbl() external onlyOwner {
+        _burnTngbl();
     }
 
 

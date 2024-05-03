@@ -59,6 +59,18 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
      */
     event MigrationMessageReceived(uint16 packetType, address migrator, bytes _payload);
 
+    /**
+     * @notice This event is emitted when a new `votingEscrowRWA` is set.
+     * @param newRWAVotingEscrow New address stored in `votingEscrowRWA`.
+     */
+    event RWAVotingEscrowSet(address indexed newRWAVotingEscrow);
+
+    /**
+     * @notice This event is emitted when a new `rwaToken` is set.
+     * @param newRWAToken New value stored in `rwaToken`.
+     */
+    event RWATokenSet(address indexed newRWAToken);
+
     // ------
     // Errors
     // ------
@@ -120,6 +132,7 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
      */
     function setVotingEscrowRWA(address _newVeRwa) external onlyOwner {
         require(_newVeRwa != address(0), "Cannot be address(0)");
+        emit RWAVotingEscrowSet(_newVeRwa);
         veRwaNFT = _newVeRwa;
     }
 
@@ -129,6 +142,7 @@ contract RealReceiver is OwnableUpgradeable, NonblockingLzAppUpgradeable, UUPSUp
      */
     function setRwaToken(address _newRwaToken) external onlyOwner {
         require(_newRwaToken != address(0), "Cannot be address(0)");
+        emit RWATokenSet(_newRwaToken);
         rwaToken = _newRwaToken;
     }
 

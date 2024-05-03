@@ -56,6 +56,13 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
      */
     event DelegatorDeleted(address indexed _delegator);
 
+    /**
+     * @notice This event is emitted when a new `canDelegate` is set.
+     * @param newDelegatorRole New value stored in `canDelegate`.
+     * @param canDelegate If true, `newDelegatorRole` address can delegate via deployDelegator.
+     */
+    event DelegatorRoleSet(address indexed newDelegatorRole, bool canDelegate);
+
     
     // -----------
     // Constructor
@@ -172,6 +179,7 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
      * @param _canDelegate If true, `_delegatingEOA` can delegate.
      */
     function setCanDelegate(address _delegatingEOA, bool _canDelegate) external onlyOwner {
+        emit DelegatorRoleSet(_delegatingEOA, _canDelegate);
         canDelegate[_delegatingEOA] = _canDelegate;
     }
 

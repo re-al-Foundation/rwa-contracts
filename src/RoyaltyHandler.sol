@@ -210,7 +210,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      */
     function updateDistribution(uint8 _burnPortion, uint8 _revSharePortion, uint8 _lpPortion) external onlyOwner {   
         burnPortion = _burnPortion;
-        revSharePortion = _burnPortion;
+        revSharePortion = _revSharePortion;
         lpPortion = _lpPortion;
 
         emit DistributionUpdated(_burnPortion, _revSharePortion, _lpPortion);

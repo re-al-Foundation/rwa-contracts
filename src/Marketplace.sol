@@ -44,7 +44,6 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         bool listed;
     }
 
-    //IERC20 public USDC;
     RWAVotingEscrow public nftContract;
     IRouter public router;
 
@@ -99,9 +98,15 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
     error InvalidTokenId(uint256 tokenId);
 
-    error CallerIsNotOwner(address caller);
+    error CallerIsNotOwnerOrSeller(address caller);
 
     error CallerIsNotSeller(address caller);
+
+    error InsufficientETH(uint256 amountApproved, uint256 price);
+
+    error LowLevelETHCallFailed(address recipient, uint256 amount);
+
+    error SellerCantPurchaseToken(address seller, uint256 tokenId);
 
 
     // -----------
@@ -118,7 +123,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     // -----------
 
     function initialize(
-        address _usdcAddress, // TODO: Are we still using USDC?
+        address _initialPaymentToken,
         address _nftContractAddress, // veRWA
         address _revDist, // revenue distributor
         address _admin
@@ -128,13 +133,11 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
         fee = 25; // 2.5%
 
-        //USDC = IERC20(_usdcAddress);
-        paymentTokens.push(_usdcAddress);
-        isPaymentToken[_usdcAddress] = true;
+        paymentTokens.push(_initialPaymentToken);
+        isPaymentToken[_initialPaymentToken] = true;
         nftContract = RWAVotingEscrow(_nftContractAddress);
         _listedItems = new Collection();
         revDistributor = _revDist;
-
     } 
 
 
@@ -143,113 +146,146 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     // ----------------
 
     /**
-     * @dev Lists an item for sale on the marketplace.
-     * The item itself will be transferred to the marketplace.
+     * @notice This method allows a veRWA holder to list their NFT for sale at a specified price for a specific payment token.
+     * @dev The paymentToken chosen must be supported by this contract. It's also important to mention, the marketplace
+     * will set the remaining vesting duration of the veRWA token to 0 to stop all yields. The marketplace will not
+     * receive any yield and neither will the seller while the token is listed on the marketplace. This is similar
+     * to how the vesting contact works except the token's vesting schedule is not affected while the token is listed.
+     * AKA the token's lock duration is NOT being vesting while it is listed for sale.
+     * If the tokenId is already listed, the paymentToken and price can be used to update a current listing.
+     * msg.sender must be the seller of the token to update listing info.
+     *
+     * @param tokenId Token identifier of veRWA token.
+     * @param paymentToken ERC-20 payment method the seller prefers. If == address(0) it will default to ETH.
+     * @param price Amount of paymentToken the buyer must pay in order to purchase the token being listed.
+     *
+     * @custom:error InvalidPaymentToken Thrown if paymentToken is not supported.
+     * @custom:error CallerIsNotOwnerOrSeller Thrown if the msg.sender is not owner nor seller.
      */
     function listMarketItem(uint256 tokenId, address paymentToken, uint256 price) external nonReentrant {
-        if (!isPaymentToken[paymentToken] && paymentToken == address(0)) revert InvalidPaymentToken(paymentToken);
+        if (!isPaymentToken[paymentToken] && paymentToken != address(0)) revert InvalidPaymentToken(paymentToken);
         address owner = nftContract.ownerOf(tokenId);
         if (
             owner != msg.sender && // If caller is not owner
             (owner == address(this) && idToMarketItem[tokenId].seller != msg.sender) // and the listing isnt being updated
-        ) revert CallerIsNotOwner(msg.sender);
+        ) revert CallerIsNotOwnerOrSeller(msg.sender);
+
+        uint256 remainingVestingDuration;
+
+        if (msg.sender == owner) { // new listing
+            emit MarketItemCreated(tokenId, msg.sender, paymentToken, price);
+            remainingVestingDuration = nftContract.getRemainingVestingDuration(tokenId);
+            _listedItems.append(tokenId); // TODO: Test
+
+            nftContract.transferFrom(msg.sender, address(this), tokenId);
+            // marketplace should not have voting power
+            nftContract.updateVestingDuration(tokenId, 0);
+
+        } else { // current listing is being updated
+            emit MarketItemUpdated(tokenId, msg.sender, paymentToken, price);
+            remainingVestingDuration = idToMarketItem[tokenId].remainingTime;
+        }
 
         idToMarketItem[tokenId] = MarketItem(
             tokenId,
             msg.sender,
             paymentToken,
             price,
-            nftContract.getRemainingVestingDuration(tokenId),
+            remainingVestingDuration,
             true
         );
-
-        if (msg.sender == owner) {
-            nftContract.transferFrom(msg.sender, address(this), tokenId);
-            nftContract.updateVestingDuration(tokenId, 0); // marketplace should not have voting power
-            emit MarketItemCreated(tokenId, msg.sender, paymentToken, price);
-        } else {
-            emit MarketItemUpdated(tokenId, msg.sender, paymentToken, price);
-        }
     }
 
     /**
-     * @dev Delists an item from the marketplace.
-     * The item itself will be transferred back to the seller.
+     * @notice This method allows an extsing seller to delist their veRWA token from the marketplace.
+     * @dev The veRWA token will be transferred back into the custody of the seller. The original remaining vesting duration
+     * the veRWA token held prior to listing will be restored with the same value. Allowing the seller (and new owner of token)
+     * to receive the same voting power they had prior to listing the token.
+     *
+     * @param tokenId Token identifier of veRWA token being delisted.
+     *
+     * @custom:error InvalidTokenId Thrown if tokenId is not listed.
+     * @custom:error CallerIsNotOwnerOrSeller Thrown if the msg.sender is not seller.
      */
     function delistMarketItem(uint256 tokenId) external nonReentrant {
         MarketItem storage item = idToMarketItem[tokenId];
-
         address seller = item.seller;
 
-        require(seller == msg.sender, "caller is not the seller");
-
-        if (item.tokenId != tokenId) revert InvalidTokenId(tokenId);
+        if (item.tokenId != tokenId || !item.listed) revert InvalidTokenId(tokenId);
         if (seller != msg.sender) revert CallerIsNotSeller(msg.sender);
 
-        nftContract.updateVestingDuration(tokenId, item.remainingTime);
-        nftContract.transferFrom(address(this), msg.sender, tokenId);
-
-        item.seller = address(0);
-        item.listed = false;
-
         emit MarketItemDelisted(tokenId);
+
+        _removeListing(item, tokenId, seller);
     }
 
     /**
-     * @dev Sells the market item.
-     * Funds will be transferred to the seller.
-     * The ownership of the item will be transferred to the buyer.
+     * @notice This method allows a buyer to purchase a token from the marketplace.
+     * @dev The buyer will have to approve the specific price amount of paymentToken prior to purchasing the token.
+     * If the idToMarketItem[tokenId].paymenToken == address(0) then the seller requires payment to be made in the form of ETH.
+     * Once the token is successfully purchased, the token will be transferred to the custody of the buyer and the
+     * voting power (vesting duration) of the token is restored, granting voting power to the buyer.
+     * A tax is applied to the sale. By default this tax is 2.5%, but it is recommended you check what the current rate tax is
+     * via Marketplace::fee. This fee is sent to the RevenueDistributor contract and later distributed to veRWA holders.
+     * The rest of the payment is sent directly to the seller.
+     *
+     * @param tokenId Token identifier of veRWA token being purchased.
+     *
+     * @custom:error InvalidTokenId Thrown if tokenId is not listed.
+     * @custom:error SellerCantPurchaseToken Thrown if buyer is the same as seller.
+     * @custom:error InsufficientETH Thrown if amount of ETH is not sufficient for purchase.
+     * @custom:error LowLevelETHCallFailed Thrown if the low level .call to transfer ETH has failed.
      */
     function purchaseMarketItem(uint256 tokenId) payable external nonReentrant {
         MarketItem storage item = idToMarketItem[tokenId];
 
-        require(item.tokenId == tokenId && item.listed, "invalid item");
+        if (item.tokenId != tokenId || !item.listed) revert InvalidTokenId(tokenId);
 
         address buyer = msg.sender;
         uint256 price = item.price;
         address paymentToken = item.paymentToken;
-        uint256 feeAmount;
+        address seller = item.seller;
 
+        if (seller == msg.sender) revert SellerCantPurchaseToken(msg.sender, tokenId);
+
+        uint256 feeAmount;
         if (price > 0) {
             if (paymentToken == address(0)) { // ETH
-                require(msg.value == price, "Insufficient amount");
+                if (msg.value != price) revert InsufficientETH(msg.value, price);
 
-                feeAmount = (price * fee) / 1000; // TODO test: Should result in 2.5% penalty 
+                feeAmount = (price * fee) / 1000;
                 uint256 payout = price - feeAmount;
                 
                 if (feeAmount > 0) {
                     (bool sent,) = revDistributor.call{value: feeAmount}("");
-                    require(sent, "Failed to send ETH to rev distributor");
+                    if (!sent) revert LowLevelETHCallFailed(revDistributor, feeAmount);
                 }
-                (bool sent,) = item.seller.call{value: payout}("");
-                require(sent, "Failed to send ETH to seller");
+                (bool sent,) = seller.call{value: payout}("");
+                if (!sent) revert LowLevelETHCallFailed(seller, payout);
 
             } else { // ERC-20 payment token
                 IERC20(paymentToken).safeTransferFrom(buyer, address(this), price);
 
-                feeAmount = (price * fee) / 1000; // TODO test: Should result in 2.5% penalty 
+                feeAmount = (price * fee) / 1000;
                 uint256 payout = price - feeAmount;
                 
                 if (feeAmount > 0) {
                     IERC20(paymentToken).safeTransfer(revDistributor, feeAmount);
                 }
-                IERC20(paymentToken).safeTransfer(item.seller, payout);
+                IERC20(paymentToken).safeTransfer(seller, payout);
             }
         }
 
-        // transfer NFT to new owner
-        nftContract.safeTransferFrom(address(this), buyer, item.tokenId);
-
-        item.listed = false;
-
         emit MarketItemSold(
-            item.tokenId,
-            item.seller,
+            tokenId,
+            seller,
             buyer,
-            item.paymentToken,
-            item.price,
+            paymentToken,
+            price,
             feeAmount
         );
+
+        _removeListing(item, tokenId, buyer);
     }
 
     /**
@@ -318,13 +354,6 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     }
 
     /**
-     * @dev Returns the swap route for the given token.
-     */
-    // function getSwapRoute(address tokenAddress) external view returns (address[] memory) {
-    //     return _routerPaths[tokenAddress];
-    // }
-
-    /**
      * @dev Returns all valid payment tokens.
      */
     function getPaymentTokens() external view returns (address[] memory) {
@@ -334,8 +363,8 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     /**
      * @dev Returns the market item for the provided id.
      */
-    function getMarketItem(uint256 itemId) external view returns (MarketItem memory) {
-        return idToMarketItem[itemId];
+    function getMarketItem(uint256 tokenId) external view returns (MarketItem memory) {
+        return idToMarketItem[tokenId];
     }
 
     /**
@@ -372,19 +401,6 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
             // freeClaimable += free; TODO Rework
         }
     }
-
-    // function updateTokenOwner(uint256 tokenId, address from, address to) external {
-    //     require(
-    //         msg.sender == address(nftContract),
-    //         "caller is not the NFT contract"
-    //     );
-    //     if (from != address(0)) {
-    //         _itemsByOwner[from].safeRemove(tokenId);
-    //     }
-    //     if (to != address(0)) {
-    //         _itemsByOwner.safeAdd(to, tokenId);
-    //     }
-    // }
 
 
     // --------------
@@ -441,6 +457,16 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     // ---------------
     // Private Methods
     // ---------------
+
+    function _removeListing(MarketItem storage item, uint256 tokenId, address recipient) internal {
+        item.seller = address(0);
+        item.listed = false;
+        // restore vesting duration & transfer NFT to new owner
+        nftContract.updateVestingDuration(tokenId, item.remainingTime);
+        nftContract.safeTransferFrom(address(this), recipient, item.tokenId);
+
+        _listedItems.remove(tokenId); // TODO: Test 
+    }
 
     function _countRemainingItems(
         Collection collection,

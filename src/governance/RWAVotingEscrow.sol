@@ -80,6 +80,8 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         mapping(uint256 tokenId => uint48) _mintingTimestamp;
         /// @notice Used to treack the default delegation for an account.
         mapping(address account => bool) _defaultDelegateSet;
+        /// @notice Stores contract address of veRWA marketplace.
+        address marketplace;
     }
 
     // keccak256(abi.encode(uint256(keccak256("veRWA.storage.VotingEscrow")) - 1)) & ~bytes32(uint256(0xff))
@@ -457,7 +459,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
         uint256 remainingVestingDuration = $._remainingVestingDuration[tokenId];
         if (vestingDuration < remainingVestingDuration) {
-            if ($.vestingContract != _msgSender()) {
+            if ($.vestingContract != _msgSender() && $.marketplace != _msgSender()) {
                 revert InvalidVestingDuration(vestingDuration, remainingVestingDuration, MAX_VESTING_DURATION);
             }
         } else {
@@ -476,6 +478,15 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
     function updateEndpointReceiver(address _newEndpointReceiver) external onlyOwner {
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
         $.endpointReceiver = _newEndpointReceiver;
+    }
+
+    /**
+     * @notice Allows permissioned acount (owner) to update the Marketplace address.
+     * @param _marketplace New address for Marketplace contract.
+     */
+    function setMarketplace(address _marketplace) external onlyOwner {
+        VotingEscrowStorage storage $ = _getVotingEscrowStorage();
+        $.marketplace = _marketplace;
     }
 
     /**
@@ -527,6 +538,10 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
 
     function vestingContract() external view returns (address) {
         return _getVotingEscrowStorage().vestingContract;
+    }
+
+    function marketplace() external view returns (address) {
+        return _getVotingEscrowStorage().marketplace;
     }
 
     function getLockedAmount(uint256 tokenId) external view returns (uint256) {

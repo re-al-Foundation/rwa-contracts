@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-pragma solidity ^0.8.4;
+pragma solidity ^0.8.19;
 
 // oz imports
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
@@ -90,6 +90,14 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
     event MarketItemDelisted(uint256 indexed tokenId);
 
+    event PaymentTokenAdded(address indexed paymentToken);
+
+    event PaymentTokenRemoved(address indexed paymentToken);
+
+    event FeeSet(uint256 newFee);
+
+    event RevenueDistributorSet(address indexed newRevenueDistributor);
+
     // ------
     // Errors
     // ------
@@ -175,7 +183,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         if (msg.sender == owner) { // new listing
             emit MarketItemCreated(tokenId, msg.sender, paymentToken, price);
             remainingVestingDuration = nftContract.getRemainingVestingDuration(tokenId);
-            _listedItems.append(tokenId); // TODO: Test
+            _listedItems.append(tokenId);
 
             nftContract.transferFrom(msg.sender, address(this), tokenId);
             // marketplace should not have voting power
@@ -215,7 +223,6 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         if (seller != msg.sender) revert CallerIsNotSeller(msg.sender);
 
         emit MarketItemDelisted(tokenId);
-
         _removeListing(item, tokenId, seller);
     }
 
@@ -250,77 +257,75 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
         uint256 feeAmount;
         if (price > 0) {
-            if (paymentToken == address(0)) { // ETH
+            if (paymentToken == address(0)) { // ETH as payment
                 if (msg.value != price) revert InsufficientETH(msg.value, price);
 
                 feeAmount = (price * fee) / 1000;
                 uint256 payout = price - feeAmount;
                 
-                if (feeAmount > 0) {
-                    (bool sent,) = revDistributor.call{value: feeAmount}("");
+                bool sent;
+                if (feeAmount != 0) {
+                    (sent,) = revDistributor.call{value: feeAmount}("");
                     if (!sent) revert LowLevelETHCallFailed(revDistributor, feeAmount);
                 }
-                (bool sent,) = seller.call{value: payout}("");
+                (sent,) = seller.call{value: payout}("");
                 if (!sent) revert LowLevelETHCallFailed(seller, payout);
 
-            } else { // ERC-20 payment token
+            } else { // ERC-20 as payment
                 IERC20(paymentToken).safeTransferFrom(buyer, address(this), price);
 
                 feeAmount = (price * fee) / 1000;
                 uint256 payout = price - feeAmount;
                 
-                if (feeAmount > 0) {
+                if (feeAmount != 0) {
                     IERC20(paymentToken).safeTransfer(revDistributor, feeAmount);
                 }
                 IERC20(paymentToken).safeTransfer(seller, payout);
             }
         }
 
-        emit MarketItemSold(
-            tokenId,
-            seller,
-            buyer,
-            paymentToken,
-            price,
-            feeAmount
-        );
-
+        emit MarketItemSold(tokenId, seller, buyer, paymentToken, price, feeAmount);
         _removeListing(item, tokenId, buyer);
     }
 
     /**
-     * @dev Adds a new token as payment option.
+     * @notice This method allows the owner to add valid payment tokens.
+     * @dev If a paymentToken is supported, a seller can request it as their preferred payment method when listing
+     * a veRWA NFT on the marketplace.
+     *
+     * @param tokenAddress ERC-20 payment token to add.
+     *
+     * @custom:error InvalidZeroAddress Thrown if tokenAddress == addr(0)
+     * @custom:error PaymentTokenAlreadyAdded Thrown if tokenAddress is already supported as a valid paymentToken.
      */
     function addPaymentToken(address tokenAddress) external onlyOwner {
-        // require(
-        //     (tokenAddress == address(USDC) && routerPath.length == 0) ||
-        //         (tokenAddress != address(USDC) &&
-        //             routerPath[0] == tokenAddress &&
-        //             routerPath[routerPath.length - 1] == address(USDC)),
-        //     "invalid route"
-        // );
-        if (!isPaymentToken[tokenAddress]) {
-            paymentTokens.push(tokenAddress);
-            isPaymentToken[tokenAddress] = true;
-        }
-        //_routerPaths[tokenAddress] = routerPath;
+        tokenAddress.requireNonZeroAddress();
+        if (isPaymentToken[tokenAddress]) revert InvalidPaymentToken(tokenAddress);
+        emit PaymentTokenAdded(tokenAddress);
+        paymentTokens.push(tokenAddress);
+        isPaymentToken[tokenAddress] = true;
     }
 
     /**
-     * @dev Removes a token from payment options.
+     * @notice This method allows the owner to remove valid payment tokens.
+     *
+     * @param tokenAddress ERC-20 payment token to remove.
+     *
+     * @custom:error InvalidZeroAddress Thrown if tokenAddress == addr(0)
+     * @custom:error PaymentTokenAlreadyAdded Thrown if tokenAddress is not a valid paymentToken.
      */
     function removePaymentToken(address tokenAddress) external onlyOwner {
-        require(isPaymentToken[tokenAddress], "payment token does not exist");
+        tokenAddress.requireNonZeroAddress();
+        if (!isPaymentToken[tokenAddress]) revert InvalidPaymentToken(tokenAddress);
+
+        emit PaymentTokenRemoved(tokenAddress);
         delete isPaymentToken[tokenAddress];
 
         uint256 len = paymentTokens.length;
-        for (uint256 i; i < len;) {
+        for (uint256 i; i < len; ++i) {
             if (paymentTokens[i] == tokenAddress) {
                 paymentTokens[i] = paymentTokens[len - 1];
                 paymentTokens.pop();
-            }
-            unchecked {
-                ++i;
             }
         }
     }
@@ -329,8 +334,8 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @dev Sets the TX fee that is applied to each purchase.
      */
     function setFee(uint256 fee_) external onlyOwner {
-        require(revDistributor != address(0), "fee collector not set");
-        require(fee_ <= 10000, "invalid fee");
+        fee_.requireLessThanOrEqualToUint256(1000);
+        emit FeeSet(fee_);
         fee = fee_;
     }
 
@@ -338,19 +343,10 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @dev Sets the address where TX fees are being sent to.
      */
     function setRevDistributor(address revDistributor_) external onlyOwner {
-        require(
-            revDistributor_ != address(0) || fee == 0,
-            "invalid fee collector"
-        );
+        revDistributor_.requireNonZeroAddress();
+        revDistributor_.requireDifferentAddress(revDistributor);
+        emit RevenueDistributorSet(revDistributor_);
         revDistributor = revDistributor_;
-    }
-
-    /**
-     * @dev Called by NFT contract after a token was burned.
-     */
-    function afterBurnToken(uint256 tokenId) external { // TODO: call from veRWA post-burn
-        require(_isBurned(tokenId), "token is not burned");
-        delete idToMarketItem[tokenId];
     }
 
     /**
@@ -370,7 +366,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     /**
      * @dev Returns a page of listed market items.
      */
-    function fetchMarketItems(
+    function fetchMarketItems( // TODO: Loads sequentially??? Could cause issues - either replace Collection or load ALL tokens (not just listed)
         uint256 lastItemId,
         uint256 pageSize,
         bool ascending
@@ -383,25 +379,11 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         );
         items = new MarketItem[](numItems);
         Collection.Item memory current = first;
-        for (uint256 i = 0; i < numItems; i++) {
+        for (uint256 i; i < numItems; ++i) {
             items[i] = idToMarketItem[current.itemId];
             current = _listedItems.getNext(current, ascending);
         }
     }
-
-    /**
-     * @dev Returns the total value for all items of the given owner.
-     */
-    function totalValueByOwner(address owner) external view returns (uint256 totalValue, uint256 freeClaimable) {
-        uint256 numTokens = nftContract.balanceOf(owner);
-        for (uint256 i = 0; i < numTokens; i++) {
-            uint256 tokenId = nftContract.tokenOfOwnerByIndex(owner, i);
-            totalValue += nftContract.getLockedAmount(tokenId);
-            // (uint256 free, ) = nftContract.claimableIncome(tokenId);
-            // freeClaimable += free; TODO Rework
-        }
-    }
-
 
     // --------------
     // Public Methods
@@ -447,7 +429,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         uint256 len = itemIds.length;
         if (len > 0) {
             items = new MarketItem[](len);
-            for (uint256 i = 0; i < len; i++) {
+            for (uint256 i; i < len; ++i) {
                 items[i] = idToMarketItem[itemIds[i]];
             }
         }
@@ -459,13 +441,13 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     // ---------------
 
     function _removeListing(MarketItem storage item, uint256 tokenId, address recipient) internal {
-        item.seller = address(0);
-        item.listed = false;
         // restore vesting duration & transfer NFT to new owner
         nftContract.updateVestingDuration(tokenId, item.remainingTime);
         nftContract.safeTransferFrom(address(this), recipient, item.tokenId);
 
-        _listedItems.remove(tokenId); // TODO: Test 
+        delete idToMarketItem[tokenId];
+
+        _listedItems.remove(tokenId);
     }
 
     function _countRemainingItems(
@@ -478,7 +460,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
             ? collection.first(ascending)
             : collection.getNext(collection.get(lastItemId), ascending);
         Collection.Item memory current = firstItem;
-        for (uint256 i = limit; i > 0 && current.itemId != 0; i--) {
+        for (uint256 i = limit; i > 0 && current.itemId != 0; --i) {
             numItems++;
             current = collection.getNext(current, ascending);
         }

@@ -16,6 +16,7 @@ import { Marketplace } from "../src/Marketplace.sol";
 import { VotingMath } from "../src/governance/VotingMath.sol";
 import { RevenueDistributor } from "../src/RevenueDistributor.sol";
 import { RevenueStreamETH } from "../src/RevenueStreamETH.sol";
+import { CommonErrors } from "../src/interfaces/CommonErrors.sol";
 
 // local helper imports
 import "./utils/Utility.sol";
@@ -134,10 +135,6 @@ contract MarketplaceTest is Utility {
 
         // ~ Config ~
 
-        // add RWA as payment token on marketplace
-        vm.prank(ADMIN);
-        marketplace.addPaymentToken(address(rwaToken));
-
         // set votingEscrow on vesting contract
         vm.prank(ADMIN);
         vesting.setVotingEscrowContract(address(veRWA));
@@ -182,8 +179,8 @@ contract MarketplaceTest is Utility {
     function _createNewTokenAndList(address actor, uint256 amountLock, address paymentToken, uint256 price) internal returns (uint256 tokenId) {
         // ~ Config ~
 
-        uint256 preBal = veRWA.balanceOf(JOE);
-        tokenId = _createStakeholder(JOE, 1_000 ether);
+        uint256 preBal = veRWA.balanceOf(actor);
+        tokenId = _createStakeholder(actor, amountLock);
 
         uint256 itemTokenId;
         address itemSeller;
@@ -196,8 +193,8 @@ contract MarketplaceTest is Utility {
 
         assertEq(veRWA.getRemainingVestingDuration(tokenId), newTokenDuration);
 
-        assertEq(veRWA.balanceOf(JOE), preBal + 1);
-        assertEq(veRWA.ownerOf(tokenId), JOE);
+        assertEq(veRWA.balanceOf(actor), preBal + 1);
+        assertEq(veRWA.ownerOf(tokenId), actor);
 
         (itemTokenId, itemSeller, itemPaymentToken, itemPrice, remainingTime, itemListed)
             = marketplace.idToMarketItem(tokenId);
@@ -211,7 +208,7 @@ contract MarketplaceTest is Utility {
 
         // ~ Joe lists NFT ~
 
-        vm.startPrank(JOE);
+        vm.startPrank(actor);
         veRWA.approve(address(marketplace), tokenId);
         marketplace.listMarketItem(tokenId, paymentToken, price);
         vm.stopPrank();
@@ -220,14 +217,14 @@ contract MarketplaceTest is Utility {
 
         assertEq(veRWA.getRemainingVestingDuration(tokenId), 0);
 
-        assertEq(veRWA.balanceOf(JOE), preBal);
+        assertEq(veRWA.balanceOf(actor), preBal);
         assertEq(veRWA.ownerOf(tokenId), address(marketplace));
 
         (itemTokenId, itemSeller, itemPaymentToken, itemPrice, remainingTime, itemListed)
             = marketplace.idToMarketItem(tokenId);
 
         assertEq(itemTokenId, tokenId);
-        assertEq(itemSeller, JOE);
+        assertEq(itemSeller, actor);
         assertEq(itemPaymentToken, paymentToken);
         assertEq(itemPrice, price);
         assertEq(remainingTime, newTokenDuration);
@@ -260,8 +257,8 @@ contract MarketplaceTest is Utility {
 
         // Cannot use a unsupported purchase token
         vm.startPrank(JOE);
-        vm.expectRevert(abi.encodeWithSelector(Marketplace.InvalidPaymentToken.selector, address(2)));
-        marketplace.listMarketItem(tokenId, address(2), 100_000 ether);
+        vm.expectRevert(abi.encodeWithSelector(Marketplace.InvalidPaymentToken.selector, address(mockToken)));
+        marketplace.listMarketItem(tokenId, address(mockToken), 100_000 ether);
         vm.stopPrank();
 
         // However, you can list an item with address(0) for payment token -> requesting Ether as payment
@@ -352,8 +349,16 @@ contract MarketplaceTest is Utility {
         uint256 remainingTime;
         bool itemListed;
 
+        Marketplace.MarketItem[] memory items;
+
         uint256 preBal = veRWA.balanceOf(JOE);
         uint256 preVotingPower = veRWA.getAccountVotingPower(JOE);
+
+        // ~ Pre-state check ~
+
+        items = marketplace.fetchMarketItems(0, 10, true);
+        assertEq(items.length, 1);
+        assertEq(items[0].tokenId, tokenId);
 
         // ~ Joe delists his token ~
 
@@ -361,6 +366,9 @@ contract MarketplaceTest is Utility {
         marketplace.delistMarketItem(tokenId);
 
         // ~ Post-state check ~
+
+        items = marketplace.fetchMarketItems(0, 10, true);
+        assertEq(items.length, 0);
 
         assertEq(veRWA.getRemainingVestingDuration(tokenId), newTokenDuration);
 
@@ -370,14 +378,20 @@ contract MarketplaceTest is Utility {
         (itemTokenId, itemSeller, itemPaymentToken, itemPrice, remainingTime, itemListed)
             = marketplace.idToMarketItem(tokenId);
 
-        assertEq(itemTokenId, tokenId);
+        assertEq(itemTokenId, 0);
         assertEq(itemSeller, address(0));
-        assertEq(itemPaymentToken, address(rwaToken));
-        assertEq(itemPrice, 100_000 ether);
-        assertEq(remainingTime, newTokenDuration);
+        assertEq(itemPaymentToken, address(0));
+        assertEq(itemPrice, 0);
+        assertEq(remainingTime, 0);
         assertEq(itemListed, false);
 
         assertGt(veRWA.getAccountVotingPower(JOE), preVotingPower);
+
+        // A token can be re-listed
+        vm.startPrank(JOE);
+        veRWA.approve(address(marketplace), tokenId);
+        marketplace.listMarketItem(tokenId, address(rwaToken), 1);
+        vm.stopPrank();
     }
 
     /// @dev This unit test verifies restrictions when Marketplace::delistMarketItem is executed
@@ -405,11 +419,12 @@ contract MarketplaceTest is Utility {
         uint256 tokenId = _createNewTokenAndList(JOE, 1_000 ether, address(rwaToken), price);
 
         address itemSeller;
-        address itemOwner;
         address itemPaymentToken;
         uint256 itemPrice;
         uint256 remainingTime;
         bool itemListed;
+
+        Marketplace.MarketItem[] memory items;
 
         uint256 preVotingPower = veRWA.getAccountVotingPower(ALICE);
         uint256 preBalSeller = rwaToken.balanceOf(JOE);
@@ -418,6 +433,10 @@ contract MarketplaceTest is Utility {
         rwaToken.mintFor(ALICE, price);
 
         // ~ Pre-state check ~
+
+        items = marketplace.fetchMarketItems(0, 10, true);
+        assertEq(items.length, 1);
+        assertEq(items[0].tokenId, tokenId);
 
         assertEq(rwaToken.balanceOf(ALICE), price);
         assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
@@ -434,6 +453,9 @@ contract MarketplaceTest is Utility {
 
         // ~ Post-state check ~
 
+        items = marketplace.fetchMarketItems(0, 10, true);
+        assertEq(items.length, 0);
+
         uint256 feeTaken = price * marketplace.fee() / 1000;
         uint256 amountToSeller = price - feeTaken;
 
@@ -449,9 +471,9 @@ contract MarketplaceTest is Utility {
             = marketplace.idToMarketItem(tokenId);
 
         assertEq(itemSeller, address(0));
-        assertEq(itemPaymentToken, address(rwaToken));
-        assertEq(itemPrice, price);
-        assertEq(remainingTime, newTokenDuration);
+        assertEq(itemPaymentToken, address(0));
+        assertEq(itemPrice, 0);
+        assertEq(remainingTime, 0);
         assertEq(itemListed, false);
 
         assertGt(veRWA.getAccountVotingPower(ALICE), preVotingPower);
@@ -494,7 +516,6 @@ contract MarketplaceTest is Utility {
         uint256 tokenId = _createNewTokenAndList(JOE, 1_000 ether, address(rwaToken), price);
 
         address itemSeller;
-        address itemOwner;
         address itemPaymentToken;
         uint256 itemPrice;
         uint256 remainingTime;
@@ -538,9 +559,9 @@ contract MarketplaceTest is Utility {
             = marketplace.idToMarketItem(tokenId);
 
         assertEq(itemSeller, address(0));
-        assertEq(itemPaymentToken, address(rwaToken));
-        assertEq(itemPrice, price);
-        assertEq(remainingTime, newTokenDuration);
+        assertEq(itemPaymentToken, address(0));
+        assertEq(itemPrice, 0);
+        assertEq(remainingTime, 0);
         assertEq(itemListed, false);
 
         assertGt(veRWA.getAccountVotingPower(ALICE), preVotingPower);
@@ -555,7 +576,6 @@ contract MarketplaceTest is Utility {
         uint256 tokenId = _createNewTokenAndList(JOE, 1_000 ether, address(0), price);
 
         address itemSeller;
-        address itemOwner;
         address itemPaymentToken;
         uint256 itemPrice;
         uint256 remainingTime;
@@ -599,8 +619,8 @@ contract MarketplaceTest is Utility {
 
         assertEq(itemSeller, address(0));
         assertEq(itemPaymentToken, address(0));
-        assertEq(itemPrice, price);
-        assertEq(remainingTime, newTokenDuration);
+        assertEq(itemPrice, 0);
+        assertEq(remainingTime, 0);
         assertEq(itemListed, false);
 
         assertGt(veRWA.getAccountVotingPower(ALICE), preVotingPower);
@@ -646,7 +666,6 @@ contract MarketplaceTest is Utility {
         uint256 tokenId = _createNewTokenAndList(JOE, 1_000 ether, address(0), price);
 
         address itemSeller;
-        address itemOwner;
         address itemPaymentToken;
         uint256 itemPrice;
         uint256 remainingTime;
@@ -690,12 +709,126 @@ contract MarketplaceTest is Utility {
 
         assertEq(itemSeller, address(0));
         assertEq(itemPaymentToken, address(0));
-        assertEq(itemPrice, price);
-        assertEq(remainingTime, newTokenDuration);
+        assertEq(itemPrice, 0);
+        assertEq(remainingTime, 0);
         assertEq(itemListed, false);
 
         assertGt(veRWA.getAccountVotingPower(ALICE), preVotingPower);
     }
 
-    
+    /// @dev This unit test verifies proper read data when Marketplace::fetchMarketItems is called.
+    function test_marketplace_fetchMarketItems_single() public {
+        uint256 tokenId = _createNewTokenAndList(JOE, 1_000 ether, address(rwaToken), 100_000 ether);
+        Marketplace.MarketItem[] memory items = marketplace.fetchMarketItems(0, 10, true);
+        assertEq(items.length, 1);
+        assertEq(items[0].tokenId, tokenId);
+        assertEq(items[0].seller, JOE);
+        assertEq(items[0].paymentToken, address(rwaToken));
+        assertEq(items[0].price, 100_000 ether);
+        assertEq(items[0].remainingTime, newTokenDuration);
+        assertEq(items[0].listed, true);
+    }
+
+    /// @dev This unit test verifies proper read data when Marketplace::fetchMarketItems is called.
+    function test_marketplace_fetchMarketItems_multiple() public {
+        uint256 amount = 10;
+        uint256[] memory tokenIds = new uint256[](amount);
+
+        // create tokens and list
+        for (uint256 i; i < amount; ++i) {
+            tokenIds[i] = _createNewTokenAndList(JOE, 1_000 ether, address(rwaToken), 100_000 ether);
+        }
+
+        // fetch items
+        Marketplace.MarketItem[] memory items = marketplace.fetchMarketItems(0, amount, true);
+        assertEq(items.length, amount);
+
+        // verify data
+        for (uint256 i; i < amount; ++i) {
+            assertEq(items[i].tokenId, tokenIds[i]);
+            assertEq(items[i].seller, JOE);
+            assertEq(items[i].paymentToken, address(rwaToken));
+            assertEq(items[i].price, 100_000 ether);
+            assertEq(items[i].remainingTime, newTokenDuration);
+            assertEq(items[i].listed, true);
+        }
+    }
+
+    /// @dev This unit test verifies proper state changes when Marketplace::addPaymentToken is executed.
+    function test_marketplace_addPaymentToken() public {
+        // ~ Pre-state check ~
+
+        assertEq(marketplace.isPaymentToken(address(mockToken)), false);
+
+        // ~ Add new token ~ 
+
+        vm.prank(ADMIN);
+        marketplace.addPaymentToken(address(mockToken));
+
+        // ~ Post-state check ~
+
+        assertEq(marketplace.isPaymentToken(address(mockToken)), true);
+    }
+
+    /// @dev This unit test verifies restrictions when Marketplace::addPaymentToken is executed
+    ///      with unacceptable conditions.
+    function test_marketplace_addPaymentToken_restrictions() public {
+        // Only callable by owner.
+        vm.prank(JOE);
+        vm.expectRevert();
+        marketplace.addPaymentToken(address(mockToken));
+
+        // Cannot input address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CommonErrors.InvalidZeroAddress.selector));
+        marketplace.addPaymentToken(address(0));
+
+        // Cannot add token that's already added.
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(Marketplace.InvalidPaymentToken.selector, address(rwaToken)));
+        marketplace.addPaymentToken(address(rwaToken));
+    }
+
+    /// @dev This unit test verifies proper state changes when Marketplace::removePaymentToken is executed.
+    function test_marketplace_removePaymentToken() public {
+        // ~ Pre-state check ~
+
+        assertEq(marketplace.isPaymentToken(address(rwaToken)), true);
+
+        // ~ remove payment token ~ 
+
+        vm.prank(ADMIN);
+        marketplace.removePaymentToken(address(rwaToken));
+
+        // ~ Post-state check ~
+
+        assertEq(marketplace.isPaymentToken(address(rwaToken)), false);
+    }
+
+    /// @dev This unit test verifies restrictions when Marketplace::removePaymentToken is executed
+    ///      with unacceptable conditions.
+    function test_marketplace_removePaymentToken_restrictions() public {
+        // Only callable by owner.
+        vm.prank(JOE);
+        vm.expectRevert();
+        marketplace.removePaymentToken(address(rwaToken));
+
+        // Cannot input address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CommonErrors.InvalidZeroAddress.selector));
+        marketplace.removePaymentToken(address(0));
+
+        // Cannot remove a token that is not supported.
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(Marketplace.InvalidPaymentToken.selector, address(mockToken)));
+        marketplace.removePaymentToken(address(mockToken));
+    }
+
+    function test_setFee() public {}
+
+    function test_setFee_restrictions() public {}
+
+    function test_setRevDistributor() public {}
+
+    function test_setRevDistributor_restrictions() public {}
 }

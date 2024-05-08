@@ -2,7 +2,9 @@
 pragma solidity ^0.8.19;
 
 // oz imports
+import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
+import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import { ERC721Enumerable } from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
 
@@ -12,21 +14,25 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 // local imports
-import { IRevenueStreamETH } from "./interfaces/IRevenueStreamETH.sol";
+import { IRevenueStream } from "./interfaces/IRevenueStream.sol";
 
 /**
- * @title RevenueStreamETH
+ * @title RevenueStream
  * @author @chasebrownn
- * @notice This contract facilitates the distribution of claimable revenue to veRWA shareholders.
- *         This contract will facilitate the distribution of ETH.
+ * @notice This contract facilitates the distribution of claimable revenue to veRWA shareholders. 
+ *         This contract will facilitate the distribution of only 1 ERC-20 revenue token.
+ *         If there are several streams of ERC-20 revenue, it's suggested to deploy multiple RevenueStream contracts.
  */
-contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
+contract RevenueStream is IRevenueStream, UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+    using SafeERC20 for IERC20;
 
     // ---------------
     // State Variables
     // ---------------
 
     uint256 constant internal MAX_INT = type(uint256).max;
+    /// @dev Contract reference for ERC-20 revenue token.
+    IERC20 public immutable revenueToken;
     /// @dev Array used to track all deposits by timestamp.
     uint256[] public cycles;
     /// @dev The duration between deposit and when the revenue in the cycle becomes expired.
@@ -39,7 +45,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     mapping(uint256 cycle => uint256 amount) public revenueClaimed;
     /// @dev Mapping from cycle to whether the expired unclaimed revenue was claimed/skimmed.
     mapping(uint256 cycle => bool) public expiredRevClaimed;
-    /// @dev Mapping of an account's last index claimed from the cycle array.
+    /// @dev Mapping of an account's last cycle claimed.
     mapping(address account => uint256 index) public lastClaimIndex;
     /// @dev Contract reference for veRWA contract.
     address public votingEscrow;
@@ -53,7 +59,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
 
     /**
      * @notice This event is emitted upon a successful execution of deposit().
-     * @param amount Amount of ETH deposited.
+     * @param amount Amount of `revenueToken` deposited.
      */
     event RevenueDeposited(uint256 amount);
 
@@ -62,13 +68,13 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @param claimer Address that claimed revenue.
      * @param account Address that held the voting power.
      * @param cycle Cycle in which claim took place.
-     * @param amount Amount of ETH claimed.
+     * @param amount Amount of `revenueToken` claimed.
      */
     event RevenueClaimed(address indexed claimer, address indexed account, uint256 indexed cycle, uint256 amount);
 
     /**
      * @notice This event is emitted when expired revenue is skimmed and sent back to the RevenueDistributor.
-     * @param amount Amount of ETH revenue skimmed.
+     * @param amount Amount of revenue skimmed.
      * @param numCycles Number of "expired" cycles skimmed.
      */
     event ExpiredRevenueSkimmed(uint256 amount, uint256 numCycles);
@@ -79,24 +85,18 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      */
     event TimeUntilExpiredSet(uint256 newTimeUntilExpired);
 
-
-    // ------
-    // Errors
-    // ------
-
-    /**
-     * @notice This error is thrown when the transfer of ETH to the `recipient` fails.
-     * @param recipient Intended receiver of ETH.
-     * @param amount Amount of ETH sent.
-     */
-    error ETHTransferFailed(address recipient, uint256 amount);
-
     
     // -----------
     // Constructor
     // -----------
 
-    constructor() {
+    /**
+     * @notice RevenueStream constructor
+     * @param _revenueToken ERC-20 token to be assigned as RevenueStream's revenue token.
+     */
+    constructor(address _revenueToken) {
+        require(_revenueToken != address(0));
+        revenueToken = IERC20(_revenueToken);
         _disableInitializers();
     }
 
@@ -106,7 +106,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     // -----------
 
     /**
-     * @notice Initializes RevenueStreamETH
+     * @notice Initializes RevenueStream
      * @param _distributor Contract address of RevenueDistributor contract.
      * @param _votingEscrow Contract address of VotingEscrow contract. Holders of VE tokens will be entitled to revenue shares.
      * @param _admin Address that will be granted initial ownership.
@@ -137,32 +137,35 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     // ----------------
 
     /**
-     * @notice This method is used to deposit ETH into the contract to be claimed by shareholders.
+     * @notice This method is used to deposit ERC-20 `revenueToken` into the contract to be claimed by shareholders.
      * @dev Can only be called by an address granted the `DEPOSITOR_ROLE`.
+     * @param amount Amount of `revenueToken` to be deposited.
      */
-    function depositETH() payable external {
-        require(msg.value != 0, "RevenueStreamETH: msg.value == 0");
-        require(msg.sender == revenueDistributor, "RevenueStreamETH: Not authorized");
+    function deposit(uint256 amount) external {
+        require(amount != 0, "RevenueStream: amount == 0");
+        require(msg.sender == revenueDistributor, "RevenueStream: Not authorized");
+
+        amount = _pullTokens(amount);
 
         if (revenue[block.timestamp] == 0) {
             cycles.push(block.timestamp);
-            revenue[currentCycle()] = msg.value;
+            revenue[currentCycle()] = amount;
         }
         else {
-            /// @dev In the event `depositETH` is called twice in the same second (though unlikely), dont push a new cycle.
+            /// @dev In the event `deposit` is called twice in the same second (though unlikely), dont push a new cycle.
             ///      Just add the value to the existing cycle.
-            revenue[block.timestamp] += msg.value;
+            revenue[block.timestamp] += amount;
         }
 
-        emit RevenueDeposited(msg.value);
+        emit RevenueDeposited(amount);
     }
 
     /**
      * @notice This method allows eligible VE shareholders to claim their revenue rewards by account.
      * @param account Address of shareholder that is claiming rewards.
      */
-    function claimETH(address account) external returns (uint256 amount) {
-        amount = claimETHIncrement(account, MAX_INT);
+    function claim(address account) external returns (uint256 amount) {
+        amount = claimIncrement(account, MAX_INT);
     }
 
     /**
@@ -171,9 +174,9 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @param numIndexes Number of revenue cycles the msg.sender wants to claim in one transaction.
      *        If the amount of cycles is substantial, it's recommended to claim in more than one increment.
      */
-    function claimETHIncrement(address account, uint256 numIndexes) public nonReentrant returns (uint256 amount) {
-        require(account == msg.sender, "RevenueStreamETH: Not authorized");
-        require(numIndexes != 0, "RevenueStreamETH: numIndexes cant be 0");
+    function claimIncrement(address account, uint256 numIndexes) public nonReentrant returns (uint256 amount) {
+        require(account == msg.sender, "RevenueStream: Not authorized");
+        require(numIndexes != 0, "RevenueStream: numIndexes cant be 0");
 
         uint256 cycle = currentCycle();
 
@@ -194,8 +197,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
             }
         }
 
-        (bool sent,) = payable(msg.sender).call{value: amount}("");
-        if (!sent) revert ETHTransferFailed(msg.sender, amount);
+        revenueToken.safeTransfer(msg.sender, amount);
 
         emit RevenueClaimed(msg.sender, account, cycle, amount);
     }
@@ -217,7 +219,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      * @return amount -> Amount of expired revenue that was skimmed.
      */
     function skimExpiredRevenueIncrement(uint256 numIndexes) external onlyOwner returns (uint256 amount) { // TODO: Test
-        require(numIndexes != 0, "RevenueStreamETH: numIndexes cant be 0");
+        require(numIndexes != 0, "RevenueStream: numIndexes cant be 0");
         return _skimExpiredRevenue(numIndexes);
     }
 
@@ -274,10 +276,10 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     }
 
     /**
-     * @notice View method that returns the balance of ETH in this contract.
+     * @notice View method that returns the balance of revenueToken in this contract.
      */
-    function getContractBalanceETH() public view returns (uint256){
-        return address(this).balance;
+    function getContractBalance() public view returns (uint256){
+        return revenueToken.balanceOf(address(this));
     }
 
 
@@ -319,9 +321,8 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
             }
         }
 
-        // send money to revdist
-        (bool sent,) = payable(revenueDistributor).call{value: amount}("");
-        if (!sent) revert ETHTransferFailed(revenueDistributor, amount);
+        // send tokens to revdist
+        revenueToken.safeTransfer(revenueDistributor, amount);
 
         emit ExpiredRevenueSkimmed(amount, num);
     }
@@ -329,7 +330,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     /**
      * @notice Internal method for calculating the amount of revenue that is currently claimable for a specific `account`.
      * @param account Address of account with voting power.
-     * @return amount -> Amount of ETH that is currently claimable for `account`.
+     * @return amount -> Amount of ERC-20 revenueToken that is currently claimable for `account`.
      */
     function _claimable(
         address account,
@@ -414,6 +415,13 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
         }
 
         return (expired, expiredCycles, num, indexes);
+    }
+
+    // TODO NatSpec
+    function _pullTokens(uint256 amount) internal returns (uint256) {
+        uint256 preBal = revenueToken.balanceOf(address(this));
+        revenueToken.safeTransferFrom(msg.sender, address(this), amount);
+        return revenueToken.balanceOf(address(this)) - preBal;
     }
 
     /**

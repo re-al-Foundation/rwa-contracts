@@ -36,6 +36,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     mapping(address => bool) public canDistribute;
     /// @dev Mapping used to fetch whether a `revenueToken` address is a supported revenue token.
     mapping(address revenueToken => bool) public isRevToken;
+    /// @dev Mapping used to fetch the RevenueStream contract address for a revenueToken (if set).
+    mapping(address revenueToken => address revenueStream) public revenueStreamForToken;
     /// @dev Stores a supported selector, given the `target` address. Prevents misuse.
     mapping(address target => mapping(bytes4 selector => bool approved)) public fetchSelector;
     /// @dev RevenueStream contract address where ETH will be distributed to if an ETH revenue stream exists.
@@ -65,10 +67,18 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
 
     /**
      * @notice This event is emitted when revenue is distributed (as ETH) from this contract to a RevenueStreamETH contract.
-     * @param revStreamETH Address of revenue stream contract that received `token`.
-     * @param amount Amount of `token` sent.
+     * @param revStreamETH Address of revenue stream contract that received revenue.
+     * @param amount Amount of ETH deposited into RevenueStreamETH.
      */
-    event RevenueDistributed(address indexed revStreamETH, uint256 amount);
+    event ETHRevenueDistributed(address indexed revStreamETH, uint256 amount);
+
+    /**
+     * @notice This event is emitted when revenue is distributed from this contract to a RevenueStream contract.
+     * @param token Address of revenue token that was distributed.
+     * @param revStream Address of revenue stream contract that received revenue.
+     * @param amount Amount of revenue token deposited into RevenueStream.
+     */
+    event ERC20RevenueDistributed(address indexed token, address indexed revStream, uint256 amount);
 
     /**
      * @notice This event is emitted when an ERC-20 revenue token is converted to ETH prior to distribution.
@@ -116,6 +126,9 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      * @param newRevenueStreamETH New value stored in `revStreamETH`.
      */
     event RevenueStreamETHSet(address indexed newRevenueStreamETH);
+
+    // TODO: Natspec
+    event RevenueStreamForTokenSet(address indexed token, address indexed newRevenueStream);
 
 
     // -----------
@@ -180,6 +193,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         bytes calldata _data
     ) external isDistributor returns (uint256 _amountOut) {
         require(isRevToken[_token], "invalid revenue token");
+        require(revenueStreamForToken[_token] == address(0), "Token not meant to be swapped");
         require(_amount != 0, "amount cannot be 0");
 
         uint256 _before = IERC20(_token).balanceOf(address(this));
@@ -222,7 +236,9 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
             uint256 amount = _amounts[i];
 
             require(isRevToken[token], "invalid revenue token");
+            require(revenueStreamForToken[token] == address(0), "Token not meant to be swapped");
             require(amount != 0, "amount cannot be 0");
+
             uint256 _before = IERC20(token).balanceOf(address(this));
             require(_before >= amount, "Insufficient balance");
 
@@ -239,6 +255,32 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
 
         require(totalDeposit != 0, "insufficient output amount");
         _distributeETH();
+    }
+
+    // TODO: NatSpec & Test
+    function distributeToken(address _token, uint256 _amount) external isDistributor {
+        require(isRevToken[_token], "invalid revenue token");
+        require(revenueStreamForToken[_token] != address(0), "No RevenueStream assigned to token");
+        require(_amount != 0, "amount cannot be 0");
+
+        _distributeERC20(_token, _amount);
+    }
+
+    // TODO: NatSpec & Test
+    function distributeTokenBatch(address[] memory _tokens, uint256[] memory _amounts) external isDistributor {
+        require(_tokens.length == _amounts.length, "Lengths do not match");
+        for (uint256 i; i < _tokens.length;) {
+
+            require(isRevToken[_tokens[i]], "invalid revenue token");
+            require(revenueStreamForToken[_tokens[i]] != address(0), "No RevenueStream assigned to token");
+            require(_amounts[i] != 0, "amount cannot be 0");
+
+            _distributeERC20(_tokens[i], _amounts[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /**
@@ -290,6 +332,16 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         revenueTokens.push(_revToken);
 
         emit RevTokenAdded(_revToken);
+    }
+
+    // TODO: NatSpec
+    function setRevenueStreamForToken(address _revToken, address _revStream) external onlyOwner {
+        require(isRevToken[_revToken], "token not added");
+        require(revenueStreamForToken[_revToken] != _revStream, "revStream already set");
+
+        revenueStreamForToken[_revToken] = _revStream;
+
+        emit RevenueStreamForTokenSet(_revToken, _revStream);
     }
 
     /**
@@ -361,7 +413,17 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     function _distributeETH() internal {
         uint256 amount = address(this).balance;
         revStreamETH.depositETH{value: amount}();
-        emit RevenueDistributed(address(revStreamETH), amount);
+        emit ETHRevenueDistributed(address(revStreamETH), amount);
+    }
+
+    /**
+     * @notice Method for depositing ERC20 revenue tokens to a designated RevenueStream contract.
+     */
+    function _distributeERC20(address _token, uint256 _amount) internal {
+        address revStream = revenueStreamForToken[_token];
+        IERC20(_token).approve(revStream, _amount);
+        IRevenueStream(revStream).deposit(_amount);
+        emit ERC20RevenueDistributed(_token, revStream, _amount);
     }
 
     /**

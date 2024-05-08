@@ -246,7 +246,7 @@ contract RWATokenTest is Utility {
         RWAToken newRWAToken = new RWAToken();
 
         vm.expectRevert();
-        ERC1967Proxy newRWATokenProxy = new ERC1967Proxy(
+        new ERC1967Proxy(
             address(newRWAToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
                 address(0)

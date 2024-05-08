@@ -36,8 +36,6 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     mapping(address => bool) public canDistribute;
     /// @dev Mapping used to fetch whether a `revenueToken` address is a supported revenue token.
     mapping(address revenueToken => bool) public isRevToken;
-    /// @dev Mapping used to fetch the RevenueStream contract address for a revenueToken (if set).
-    mapping(address revenueToken => address revenueStream) public revenueStreamForToken;
     /// @dev Stores a supported selector, given the `target` address. Prevents misuse.
     mapping(address target => mapping(bytes4 selector => bool approved)) public fetchSelector;
     /// @dev RevenueStream contract address where ETH will be distributed to if an ETH revenue stream exists.
@@ -46,6 +44,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     address public veRwaNFT;
     /// @dev Stores local WETH address.
     IWETH public WETH;
+    /// @dev Mapping used to fetch the RevenueStream contract address for a revenueToken (if set).
+    mapping(address revenueToken => address revenueStream) public revenueStreamForToken;
 
     
     // ---------
@@ -127,7 +127,11 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      */
     event RevenueStreamETHSet(address indexed newRevenueStreamETH);
 
-    // TODO: Natspec
+    /**
+     * @notice This event is emitted when a RevenueStream is assigned to a revenue token.
+     * @param token revenue token address.
+     * @param newRevenueStream RevenueStream contract address.
+     */
     event RevenueStreamForTokenSet(address indexed token, address indexed newRevenueStream);
 
 
@@ -257,7 +261,12 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         _distributeETH();
     }
 
-    // TODO: NatSpec & Test
+    /**
+     * @notice This method will take a specified amount of a revenue token and deposit it into a RevenueStream contract
+     * so it can be claimed by a veRWA holder.
+     * @param _token Revenue token to distribute (aka deposit into RevenueStream contract).
+     * @param _amount Amount of _token.
+     */
     function distributeToken(address _token, uint256 _amount) external isDistributor {
         require(isRevToken[_token], "invalid revenue token");
         require(revenueStreamForToken[_token] != address(0), "No RevenueStream assigned to token");
@@ -266,7 +275,11 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         _distributeERC20(_token, _amount);
     }
 
-    // TODO: NatSpec & Test
+    /**
+     * @notice This method will distribute a batch of revenue tokens, depositing each token into a RevenuStream contract.
+     * @param _tokens Array of revenue tokens to distribute (aka deposit into RevenueStream contract).
+     * @param _amounts Amounts of _tokens[i].
+     */   
     function distributeTokenBatch(address[] memory _tokens, uint256[] memory _amounts) external isDistributor {
         require(_tokens.length == _amounts.length, "Lengths do not match");
         for (uint256 i; i < _tokens.length;) {
@@ -334,7 +347,13 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         emit RevTokenAdded(_revToken);
     }
 
-    // TODO: NatSpec
+    /**
+     * @notice This method is used to add a RevenueStream contract to an already supported revenue token.
+     * @dev If a revenue token has a RevenueStream contract assigned, it means that token will not be
+     * swapped for ETH upon distribution. It will only be distributed as the raw token.
+     * @param _revToken Address of ERC-20 revenue token.
+     * @param _revStream RevenueStream contract address for token.
+     */
     function setRevenueStreamForToken(address _revToken, address _revStream) external onlyOwner {
         require(isRevToken[_revToken], "token not added");
         require(revenueStreamForToken[_revToken] != _revStream, "revStream already set");

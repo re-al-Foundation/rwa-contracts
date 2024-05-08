@@ -218,7 +218,7 @@ contract RevenueStream is IRevenueStream, UUPSUpgradeable, OwnableUpgradeable, R
      *      `timeUntilExpired` duration. If skimmed, it is sent back to the RevenueDistributor contract.
      * @return amount -> Amount of expired revenue that was skimmed.
      */
-    function skimExpiredRevenueIncrement(uint256 numIndexes) external onlyOwner returns (uint256 amount) { // TODO: Test
+    function skimExpiredRevenueIncrement(uint256 numIndexes) external onlyOwner returns (uint256 amount) {
         require(numIndexes != 0, "RevenueStream: numIndexes cant be 0");
         return _skimExpiredRevenue(numIndexes);
     }
@@ -417,7 +417,13 @@ contract RevenueStream is IRevenueStream, UUPSUpgradeable, OwnableUpgradeable, R
         return (expired, expiredCycles, num, indexes);
     }
 
-    // TODO NatSpec
+    /**
+     * @notice This internal method handles the transferring of tokens into this contrat during a deposit.
+     * @dev This method monitors the contract balance before and after the transfer to catch any potential
+     * rounding issue from rebase tokens.
+     * @param amount Amount of tokens to transfer.
+     * @return Amount of tokens received.
+     */
     function _pullTokens(uint256 amount) internal returns (uint256) {
         uint256 preBal = revenueToken.balanceOf(address(this));
         revenueToken.safeTransferFrom(msg.sender, address(this), amount);

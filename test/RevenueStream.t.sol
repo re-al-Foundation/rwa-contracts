@@ -167,6 +167,7 @@ contract RWARevenueStreamTest is Utility {
 
         rwaToken.excludeFromFees(address(veRWA), true);
         rwaToken.excludeFromFees(JOE, true);
+        rwaToken.excludeFromFees(address(revStream), true);
         vm.stopPrank();
 
         // Mint Joe $RWA tokens

@@ -216,7 +216,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      *      `timeUntilExpired` duration. If skimmed, it is sent back to the RevenueDistributor contract.
      * @return amount -> Amount of expired revenue that was skimmed.
      */
-    function skimExpiredRevenueIncrement(uint256 numIndexes) external onlyOwner returns (uint256 amount) { // TODO: Test
+    function skimExpiredRevenueIncrement(uint256 numIndexes) external onlyOwner returns (uint256 amount) {
         require(numIndexes != 0, "RevenueStreamETH: numIndexes cant be 0");
         return _skimExpiredRevenue(numIndexes);
     }

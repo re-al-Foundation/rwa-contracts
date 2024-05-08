@@ -7,11 +7,11 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
+import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 
 // local imports
 import { Delegator } from "./Delegator.sol";
 import { IDelegator } from "../interfaces/IDelegator.sol";
-import { FetchableBeaconProxy } from "../proxy/FetchableBeaconProxy.sol";
 
 /**
  * @title DelegateFactory
@@ -120,7 +120,7 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
         veRWA.transferFrom(msg.sender, address(this), _tokenId);
 
         // create delegator
-        FetchableBeaconProxy newDelegatorBeacon = new FetchableBeaconProxy(
+        BeaconProxy newDelegatorBeacon = new BeaconProxy(
             address(beacon),
             abi.encodeWithSelector(Delegator.initialize.selector,
                 address(veRWA),

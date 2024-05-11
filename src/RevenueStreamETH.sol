@@ -60,11 +60,10 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     /**
      * @notice This event is emitted when revenue is claimed by an eligible shareholder.
      * @param claimer Address that claimed revenue.
-     * @param account Address that held the voting power.
      * @param cycle Cycle in which claim took place.
      * @param amount Amount of ETH claimed.
      */
-    event RevenueClaimed(address indexed claimer, address indexed account, uint256 indexed cycle, uint256 amount);
+    event RevenueClaimed(address indexed claimer, uint256 indexed cycle, uint256 amount);
 
     /**
      * @notice This event is emitted when expired revenue is skimmed and sent back to the RevenueDistributor.
@@ -158,21 +157,18 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
     }
 
     /**
-     * @notice This method allows eligible VE shareholders to claim their revenue rewards by account.
-     * @param account Address of shareholder that is claiming rewards.
+     * @notice This method allows eligible VE shareholders to claim their revenue rewards.
      */
-    function claimETH(address account) external returns (uint256 amount) {
-        amount = claimETHIncrement(account, MAX_INT);
+    function claimETH() external returns (uint256 amount) {
+        amount = claimETHIncrement(MAX_INT);
     }
 
     /**
      * @notice This method allows eligible VE shareholders to claim their revenue rewards by account in increments by index.
-     * @param account Address of shareholder that is claiming rewards.
      * @param numIndexes Number of revenue cycles the msg.sender wants to claim in one transaction.
      *        If the amount of cycles is substantial, it's recommended to claim in more than one increment.
      */
-    function claimETHIncrement(address account, uint256 numIndexes) public nonReentrant returns (uint256 amount) {
-        require(account == msg.sender, "RevenueStreamETH: Not authorized");
+    function claimETHIncrement(uint256 numIndexes) public nonReentrant returns (uint256 amount) {
         require(numIndexes != 0, "RevenueStreamETH: numIndexes cant be 0");
 
         uint256 cycle = currentCycle();
@@ -182,10 +178,10 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
         uint256 num;
         uint256 indexes;
 
-        (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(account, numIndexes);
+        (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(msg.sender, numIndexes);
         require(amount > 0, "no claimable amount");
 
-        lastClaimIndex[account] += indexes;
+        lastClaimIndex[msg.sender] += indexes;
 
         for (uint256 i; i < num;) {
             revenueClaimed[cyclesClaimable[i]] += amountsClaimable[i];
@@ -197,7 +193,7 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
         (bool sent,) = payable(msg.sender).call{value: amount}("");
         if (!sent) revert ETHTransferFailed(msg.sender, amount);
 
-        emit RevenueClaimed(msg.sender, account, cycle, amount);
+        emit RevenueClaimed(msg.sender, cycle, amount);
     }
 
     /**

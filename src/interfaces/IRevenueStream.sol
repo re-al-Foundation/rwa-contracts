@@ -11,7 +11,7 @@ interface IRevenueStream {
 
     function claimable(address account) external view returns (uint256 amount);
 
-    function claim(address account) external returns (uint256 amount);
+    function claim() external returns (uint256 amount);
 
     function deposit(uint256 amount) external;
 

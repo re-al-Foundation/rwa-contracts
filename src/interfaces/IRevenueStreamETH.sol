@@ -6,7 +6,7 @@ interface IRevenueStreamETH {
     
     function claimable(address account) external view returns (uint256 amount);
 
-    function claimETH(address account) external returns (uint256 amount);
+    function claimETH() external returns (uint256 amount);
 
     function depositETH() payable external;
 

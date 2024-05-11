@@ -410,7 +410,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claimETH(JOE);
+        revStream.claimETH();
 
         // ~ Post-state check 1 ~
 
@@ -435,7 +435,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claimETH(JOE);
+        revStream.claimETH();
 
         // ~ Post-state check 2 ~
 
@@ -492,7 +492,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Execute claim increment 1 ~
 
         vm.prank(JOE);
-        revStream.claimETHIncrement(JOE, 1);
+        revStream.claimETHIncrement(1);
 
         // ~ Post-state check 1 ~
 
@@ -509,7 +509,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Execute claim increment 2 ~
 
         vm.prank(JOE);
-        revStream.claimETHIncrement(JOE, 2);
+        revStream.claimETHIncrement(2);
 
         // ~ Post-state check 2 ~
 
@@ -534,7 +534,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claimETHIncrement(JOE, 1);
+        revStream.claimETHIncrement(1);
 
         // ~ Post-state check 3 ~
 
@@ -600,7 +600,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claimETH(JOE);
+        revStream.claimETH();
 
         // ~ Post-state check ~
 
@@ -677,7 +677,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claimETH(JOE);
+        revStream.claimETH();
 
         // ~ Post-state check 1 ~
 
@@ -736,7 +736,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Joe claims ~
 
         vm.prank(JOE);
-        revStream.claimETH(JOE);
+        revStream.claimETH();
 
         // ~ Post-state check 2 ~
 
@@ -796,7 +796,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Joe claims in increment 1/2 ~
 
         vm.prank(JOE);
-        revStream.claimETHIncrement(JOE, 1);
+        revStream.claimETHIncrement(1);
 
         // ~ Post-state check 2 ~
 
@@ -808,7 +808,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Joe claims in increment 2/2 ~
 
         vm.prank(JOE);
-        revStream.claimETHIncrement(JOE, 1);
+        revStream.claimETHIncrement(1);
 
         // ~ Post-state check 3 ~
 
@@ -895,7 +895,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Joe claims ~
 
         vm.prank(JOE);
-        revStream.claimETH(JOE);
+        revStream.claimETH();
 
         // ~ Post-state check 4 ~
 
@@ -1227,10 +1227,10 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Joe and Bob claim their revenue ~
 
         vm.prank(JOE);
-        revStream.claimETH(JOE);
+        revStream.claimETH();
 
         vm.prank(BOB);
-        revStream.claimETH(BOB);
+        revStream.claimETH();
         
         // ~ Skip to expiration ~
 
@@ -1279,12 +1279,12 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ All claim ~
 
         vm.prank(JOE);
-        revStream.claimETH(JOE);
+        revStream.claimETH();
 
         vm.prank(BOB);
-        revStream.claimETH(BOB);
+        revStream.claimETH();
 
         vm.prank(ALICE);
-        revStream.claimETH(ALICE);
+        revStream.claimETH();
     }
 }

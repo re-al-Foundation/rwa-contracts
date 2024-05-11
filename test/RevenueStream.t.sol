@@ -427,7 +427,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 1 ~
 
@@ -454,7 +454,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 2 ~
 
@@ -517,7 +517,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Execute claim increment 1 ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 1);
+        revStream.claimIncrement(1);
 
         // ~ Post-state check 1 ~
 
@@ -534,7 +534,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Execute claim increment 2 ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 2);
+        revStream.claimIncrement(2);
 
         // ~ Post-state check 2 ~
 
@@ -561,7 +561,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 1);
+        revStream.claimIncrement(1);
 
         // ~ Post-state check 3 ~
 
@@ -631,7 +631,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check ~
 
@@ -711,7 +711,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 1 ~
 
@@ -772,7 +772,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Joe claims ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 2 ~
 
@@ -836,7 +836,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Joe claims in increment 1/2 ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 1);
+        revStream.claimIncrement(1);
 
         // ~ Post-state check 2 ~
 
@@ -848,7 +848,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Joe claims in increment 2/2 ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 1);
+        revStream.claimIncrement(1);
 
         // ~ Post-state check 3 ~
 
@@ -941,7 +941,7 @@ contract RWARevenueStreamTest is Utility {
         // ~ Joe claims ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 4 ~
 
@@ -1289,10 +1289,10 @@ contract RWARevenueStreamTest is Utility {
         // ~ Joe and Bob claim their revenue ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         vm.prank(BOB);
-        revStream.claim(BOB);
+        revStream.claim();
         
         // ~ Skip to expiration ~
 
@@ -1343,12 +1343,12 @@ contract RWARevenueStreamTest is Utility {
         // ~ All claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         vm.prank(BOB);
-        revStream.claim(BOB);
+        revStream.claim();
 
         vm.prank(ALICE);
-        revStream.claim(ALICE);
+        revStream.claim();
     }
 }

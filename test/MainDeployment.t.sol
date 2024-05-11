@@ -3751,7 +3751,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStreamETH.claimETH(JOE);
+        revStreamETH.claimETH();
 
         // ~ Post-state check 1 ~
 
@@ -3773,7 +3773,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStreamETH.claimETH(JOE);
+        revStreamETH.claimETH();
 
         // ~ Post-state check 2 ~
 
@@ -3830,7 +3830,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim increment 1 ~
 
         vm.prank(JOE);
-        revStreamETH.claimETHIncrement(JOE, 1);
+        revStreamETH.claimETHIncrement(1);
 
         // ~ Post-state check 1 ~
 
@@ -3844,7 +3844,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim increment 2 ~
 
         vm.prank(JOE);
-        revStreamETH.claimETHIncrement(JOE, 2);
+        revStreamETH.claimETHIncrement(2);
 
         // ~ Post-state check 2 ~
 
@@ -3866,7 +3866,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStreamETH.claimETHIncrement(JOE, 1);
+        revStreamETH.claimETHIncrement(1);
 
         // ~ Post-state check 3 ~
 
@@ -3930,7 +3930,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStreamETH.claimETH(JOE);
+        revStreamETH.claimETH();
 
         // ~ Post-state check ~
 
@@ -4007,7 +4007,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStreamETH.claimETH(JOE);
+        revStreamETH.claimETH();
 
         // ~ Post-state check 1 ~
 
@@ -4065,7 +4065,7 @@ contract MainDeploymentTest is Utility {
         // ~ Joe claims ~
 
         vm.prank(JOE);
-        revStreamETH.claimETH(JOE);
+        revStreamETH.claimETH();
 
         // ~ Post-state check 2 ~
 
@@ -4127,7 +4127,7 @@ contract MainDeploymentTest is Utility {
         // ~ Joe claims in increment 1/2 ~
 
         vm.prank(JOE);
-        revStreamETH.claimETHIncrement(JOE, 1);
+        revStreamETH.claimETHIncrement(1);
 
         // ~ Post-state check 2 ~
 
@@ -4139,7 +4139,7 @@ contract MainDeploymentTest is Utility {
         // ~ Joe claims in increment 2/2 ~
 
         vm.prank(JOE);
-        revStreamETH.claimETHIncrement(JOE, 1);
+        revStreamETH.claimETHIncrement(1);
 
         // ~ Post-state check 3 ~
 
@@ -4231,7 +4231,7 @@ contract MainDeploymentTest is Utility {
         // ~ Joe claims ~
 
         vm.prank(JOE);
-        revStreamETH.claimETH(JOE);
+        revStreamETH.claimETH();
 
         // ~ Post-state check 4 ~
 
@@ -4570,10 +4570,10 @@ contract MainDeploymentTest is Utility {
         // ~ Joe and Bob claim their revenue ~
 
         vm.prank(JOE);
-        revStreamETH.claimETH(JOE);
+        revStreamETH.claimETH();
 
         vm.prank(BOB);
-        revStreamETH.claimETH(BOB);
+        revStreamETH.claimETH();
         
         // ~ Skip to expiration ~
 
@@ -4622,13 +4622,13 @@ contract MainDeploymentTest is Utility {
         // ~ All claim ~
 
         vm.prank(JOE);
-        revStreamETH.claimETH(JOE);
+        revStreamETH.claimETH();
 
         vm.prank(BOB);
-        revStreamETH.claimETH(BOB);
+        revStreamETH.claimETH();
 
         vm.prank(ALICE);
-        revStreamETH.claimETH(ALICE);
+        revStreamETH.claimETH();
     }
 
     // ~ ExactInputWrapper test ~
@@ -4939,7 +4939,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 1 ~
 
@@ -4966,7 +4966,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 2 ~
 
@@ -5033,7 +5033,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim increment 1 ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 1);
+        revStream.claimIncrement(1);
 
         // ~ Post-state check 1 ~
 
@@ -5050,7 +5050,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim increment 2 ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 2);
+        revStream.claimIncrement(2);
 
         // ~ Post-state check 2 ~
 
@@ -5077,7 +5077,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 1);
+        revStream.claimIncrement(1);
 
         // ~ Post-state check 3 ~
 
@@ -5147,7 +5147,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check ~
 
@@ -5227,7 +5227,7 @@ contract MainDeploymentTest is Utility {
         // ~ Execute claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 1 ~
 
@@ -5290,7 +5290,7 @@ contract MainDeploymentTest is Utility {
         // ~ Joe claims ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 2 ~
 
@@ -5356,7 +5356,7 @@ contract MainDeploymentTest is Utility {
         // ~ Joe claims in increment 1/2 ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 1);
+        revStream.claimIncrement(1);
 
         // ~ Post-state check 2 ~
 
@@ -5368,7 +5368,7 @@ contract MainDeploymentTest is Utility {
         // ~ Joe claims in increment 2/2 ~
 
         vm.prank(JOE);
-        revStream.claimIncrement(JOE, 1);
+        revStream.claimIncrement(1);
 
         // ~ Post-state check 3 ~
 
@@ -5463,7 +5463,7 @@ contract MainDeploymentTest is Utility {
         // ~ Joe claims ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         // ~ Post-state check 4 ~
 
@@ -5818,10 +5818,10 @@ contract MainDeploymentTest is Utility {
         // ~ Joe and Bob claim their revenue ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         vm.prank(BOB);
-        revStream.claim(BOB);
+        revStream.claim();
         
         // ~ Skip to expiration ~
 
@@ -5872,13 +5872,13 @@ contract MainDeploymentTest is Utility {
         // ~ All claim ~
 
         vm.prank(JOE);
-        revStream.claim(JOE);
+        revStream.claim();
 
         vm.prank(BOB);
-        revStream.claim(BOB);
+        revStream.claim();
 
         vm.prank(ALICE);
-        revStream.claim(ALICE);
+        revStream.claim();
     }
 
     // ~ RoyaltyHandler ~

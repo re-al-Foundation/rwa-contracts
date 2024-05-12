@@ -386,7 +386,7 @@ contract RevenueStream is IRevenueStream, UUPSUpgradeable, OwnableUpgradeable, R
 
             // If the cycle is expired and there's still revenue to be claimed...
             if (timePassed >= timeUntilExpired) {
-                if (unclaimedRevenue != 0 && !expiredRevClaimed[cycle]) {
+                if (unclaimedRevenue != 0) {
                     // if there's unclaimed revenue in this cycle (that we know is expired),
                     // add that revenue to the `expired` value.
                     expired += unclaimedRevenue;

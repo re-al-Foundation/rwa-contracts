@@ -324,6 +324,8 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
 
     /**
      * @notice Internal method for calculating the amount of revenue that is currently claimable for a specific `account`.
+     * @dev To avoid the potential of a memory allocation error, the initial size of cyclesClaimable and amountsClaimable is
+     * set to either numIndexes or cycles.length depending on which is lower.
      * @param account Address of account with voting power.
      * @return amount -> Amount of ETH that is currently claimable for `account`.
      */
@@ -340,8 +342,11 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
         uint256 numCycles = cycles.length;
         uint256 lastClaim = lastClaimIndex[account];
 
-        cyclesClaimable = new uint256[](numCycles);
-        amountsClaimable = new uint256[](numCycles);
+        uint256 arrSize;
+        numIndexes == MAX_INT ? arrSize = numCycles : arrSize = numIndexes;
+
+        cyclesClaimable = new uint256[](arrSize);
+        amountsClaimable = new uint256[](arrSize);
 
         for (uint256 i = lastClaim + 1; i < numCycles; ++i) {
             uint256 cycle = cycles[i];
@@ -368,6 +373,8 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
 
     /**
      * @notice This method returns the amount of expired revenue along with expired cycles.
+     * @dev To avoid the potential of a memory allocation error, the initial size of cyclesClaimable and amountsClaimable is
+     * set to either numIndexes or cycles.length depending on which is lower.
      * @return expired -> Amount of expired revenue in total.
      * @return expiredCycles -> Array of cycles that contain expired revenue.
      * @return num -> Number of cycles in `expiredCycles`.
@@ -375,7 +382,11 @@ contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradea
      */
     function _checkForExpiredRevenue(uint256 numIndexes) internal view returns (uint256 expired, uint256[] memory expiredCycles, uint256 num, uint256 indexes) {
         uint256 numCycles = cycles.length;
-        expiredCycles = new uint256[](numCycles);
+
+        uint256 arrSize;
+        numIndexes == MAX_INT ? arrSize = numCycles : arrSize = numIndexes;
+
+        expiredCycles = new uint256[](arrSize);
 
         for (uint256 i = expiredRevClaimedIndex + 1; i < numCycles; ++i) {
 

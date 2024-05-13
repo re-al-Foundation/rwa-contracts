@@ -9,7 +9,7 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { Time } from "@openzeppelin/contracts/utils/types/Time.sol";
 
 // oz upgradeable imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ERC721EnumerableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 
@@ -27,7 +27,7 @@ import { VotesUpgradeable } from "./utils/VotesUpgradeable.sol";
  * @author SeaZarrgh -> Refactored by Daniel Kuppitz & Chase Brown
  * @notice VotingEscrow is an ERC721 token contract that assigns voting power based on the quantity of locked tokens and
  * their vesting duration. It is designed to incentivize long-term holding and participation in governance.
- * @dev The contract extends ERC721EnumerableUpgradeable for token enumeration, OwnableUpgradeable for ownership
+ * @dev The contract extends ERC721EnumerableUpgradeable for token enumeration, Ownable2StepUpgradeable for ownership
  * features, VotesUpgradeable for governance functionalities, and UUPSUpgradeable for upgradeability. It uses a
  * specialized storage structure to track locked balances, vesting durations, and voting power checkpoints.
  *
@@ -40,7 +40,7 @@ import { VotesUpgradeable } from "./utils/VotesUpgradeable.sol";
  * The contract integrates with a Vesting contract to manage token vesting and voting power
  * updates, respectively, providing a flexible and robust governance token system.
  */
-contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, VotesUpgradeable, UUPSUpgradeable, IVotingEscrow {
+contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable, VotesUpgradeable, UUPSUpgradeable, IVotingEscrow {
     using SafeERC20 for IERC20;
     using VotingMath for uint256;
     using Checkpoints for Checkpoints.Trace208;

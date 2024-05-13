@@ -7,7 +7,7 @@ import { ERC721Enumerable } from "@openzeppelin/contracts/token/ERC721/extension
 import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
 
 // oz upgradeable imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
@@ -20,7 +20,7 @@ import { IRevenueStreamETH } from "./interfaces/IRevenueStreamETH.sol";
  * @notice This contract facilitates the distribution of claimable revenue to veRWA shareholders.
  *         This contract will facilitate the distribution of ETH.
  */
-contract RevenueStreamETH is IRevenueStreamETH, OwnableUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
+contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpgradeable, ReentrancyGuardUpgradeable {
 
     // ---------------
     // State Variables

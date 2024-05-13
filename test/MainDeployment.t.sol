@@ -2999,7 +2999,7 @@ contract MainDeploymentTest is Utility {
         // Admin delegates voting power to Joe for 1 month.
         vm.startPrank(ADMIN);
         veRWA.approve(address(delegateFactory), tokenId);
-        address delegator = delegateFactory.deployDelegator(
+        address newDelegator = delegateFactory.deployDelegator(
             tokenId,
             JOE,
             (30 days)
@@ -3008,17 +3008,17 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check ~
 
-        assertEq(veRWA.ownerOf(tokenId), address(delegator));
+        assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
-        assertEq(veRWA.getAccountVotingPower(address(delegator)), votingPower);
+        assertEq(veRWA.getAccountVotingPower(address(newDelegator)), votingPower);
         assertEq(veRWA.getAccountVotingPower(JOE), 0);
 
         assertEq(veRWA.getVotes(ADMIN), 0);
-        assertEq(veRWA.getVotes(address(delegator)), 0);
+        assertEq(veRWA.getVotes(address(newDelegator)), 0);
         assertEq(veRWA.getVotes(JOE), votingPower);
 
         assertEq(veRWA.delegates(ADMIN), ADMIN);
-        assertEq(veRWA.delegates(address(delegator)), JOE);
+        assertEq(veRWA.delegates(address(newDelegator)), JOE);
 
         delegateCheckpoints = veRWA.getDelegatesCheckpoints(ADMIN);
         assertEq(delegateCheckpoints._checkpoints.length, 2);
@@ -3027,7 +3027,7 @@ contract MainDeploymentTest is Utility {
         assertEq(delegateCheckpoints._checkpoints[1]._key, block.timestamp);
         assertEq(delegateCheckpoints._checkpoints[1]._value, 0);
 
-        delegateCheckpoints = veRWA.getDelegatesCheckpoints(address(delegator));
+        delegateCheckpoints = veRWA.getDelegatesCheckpoints(address(newDelegator));
         assertEq(delegateCheckpoints._checkpoints.length, 1);
         assertEq(delegateCheckpoints._checkpoints[0]._key, block.timestamp);
         assertEq(delegateCheckpoints._checkpoints[0]._value, 0);
@@ -3062,7 +3062,7 @@ contract MainDeploymentTest is Utility {
         // Admin delegates voting power to Joe for 1 month.
         vm.startPrank(ADMIN);
         veRWA.approve(address(delegateFactory), tokenId);
-        address delegator = delegateFactory.deployDelegator(
+        address newDelegator = delegateFactory.deployDelegator(
             tokenId,
             JOE,
             (30 days)
@@ -3072,29 +3072,29 @@ contract MainDeploymentTest is Utility {
         // ~ Pre-state check ~
 
         assertEq(delegateFactory.getDelegatorsArray().length, 1);
-        assertEq(delegateFactory.delegatorExpiration(delegator), block.timestamp + (30 days));
-        assertEq(delegateFactory.isDelegator(delegator), true);
+        assertEq(delegateFactory.delegatorExpiration(newDelegator), block.timestamp + (30 days));
+        assertEq(delegateFactory.isDelegator(newDelegator), true);
         assertEq(delegateFactory.expiredDelegatorExists(), false);
-        assertEq(delegateFactory.isExpiredDelegator(delegator), false);
+        assertEq(delegateFactory.isExpiredDelegator(newDelegator), false);
 
-        assertEq(veRWA.ownerOf(tokenId), address(delegator));
+        assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
-        assertEq(veRWA.getAccountVotingPower(address(delegator)), votingPower);
+        assertEq(veRWA.getAccountVotingPower(address(newDelegator)), votingPower);
         assertEq(veRWA.getAccountVotingPower(JOE), 0);
 
         assertEq(veRWA.getVotes(ADMIN), 0);
-        assertEq(veRWA.getVotes(address(delegator)), 0);
+        assertEq(veRWA.getVotes(address(newDelegator)), 0);
         assertEq(veRWA.getVotes(JOE), votingPower);
 
         assertEq(veRWA.delegates(ADMIN), ADMIN);
-        assertEq(veRWA.delegates(address(delegator)), JOE);
+        assertEq(veRWA.delegates(address(newDelegator)), JOE);
 
         // ~ Skip to expiration and check ~
 
         skip(30 days);
 
         assertEq(delegateFactory.expiredDelegatorExists(), true);
-        assertEq(delegateFactory.isExpiredDelegator(delegator), true);
+        assertEq(delegateFactory.isExpiredDelegator(newDelegator), true);
 
         // ~ Execute revokeExpiredDelegators ~
 
@@ -3103,21 +3103,21 @@ contract MainDeploymentTest is Utility {
         // ~ Post-state check ~
 
         assertEq(delegateFactory.getDelegatorsArray().length, 0);
-        assertEq(delegateFactory.delegatorExpiration(delegator), 0);
-        assertEq(delegateFactory.isDelegator(delegator), false);
+        assertEq(delegateFactory.delegatorExpiration(newDelegator), 0);
+        assertEq(delegateFactory.isDelegator(newDelegator), false);
         assertEq(delegateFactory.expiredDelegatorExists(), false);
 
         assertEq(veRWA.ownerOf(tokenId), ADMIN);
         assertEq(veRWA.getAccountVotingPower(ADMIN), votingPower);
-        assertEq(veRWA.getAccountVotingPower(address(delegator)), 0);
+        assertEq(veRWA.getAccountVotingPower(address(newDelegator)), 0);
         assertEq(veRWA.getAccountVotingPower(JOE), 0);
 
         assertEq(veRWA.getVotes(ADMIN), votingPower);
-        assertEq(veRWA.getVotes(address(delegator)), 0);
+        assertEq(veRWA.getVotes(address(newDelegator)), 0);
         assertEq(veRWA.getVotes(JOE), 0);
 
         assertEq(veRWA.delegates(ADMIN), ADMIN);
-        assertEq(veRWA.delegates(address(delegator)), address(delegator));
+        assertEq(veRWA.delegates(address(newDelegator)), address(newDelegator));
 
         // restrictions test -> random address will return false
         assertEq(delegateFactory.isExpiredDelegator(address(1)), false);
@@ -3965,7 +3965,7 @@ contract MainDeploymentTest is Utility {
         // Admin delegates voting power to Joe for 1 month.
         vm.startPrank(ADMIN);
         veRWA.approve(address(delegateFactory), tokenId);
-        address delegator = delegateFactory.deployDelegator(
+        address newDelegator = delegateFactory.deployDelegator(
             tokenId,
             JOE,
             (30 days)
@@ -3992,17 +3992,17 @@ contract MainDeploymentTest is Utility {
         
         assertEq(revStreamETH.claimable(JOE), amountRevenue);
 
-        assertEq(veRWA.ownerOf(tokenId), address(delegator));
+        assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
-        assertGt(veRWA.getAccountVotingPower(address(delegator)), 0);
+        assertGt(veRWA.getAccountVotingPower(address(newDelegator)), 0);
         assertEq(veRWA.getAccountVotingPower(JOE), 0);
 
         assertEq(veRWA.getVotes(ADMIN), 0);
-        assertEq(veRWA.getVotes(address(delegator)), 0);
+        assertEq(veRWA.getVotes(address(newDelegator)), 0);
         assertGt(veRWA.getVotes(JOE), 0);
 
         assertEq(veRWA.delegates(ADMIN), ADMIN);
-        assertEq(veRWA.delegates(address(delegator)), JOE);
+        assertEq(veRWA.delegates(address(newDelegator)), JOE);
 
         // ~ Execute claim ~
 
@@ -5182,7 +5182,7 @@ contract MainDeploymentTest is Utility {
         // Admin delegates voting power to Joe for 1 month.
         vm.startPrank(ADMIN);
         veRWA.approve(address(delegateFactory), tokenId);
-        address delegator = delegateFactory.deployDelegator(
+        address newDelegator = delegateFactory.deployDelegator(
             tokenId,
             JOE,
             (30 days)
@@ -5212,17 +5212,17 @@ contract MainDeploymentTest is Utility {
 
         assertEq(revStream.claimable(JOE), amountRevenue);
 
-        assertEq(veRWA.ownerOf(tokenId), address(delegator));
+        assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
-        assertGt(veRWA.getAccountVotingPower(address(delegator)), 0);
+        assertGt(veRWA.getAccountVotingPower(address(newDelegator)), 0);
         assertEq(veRWA.getAccountVotingPower(JOE), 0);
 
         assertEq(veRWA.getVotes(ADMIN), 0);
-        assertEq(veRWA.getVotes(address(delegator)), 0);
+        assertEq(veRWA.getVotes(address(newDelegator)), 0);
         assertGt(veRWA.getVotes(JOE), 0);
 
         assertEq(veRWA.delegates(ADMIN), ADMIN);
-        assertEq(veRWA.delegates(address(delegator)), JOE);
+        assertEq(veRWA.delegates(address(newDelegator)), JOE);
 
         // ~ Execute claim ~
 

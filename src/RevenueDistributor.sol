@@ -7,7 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 
 // oz upgradeable imports
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
 // local imports
 import { IRevenueStream } from "./interfaces/IRevenueStream.sol";
@@ -23,7 +23,7 @@ import { RevenueStreamETH } from "./RevenueStreamETH.sol";
  *         These methods will convert any revenue tokens to ETH then distribute that ETH to the `revStreamETH` contract where
  *         a checkpoint will be hit and the assets will become claimable to RWA stakeholders.
  */
-contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
+contract RevenueDistributor is Ownable2StepUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     // ---------------

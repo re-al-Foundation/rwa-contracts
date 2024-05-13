@@ -7,7 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { Time } from "@openzeppelin/contracts/utils/types/Time.sol";
 
 // oz upgradeable imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
@@ -31,7 +31,7 @@ import { IERC6372 } from "../interfaces/IERC6372.sol";
  * - Claim the underlying locked tokens upon vesting completion, burning the VotingEscrow token.
  * - Manage vesting schedules and track depositors' vested tokens.
  */
-contract VotingEscrowVesting is ReentrancyGuardUpgradeable, OwnableUpgradeable, UUPSUpgradeable, IERC6372 {
+contract VotingEscrowVesting is ReentrancyGuardUpgradeable, Ownable2StepUpgradeable, UUPSUpgradeable, IERC6372 {
 
     // ---------------
     // State Variables

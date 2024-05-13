@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
@@ -20,7 +20,7 @@ import { IDelegator } from "../interfaces/IDelegator.sol";
  *         A permissioned admin can create delegator contracts to deposit Voting Escrow tokens to delegate voting power
  *         to a delegatee.
  */
-contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
 
     // ---------------
     // State Variables

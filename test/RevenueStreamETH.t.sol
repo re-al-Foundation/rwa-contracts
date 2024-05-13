@@ -635,7 +635,7 @@ contract RWARevenueStreamETHTest is Utility {
         // Admin delegates voting power to Joe for 1 month.
         vm.startPrank(ADMIN);
         veRWA.approve(address(delegateFactory), tokenId);
-        address delegator = delegateFactory.deployDelegator(
+        address newDelegator = delegateFactory.deployDelegator(
             tokenId,
             JOE,
             (30 days)
@@ -662,17 +662,17 @@ contract RWARevenueStreamETHTest is Utility {
 
         assertEq(revStream.claimable(JOE), amountRevenue);
 
-        assertEq(veRWA.ownerOf(tokenId), address(delegator));
+        assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
-        assertGt(veRWA.getAccountVotingPower(address(delegator)), 0);
+        assertGt(veRWA.getAccountVotingPower(address(newDelegator)), 0);
         assertEq(veRWA.getAccountVotingPower(JOE), 0);
 
         assertEq(veRWA.getVotes(ADMIN), 0);
-        assertEq(veRWA.getVotes(address(delegator)), 0);
+        assertEq(veRWA.getVotes(address(newDelegator)), 0);
         assertGt(veRWA.getVotes(JOE), 0);
 
         assertEq(veRWA.delegates(ADMIN), ADMIN);
-        assertEq(veRWA.delegates(address(delegator)), JOE);
+        assertEq(veRWA.delegates(address(newDelegator)), JOE);
 
         // ~ Execute claim ~
 

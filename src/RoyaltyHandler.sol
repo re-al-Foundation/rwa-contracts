@@ -6,7 +6,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // oz upgradeable imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
@@ -25,7 +25,7 @@ import { ITNGBLV3Oracle } from "./interfaces/ITNGBLV3Oracle.sol";
  * @notice This contract accrues royalties from RWAToken swap taxes and when triggered, will distribute royalties
  *         to burn, RevenueDistributor, and to ALM.
  */
-contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
+contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
     using SafeERC20 for IERC20;
 
     // ---------------
@@ -426,13 +426,11 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     // Internal Methods
     // ----------------
 
-    event Debug(uint256);
-
     /**
      * @notice This internal method is used to fetch minimum amount quotes for swaps
      */
-    function _getQuote(uint256 amountIn) internal returns (uint256 amountOut) {
-        uint256 amountIn = amountIn - ((amountIn * (poolFee + percentageDeviation)) / oracle.POOL_FEE_100());
+    function _getQuote(uint256 amountIn) internal view returns (uint256 amountOut) {
+        amountIn = amountIn - ((amountIn * (poolFee + percentageDeviation)) / oracle.POOL_FEE_100());
 
         amountOut = oracle.consultWithFee(
             address(rwaToken),
@@ -441,8 +439,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
             secondsAgo,
             poolFee
         );
-
-        emit Debug(amountOut);
     }
 
     /**

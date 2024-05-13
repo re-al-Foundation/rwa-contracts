@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
@@ -11,7 +11,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
  * @author @chasebrownn
  * @notice ERC-20 contract for $RWA token. This contract does contain a taxing mechanism on swaps.
  */
-contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
+contract RWAToken is UUPSUpgradeable, Ownable2StepUpgradeable, ERC20Upgradeable {
 
     // ---------------
     // State Variables

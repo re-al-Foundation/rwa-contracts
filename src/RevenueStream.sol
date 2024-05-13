@@ -9,7 +9,7 @@ import { ERC721Enumerable } from "@openzeppelin/contracts/token/ERC721/extension
 import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
 
 // oz upgradeable imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
@@ -23,7 +23,7 @@ import { IRevenueStream } from "./interfaces/IRevenueStream.sol";
  *         This contract will facilitate the distribution of only 1 ERC-20 revenue token.
  *         If there are several streams of ERC-20 revenue, it's suggested to deploy multiple RevenueStream contracts.
  */
-contract RevenueStream is IRevenueStream, UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract RevenueStream is IRevenueStream, UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
 
     // ---------------

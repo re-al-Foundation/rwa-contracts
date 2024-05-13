@@ -190,6 +190,46 @@ contract RWARevenueStreamETHTest is Utility {
     // Unit Tests
     // ----------
 
+    // ~ initialize ~
+
+    /// @dev Verifies restrictions when initializing a new RevenueStreamETH contract
+    function test_revStreamETH_initialize_restrictions() public {
+        RevenueStreamETH newRevStream = new RevenueStreamETH();
+
+        // distributor cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRevStream),
+            abi.encodeWithSelector(RevenueStreamETH.initialize.selector,
+                address(0),
+                address(veRWA),
+                ADMIN
+            )
+        );
+
+        // veRWA cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRevStream),
+            abi.encodeWithSelector(RevenueStreamETH.initialize.selector,
+                address(revDistributor),
+                address(0),
+                ADMIN
+            )
+        );
+
+        // admin cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRevStream),
+            abi.encodeWithSelector(RevenueStreamETH.initialize.selector,
+                address(revDistributor),
+                address(veRWA),
+                address(0)
+            )
+        );
+    }
+
     // ~ depositETH ~
 
     /// @dev Verifies proper state changes when RevenueStreamETH::depositETH() is executed.
@@ -203,6 +243,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Pre-state check ~
 
         assertEq(address(revStream).balance, 0);
+        assertEq(revStream.getContractBalanceETH(), 0);
         assertEq(address(revDistributor).balance, amount);
 
         uint256[] memory cycles = revStream.getCyclesArray();
@@ -217,6 +258,7 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Post-state check ~
 
         assertEq(address(revStream).balance, amount);
+        assertEq(revStream.getContractBalanceETH(), amount);
         assertEq(address(revDistributor).balance, 0);
 
         assertEq(revStream.revenue(block.timestamp), amount);
@@ -227,12 +269,48 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(cycles[1], block.timestamp);
     }
 
-    /// @dev Verifies msg.value cannot be 0 when depositETH() is called.
-    function test_revStreamETH_depositETH_cantBe0() public {
+    /// @dev Verifies proper state changes when RevenueStreamETH::depositETH() is executed twice
+    /// at the same time.
+    function test_revStreamETH_depositETH_multiple() public {
+        
+        // ~ Config ~
 
+        uint256 amount = 1_000 ether;
+        vm.deal(address(revDistributor), amount);
+
+        // ~ Execute Deposit 1 ~
+
+        vm.prank(address(revDistributor));
+        revStream.depositETH{value: amount/2}();
+
+        // ~ Post-state check 1 ~
+
+        assertEq(revStream.revenue(block.timestamp), amount/2);
+
+        // ~ Execute Deposit 2 ~
+
+        vm.prank(address(revDistributor));
+        revStream.depositETH{value: amount/2}();
+
+        // ~ Post-state check 2 ~
+
+        assertEq(revStream.revenue(block.timestamp), amount);
+    }
+
+    /// @dev Verifies restrictions when RevenueStreamETH::depositETH is called with
+    /// unacceptable conditions.
+    function test_revStreamETH_depositETH_restrictions() public {
+        vm.deal(JOE, 1);
+
+        // amount cant be 0
         vm.prank(address(revDistributor));
         vm.expectRevert("RevenueStreamETH: msg.value == 0");
         revStream.depositETH{value: 0}();
+
+        // only revenue distributor can call
+        vm.prank(JOE);
+        vm.expectRevert("RevenueStreamETH: Not authorized");
+        revStream.depositETH{value: 1}();
     }
 
     // ~ claimable ~
@@ -490,6 +568,11 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(revStream.claimable(JOE), amountRevenue*2);
 
         // ~ Execute claim increment 1 ~
+
+        // restrictions check -> numIndexes cannot be 0
+        vm.prank(JOE);
+        vm.expectRevert("RevenueStreamETH: numIndexes cant be 0");
+        revStream.claimETHIncrement(0);
 
         vm.prank(JOE);
         revStream.claimETHIncrement(1);
@@ -903,6 +986,7 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(revStream.expiredRevenue(), 0);
     }
 
+    /// @dev Verifies proper state changes when RevenueStreamETH::skimExpiredRevenue() is called.
     function test_revStreamETH_skimExpiredRevenue_single() public {
 
         // ~ Config ~
@@ -969,6 +1053,7 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revDistributor).balance, amountRevenue);
     }
 
+    /// @dev Verifies proper state changes when RevenueStreamETH::skimExpiredRevenue() is called.
     function test_revStreamETH_skimExpiredRevenue_single_increment() public {
 
         // ~ Config ~
@@ -1054,6 +1139,8 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revDistributor).balance, amountRevenue*2);
     }
 
+    /// @dev Verifies proper state changes when RevenueStreamETH::skimExpiredRevenue() is called
+    /// with multiple deposit cycles.
     function test_revStreamETH_skimExpiredRevenue_multiple() public {
 
         // ~ Config ~
@@ -1160,6 +1247,8 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revDistributor).balance, amountRevenue * 3);
     }
 
+    /// @dev Verifies proper state changes when RevenueStreamETH::skimExpiredRevenue() is called
+    /// with multiple holders.
     function test_revStreamETH_skimExpiredRevenue_multipleHolders() public {
 
         // ~ Config ~
@@ -1286,5 +1375,22 @@ contract RWARevenueStreamETHTest is Utility {
 
         vm.prank(ALICE);
         revStream.claimETH();
+    }
+
+    /// @dev Verifies proper state changes when RevenueStream::setExpirationForRevenue() is executed.
+    function test_revStream_setExpirationForRevenue() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(revStream.timeUntilExpired(), 6 * (30 days));
+
+        // ~ Execute setExpirationForRevenue ~
+
+        vm.prank(ADMIN);
+        revStream.setExpirationForRevenue(1 days);
+
+        // ~ Post-state check ~
+
+        assertEq(revStream.timeUntilExpired(), 1 days);
     }
 }

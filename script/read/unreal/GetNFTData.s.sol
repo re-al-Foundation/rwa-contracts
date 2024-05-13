@@ -36,7 +36,8 @@ contract GetNFTData is Script {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        VotingEscrowRWAAPI.TokenData[] memory tokenData = api.getNFTsOfOwnerWithData(0xBc0Af260d262a982297ddAa96715Ef6c31536C24);
+        //VotingEscrowRWAAPI.TokenData[] memory tokenData = api.getNFTsOfOwnerWithData(0xBc0Af260d262a982297ddAa96715Ef6c31536C24);
+        api.getNFTsOfOwnerWithData(0xBc0Af260d262a982297ddAa96715Ef6c31536C24);
 
         vm.stopBroadcast();
     }

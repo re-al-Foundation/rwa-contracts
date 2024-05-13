@@ -371,7 +371,7 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
      */
     function withdrawPearl(uint256 amount) external onlyOwner {
         uint256 bal = pearl.balanceOf(address(this));
-        require(bal != 0 && bal >= amount, "RoyaltyHandler: Insufficient ERC20");
+        require(amount != 0 && bal >= amount, "RoyaltyHandler: Insufficient ERC20");
         pearl.safeTransfer(msg.sender, amount);
     }
 

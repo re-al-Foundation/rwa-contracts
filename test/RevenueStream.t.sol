@@ -193,6 +193,49 @@ contract RWARevenueStreamTest is Utility {
     // Unit Tests
     // ----------
 
+    // ~ initialize ~
+
+    /// @dev Verifies restrictions when initializing a new RevenueStream contract
+    function test_revStream_initialize_restrictions() public {
+        // revenueToken cannot be address(0)
+        vm.expectRevert();
+        new RevenueStream(address(0));
+        RevenueStream newRevStream = new RevenueStream(address(rwaToken));
+
+        // distributor cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRevStream),
+            abi.encodeWithSelector(RevenueStream.initialize.selector,
+                address(0),
+                address(veRWA),
+                ADMIN
+            )
+        );
+
+        // veRWA cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRevStream),
+            abi.encodeWithSelector(RevenueStream.initialize.selector,
+                address(revDistributor),
+                address(0),
+                ADMIN
+            )
+        );
+
+        // admin cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRevStream),
+            abi.encodeWithSelector(RevenueStream.initialize.selector,
+                address(revDistributor),
+                address(veRWA),
+                address(0)
+            )
+        );
+    }
+
     // ~ deposit ~
 
     /// @dev Verifies proper state changes when RevenueStream::deposit() is executed.
@@ -232,11 +275,18 @@ contract RWARevenueStreamTest is Utility {
         assertEq(cycles[1], block.timestamp);
     }
 
-    /// @dev Verifies amount cannot be 0 when deposit() is called.
-    function test_revStream_deposit_cantBe0() public {
+    /// @dev Verifies restrictions when RevenueStream::deposit is called with
+    /// unacceptable conditions.
+    function test_revStream_deposit_restrictions() public {
+        // amount cant be 0
         vm.prank(address(revDistributor));
         vm.expectRevert("RevenueStream: amount == 0");
         revStream.deposit(0);
+
+        // only revenue distributor can call
+        vm.prank(JOE);
+        vm.expectRevert("RevenueStream: Not authorized");
+        revStream.deposit(1);
     }
 
     // ~ claimable ~
@@ -515,6 +565,11 @@ contract RWARevenueStreamTest is Utility {
         assertEq(revStream.claimable(JOE), amountRevenue*2);
 
         // ~ Execute claim increment 1 ~
+
+        // restrictions check -> numIndexes cannot be 0
+        vm.prank(JOE);
+        vm.expectRevert("RevenueStream: numIndexes cant be 0");
+        revStream.claimIncrement(0);
 
         vm.prank(JOE);
         revStream.claimIncrement(1);
@@ -949,6 +1004,7 @@ contract RWARevenueStreamTest is Utility {
         assertEq(revStream.expiredRevenue(), 0);
     }
 
+    /// @dev Verifies proper state changes when RevenueStream::skimExpiredRevenue() is called.
     function test_revStream_skimExpiredRevenue_single() public {
 
         // ~ Config ~
@@ -1017,6 +1073,7 @@ contract RWARevenueStreamTest is Utility {
         assertEq(rwaToken.balanceOf(address(revDistributor)), amountRevenue);
     }
 
+    /// @dev Verifies proper state changes when RevenueStream::skimExpiredRevenueIncrement() is called.
     function test_revStream_skimExpiredRevenue_single_increment() public {
 
         // ~ Config ~
@@ -1080,6 +1137,11 @@ contract RWARevenueStreamTest is Utility {
 
         // ~ expired is skimmed in 1st increment~
 
+        // restrictions check -> amount cannot be 0
+        vm.prank(ADMIN);
+        vm.expectRevert("RevenueStream: numIndexes cant be 0");
+        revStream.skimExpiredRevenueIncrement(0);
+
         vm.prank(ADMIN);
         revStream.skimExpiredRevenueIncrement(1);
 
@@ -1106,6 +1168,8 @@ contract RWARevenueStreamTest is Utility {
         assertEq(rwaToken.balanceOf(address(revDistributor)), amountRevenue*2);
     }
 
+    /// @dev Verifies proper state changes when RevenueStream::skimExpiredRevenue() is called with
+    /// multiple deposit cycles.
     function test_revStream_skimExpiredRevenue_multiple() public {
 
         // ~ Config ~
@@ -1160,6 +1224,7 @@ contract RWARevenueStreamTest is Utility {
         assertEq(revStream.expiredRevenue(), 0);
 
         assertEq(rwaToken.balanceOf(address(revStream)), amountRevenue * 3);
+        assertEq(revStream.getContractBalance(), amountRevenue * 3);
         assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
 
         // ~ Skip to expiration 1 ~
@@ -1215,9 +1280,12 @@ contract RWARevenueStreamTest is Utility {
         assertEq(revStream.expiredRevenue(), 0);
 
         assertEq(rwaToken.balanceOf(address(revStream)), 0);
+        assertEq(revStream.getContractBalance(), 0);
         assertEq(rwaToken.balanceOf(address(revDistributor)), amountRevenue * 3);
     }
 
+    /// @dev Verifies proper state changes when RevenueStream::skimExpiredRevenue() is called with
+    /// multiple holders.
     function test_revStream_skimExpiredRevenue_multipleHolders() public {
 
         // ~ Config ~
@@ -1350,5 +1418,22 @@ contract RWARevenueStreamTest is Utility {
 
         vm.prank(ALICE);
         revStream.claim();
+    }
+
+    /// @dev Verifies proper state changes when RevenueStream::setExpirationForRevenue() is executed.
+    function test_revStream_setExpirationForRevenue() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(revStream.timeUntilExpired(), 6 * (30 days));
+
+        // ~ Execute setExpirationForRevenue ~
+
+        vm.prank(ADMIN);
+        revStream.setExpirationForRevenue(1 days);
+
+        // ~ Post-state check ~
+
+        assertEq(revStream.timeUntilExpired(), 1 days);
     }
 }

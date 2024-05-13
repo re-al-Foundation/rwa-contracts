@@ -53,7 +53,7 @@ contract MigrateTokens is Script {
 
         uint256 amountETH;
 
-        uint256 airdropAmount = .0001 ether;
+        //uint256 airdropAmount = .0001 ether;
 
         // create adapterParams for custom gas.
         bytes memory adapterParams = abi.encodePacked(uint16(1), uint256(200000));

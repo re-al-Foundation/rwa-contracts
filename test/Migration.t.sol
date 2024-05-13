@@ -988,7 +988,7 @@ contract MigrationTest is Utility {
         (uint256 startTime,
         uint256 endTime,
         uint256 lockedAmount,
-        uint256 multiplier,
+        /** multiplier */,
         /** claimed */,
         uint256 maxPayout) = passiveIncomeNFTV1.locks(tokenId);
 
@@ -1166,6 +1166,95 @@ contract MigrationTest is Utility {
         vm.prank(ADMIN);
         vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.ZeroAddress.selector));
         migrator.setReceiver(address(0));
+    }
+
+    /// @notice Verifies proper state changes when RealReceiver.setVotingEscrowRWA is executed.
+    function test_receiver_setVotingEscrowRWA() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(receiver.veRwaNFT(), address(veRWA));
+
+        // ~ Execute setVotingEscrowRWA ~
+
+        vm.prank(ADMIN);
+        receiver.setVotingEscrowRWA(address(2));
+
+        // ~ Pre-state check ~
+
+        assertEq(receiver.veRwaNFT(), address(2));
+    }
+
+    /// @notice Verifies restrictions when RealReceiver.setVotingEscrowRWA is executed.
+    function test_receiver_setVotingEscrowRWA_restrictions() public {
+        // Only owner can call setVotingEscrowRWA
+        vm.prank(JOE);
+        vm.expectRevert();
+        receiver.setVotingEscrowRWA(address(2));
+
+        // Input cannot be address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert();
+        receiver.setVotingEscrowRWA(address(0));
+    }
+
+    /// @notice Verifies proper state changes when RealReceiver.setRwaToken is executed.
+    function test_receiver_setRwaToken() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(receiver.rwaToken(), address(rwaToken));
+
+        // ~ Execute setRwaToken ~
+
+        vm.prank(ADMIN);
+        receiver.setRwaToken(address(2));
+
+        // ~ Pre-state check ~
+
+        assertEq(receiver.rwaToken(), address(2));
+    }
+
+    /// @notice Verifies restrictions when RealReceiver.setRwaToken is executed.
+    function test_receiver_setRwaToken_restrictions() public {
+        // Only owner can call setRwaToken
+        vm.prank(JOE);
+        vm.expectRevert();
+        receiver.setRwaToken(address(2));
+
+        // Input cannot be address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert();
+        receiver.setRwaToken(address(0));
+    }
+
+    /// @notice Verifies restrictions when RealReceiver.initialize is executed.
+    function test_receiver_initialize_restrictions() public {
+        RealReceiver newReceiver = new RealReceiver(address(endpoint));
+
+        // Initial admin cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newReceiver),
+            abi.encodeWithSelector(RealReceiver.initialize.selector,
+                uint16(block.chainid),
+                address(veRWA),
+                address(rwaToken),
+                address(0)
+            )
+        );
+
+        // chianId cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newReceiver),
+            abi.encodeWithSelector(RealReceiver.initialize.selector,
+                uint16(0),
+                address(veRWA),
+                address(rwaToken),
+                address(ADMIN)
+            )
+        );
     }
 }
 

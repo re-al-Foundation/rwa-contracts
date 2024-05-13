@@ -138,8 +138,8 @@ contract RWATokenTest is Utility {
                 address(rwaToken),
                 WETH,
                 MUMBAI_UNIV2_ROUTER,
-                address(0),
-                address(0)
+                UNREAL_BOX_MANAGER,
+                UNREAL_TNGBLV3ORACLE
             )
         );
         royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
@@ -424,27 +424,6 @@ contract RWATokenTest is Utility {
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(ALICE), amountTokens);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
-    }
-
-    /// @dev Verifies proper state changes when updateDistribution is executed.
-    function test_rwaToken_royaltyHandler_updateDistribution() public {
-
-        // ~ Pre-state check ~
-
-        assertEq(royaltyHandler.burnPortion(), 2);
-        assertEq(royaltyHandler.revSharePortion(), 2);
-        assertEq(royaltyHandler.lpPortion(), 1);
-
-        // ~ Execute updateDistribution ~
-
-        vm.prank(ADMIN);
-        royaltyHandler.updateDistribution(4, 4, 2);
-
-        // ~ Post-state check ~
-
-        assertEq(royaltyHandler.burnPortion(), 4);
-        assertEq(royaltyHandler.revSharePortion(), 4);
-        assertEq(royaltyHandler.lpPortion(), 2);
     }
 
     /// @dev Verifies proper state changes when RWAToken::updateFees is called.
@@ -746,5 +725,269 @@ contract RWATokenTest is Utility {
         vm.prank(JOE);
         vm.expectRevert(abi.encodeWithSelector(RWAToken.NotAuthorized.selector, JOE));
         rwaToken.mintFor(JOE, 1);
-    } 
+    }
+
+    // ~ RoyaltyHandler ~
+
+    /// @dev Verifies restrictions when initializing a new RoyaltyHandler contract.
+    function test_royaltyHandler_initialize_restrictions() public {
+        RoyaltyHandler newRoyaltyHandler = new RoyaltyHandler();
+
+        // Admin cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRoyaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                address(0),
+                address(revDistributor),
+                address(rwaToken),
+                WETH,
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+
+        // RevenueDistributor cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRoyaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                ADMIN,
+                address(0),
+                address(rwaToken),
+                WETH,
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+
+        // rwaToken cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRoyaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                ADMIN,
+                address(revDistributor),
+                address(0),
+                WETH,
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+
+        // WETH cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRoyaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                ADMIN,
+                address(revDistributor),
+                address(rwaToken),
+                address(0),
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::updateDistribution is executed.
+    function test_royaltyHandler_updateDistribution() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(royaltyHandler.burnPortion(), 2);
+        assertEq(royaltyHandler.revSharePortion(), 2);
+        assertEq(royaltyHandler.lpPortion(), 1);
+
+        // ~ Execute updateDistribution ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.updateDistribution(4, 4, 2);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.burnPortion(), 4);
+        assertEq(royaltyHandler.revSharePortion(), 4);
+        assertEq(royaltyHandler.lpPortion(), 2);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setPercentageDeviation is executed.
+    function test_royaltyHandler_setPercentageDeviation() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(royaltyHandler.percentageDeviation(), 200);
+
+        // ~ Execute setPercentageDeviation ~
+
+        vm.prank(ADMIN);
+        vm.expectRevert("RoyaltyHandler: Too high");
+        royaltyHandler.setPercentageDeviation(10000);
+
+        vm.prank(ADMIN);
+        royaltyHandler.setPercentageDeviation(100);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.percentageDeviation(), 100);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setSecondsAgo is executed.
+    function test_royaltyHandler_setSecondsAgo() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(royaltyHandler.secondsAgo(), 300);
+
+        // ~ Execute setSecondsAgo ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.setSecondsAgo(100);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.secondsAgo(), 100);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::updateDistributor is executed.
+    function test_royaltyHandler_updateDistributor() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(royaltyHandler.distributor(), JOE);
+
+        // ~ Execute updateDistributor ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.updateDistributor(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.distributor(), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::updateOracle is executed.
+    function test_royaltyHandler_updateOracle() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(address(royaltyHandler.oracle()), JOE);
+
+        // ~ Execute updateOracle ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.updateOracle(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler.oracle()), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setALMBoxManager is executed.
+    function test_royaltyHandler_setALMBoxManager() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(address(royaltyHandler.boxManager()), JOE);
+
+        // ~ Execute setALMBoxManager ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.setALMBoxManager(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler.boxManager()), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setPearl is executed.
+    function test_royaltyHandler_setPearl() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(address(royaltyHandler.pearl()), JOE);
+
+        // ~ Execute setPearl ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.setPearl(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler.pearl()), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setSwapRouter is executed.
+    function test_royaltyHandler_setSwapRouter() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(address(royaltyHandler.swapRouter()), JOE);
+
+        // ~ Execute setSwapRouter ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.setSwapRouter(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler.swapRouter()), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::updateFee is executed.
+    function test_royaltyHandler_updateFee() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(royaltyHandler.poolFee(), 1000);
+
+        // ~ Execute setSwapRouter ~
+
+        vm.prank(ADMIN);
+        vm.expectRevert("RoyaltyHandler: Invalid fee");
+        royaltyHandler.updateFee(777);
+
+        vm.prank(ADMIN);
+        royaltyHandler.updateFee(1000);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.poolFee(), 1000);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::withdrawPearl is executed.
+    function test_royaltyHandler_withdrawPearl() public {
+        uint256 amount = 10;
+        rwaToken.mintFor(address(royaltyHandler), amount);
+
+        vm.prank(ADMIN);
+        royaltyHandler.setPearl(address(rwaToken));
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), amount);
+        assertEq(rwaToken.balanceOf(ADMIN), 0);
+
+        // ~ Admin executes burn ~
+        
+        vm.prank(ADMIN);
+        vm.expectRevert("RoyaltyHandler: Insufficient ERC20");
+        royaltyHandler.withdrawPearl(0);
+
+        vm.prank(ADMIN);
+        vm.expectRevert("RoyaltyHandler: Insufficient ERC20");
+        royaltyHandler.withdrawPearl(amount+1);
+
+        vm.prank(ADMIN);
+        royaltyHandler.withdrawPearl(amount);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+        assertEq(rwaToken.balanceOf(ADMIN), amount);
+    }
 }

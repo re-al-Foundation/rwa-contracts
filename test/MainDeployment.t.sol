@@ -3266,17 +3266,6 @@ contract MainDeploymentTest is Utility {
                 swapParams.sqrtPriceLimitX96
             );
 
-        // bytes memory data2 =
-        //     abi.encodeWithSignature(
-        //         "unwrapWETH9(uint256,address)",
-        //         0, // minimum out
-        //         address(revDistributor)
-        //     );
-        
-        // bytes[] memory multicallData = new bytes[](2);
-        // multicallData[0] = data1;
-        // multicallData[1] = data2;
-
         // ~ Pre-state check ~
 
         assertEq(IERC20(DAI_MOCK).balanceOf(address(revDistributor)), amountIn);
@@ -5883,6 +5872,7 @@ contract MainDeploymentTest is Utility {
 
     // ~ RoyaltyHandler ~
 
+    /// @dev Verifies proper state changes when RoyaltyHandler::distributeRoyaltiesMinOut is called.
     function test_mainDeployment_royaltyHandler_distributeRoyaltiesMinOut() public {
         // ~ Config ~
 

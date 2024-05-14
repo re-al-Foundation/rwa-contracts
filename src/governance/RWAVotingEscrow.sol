@@ -423,6 +423,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
         uint256 remainingVestingDuration = $._remainingVestingDuration[tokenId];
         // fetch lockedBalance of tokenId
         uint256 lockedBalance = $._lockedBalance[tokenId];
+        if (lockedBalance == 0) revert ZeroLockBalance();
         // store lockedBalance in another var (will be used later)
         uint256 remainingBalance = lockedBalance;
         // find timestamp of current block
@@ -433,7 +434,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
             uint256 share = shares[i];
             // locked balance for this NFT is percentage of shares * total locked balance
             uint256 _lockedBalance = share * lockedBalance / totalShares;
-            if (lockedBalance == 0) revert ZeroLockBalance();
+            if (_lockedBalance == 0) revert ZeroLockBalance();
             // fetch new tokenId to mint
             uint256 newTokenId = _incrementAndGetTokenId();
             // store new tokenId in tokenIds array

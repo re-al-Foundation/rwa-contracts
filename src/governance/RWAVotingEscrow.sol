@@ -177,10 +177,18 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
     error SelfMerge();
 
     /**
-     * @notice This errorr is emitted when a deposit is being made for a token with a remaining
+     * @notice This error is emitted when a deposit is being made for a token with a remaining
      * vesting duration less than MIN_VESTING_DURATION.
      */
     error InsufficientVestingDuration(uint256 duration);
+
+    /**
+     * @notice This error is emitted if the amount of tokens transferred to this contract is not equal
+     * to the amount of tokens received.
+     * @param received The amount of tokens received.
+     * @param intended The amount of tokens intended to receive.
+     */
+    error InsufficientTokenReceived(uint256 received, uint256 intended);
 
 
     // -----------
@@ -248,7 +256,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
         // get storage
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
         // transfers tokens to this contract
-        $.lockedToken.safeTransferFrom(_msgSender(), address(this), _lockedBalance);
+        _pullTokens($.lockedToken, _msgSender(), _lockedBalance);
     }
 
     /**
@@ -352,7 +360,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
             revert InsufficientVestingDuration(remainingVestingDuration);
         }
         _updateLock(tokenId, $._lockedBalance[tokenId] + amount, $._remainingVestingDuration[tokenId]);
-        $.lockedToken.safeTransferFrom(_msgSender(), address(this), amount);
+        _pullTokens($.lockedToken, _msgSender(), amount);
     }
 
     /**
@@ -757,6 +765,22 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
     function _calculateEarlyFee(uint256 _duration) internal view returns (uint256 fee) {
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
         fee = ($.maxEarlyUnlockFee * _duration) / MAX_VESTING_DURATION;
+    }
+
+    /**
+     * @notice This internal method is used to move tokens from an address to this contract.
+     * @dev This method performs a pre-state balance check and a post-state balance check to verify the amount
+     * of tokens transferred is the exact amount that is received.
+     * @param token ERC-20 token being transferred.
+     * @param from Sender of tokens.
+     * @param amount Amount of tokens being transferred to this contract.
+     * @return amountReceived -> Amount of tokens received. If not equal to `amount`, function will revert.
+     */
+    function _pullTokens(IERC20 token, address from, uint256 amount) internal returns (uint256 amountReceived) {
+        uint256 preBal = token.balanceOf(address(this));
+        token.safeTransferFrom(_msgSender(), address(this), amount);
+        amountReceived = token.balanceOf(address(this)) - preBal;
+        if (amount != amountReceived) revert InsufficientTokenReceived(amountReceived, amount);
     }
 
     /**

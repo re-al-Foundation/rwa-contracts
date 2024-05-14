@@ -319,6 +319,9 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
         uint256 remainingTime = $._remainingVestingDuration[tokenId];
         uint256 payout = $._lockedBalance[tokenId];
 
+        _updateLock(tokenId, 0, 0);
+        _burn(tokenId);
+
         uint256 fee;
         uint256 penalty;
         if (remainingTime != 0) {
@@ -331,11 +334,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
             // burn penalty
             IRWAToken(address($.lockedToken)).burn(penalty);
         }
-        
-        _updateLock(tokenId, 0, 0);
-        _burn(tokenId);
         $.lockedToken.safeTransfer(receiver, payout);
-
         emit LockBurned(tokenId, remainingTime, fee, penalty, payout);
     }
 

@@ -265,6 +265,13 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         if (duration > MAX_VESTING_DURATION) {
             duration = MAX_VESTING_DURATION;
         }
+
+        emit MigrationMessageSent_PINFT(
+            msg.sender,
+            _tokenId,
+            amountTokens,
+            SafeCast.toUint208(amountTokens.calculateVotingPower(duration))
+        );
         
         _lzSend(
             remoteChainId,
@@ -273,13 +280,6 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
             zroPaymentAddress,
             adapterParams,
             msg.value
-        );
-
-        emit MigrationMessageSent_PINFT(
-            msg.sender,
-            _tokenId,
-            amountTokens,
-            SafeCast.toUint208(amountTokens.calculateVotingPower(duration))
         );
     }
 
@@ -391,12 +391,10 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         tngblToken.transferFrom(msg.sender, address(this), _amount);
 
         _checkAdapterParams(remoteChainId, SEND, adapterParams, 0);
-
         bytes memory lzPayload = abi.encode(SEND, abi.encodePacked(to), _amount);
 
-        _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
-
         emit MigrationInFlight_TNGBL(msg.sender, _amount);
+        _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
     }
 
     /**

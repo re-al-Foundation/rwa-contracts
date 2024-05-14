@@ -220,6 +220,8 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
         (uint256 amountToBurn, uint256 amountForRevShare, uint256 amountForLp, uint256 tokensForEth) 
             = getRoyaltyDistributions(amount);
 
+        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
+
         // burn
         IRWAToken(address(rwaToken)).burn(amountToBurn);
 
@@ -229,8 +231,6 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
         // lp
         _swapTokensForETH(tokensForEth, _getQuote(tokensForEth));
         _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
-
-        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
     }
 
     /**
@@ -248,6 +248,8 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
         (uint256 amountToBurn, uint256 amountForRevShare, uint256 amountForLp, uint256 tokensForEth) 
             = getRoyaltyDistributions(amount);
 
+        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
+
         // burn
         IRWAToken(address(rwaToken)).burn(amountToBurn);
 
@@ -257,8 +259,6 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
         // lp
         _swapTokensForETH(tokensForEth, minOut);
         _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
-
-        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
     }
 
     /**

@@ -38,6 +38,8 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     address[] public delegators;
     /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
     UpgradeableBeacon public beacon;
+    /// @notice Stores the maximum amount of delegators we can have deployed at one time.
+    uint256 public delegatorLimit;
 
 
     // ------
@@ -97,6 +99,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
 
         veRWA = IERC721Enumerable(_veRWA);
         beacon = new UpgradeableBeacon(_initDelegatorBase, address(this));
+        delegatorLimit = 100;
     }
 
 
@@ -115,6 +118,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         require(canDelegate[msg.sender] || msg.sender == owner(), "DelegateFactory: Not authorized");
         require(_delegatee != address(0), "delegatee cannot be address(0)");
         require(_duration != 0, "duration must be greater than 0");
+        require(delegatorLimit > delegators.length, "delegator limit cannot be exceeded");
 
         // take token
         veRWA.transferFrom(msg.sender, address(this), _tokenId);
@@ -189,6 +193,14 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
      */
     function updateDelegatorImplementation(address _newDelegatorImp) external onlyOwner {
         beacon.upgradeTo(_newDelegatorImp);
+    }
+
+    /**
+     * @notice This function allows the factory owner to update the delegatorLimit.
+     * @param _newLimit New limit to how many delegators can be deployed at one time.
+     */
+    function updateDelegatorLimit(uint256 _newLimit) external onlyOwner {
+        delegatorLimit = _newLimit;
     }
 
     /**

@@ -552,4 +552,66 @@ contract DelegationTest is Utility {
         assertEq(veRWA.getVotes(JOE), 0);
     }
 
+    /// @notice Verifies proper state changes when DelegateFactory::updateDelegatorLimit is executed.
+    function test_delegation_updateDelegatorLimit() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(delegateFactory.delegatorLimit(), 100);
+
+        // ~ Call updateDelegatorLimit ~
+
+        vm.prank(ADMIN);
+        delegateFactory.updateDelegatorLimit(200);
+
+        // ~ Pre-state check ~
+
+        assertEq(delegateFactory.delegatorLimit(), 200);
+    }
+
+    /// @notice Verifies when there's a limit placed, a new delegator cannot be deployed.
+    function test_delegation_deployDelegator_limit() public {
+        uint256 amount = 1_000 ether;
+        uint256 totalDuration = (36 * 30 days);
+
+        vm.startPrank(ADMIN);
+        rwaToken.approve(address(veRWA), amount);
+        uint256 tokenId = veRWA.mint(
+            ADMIN,
+            uint208(amount),
+            totalDuration
+        );
+        vm.stopPrank();
+        skip(1);
+
+        // Admin places limit to 0
+        vm.prank(ADMIN);
+        delegateFactory.updateDelegatorLimit(0);
+
+        // Admin delegates voting power to Joe for 1 month.
+        vm.startPrank(ADMIN);
+        veRWA.approve(address(delegateFactory), tokenId);
+        vm.expectRevert("delegator limit cannot be exceeded");
+        delegateFactory.deployDelegator(
+            tokenId,
+            JOE,
+            (30 days)
+        );
+        vm.stopPrank();
+
+        // Admin places limit to 1
+        vm.prank(ADMIN);
+        delegateFactory.updateDelegatorLimit(1);
+
+        // Admin delegates voting power to Joe for 1 month.
+        vm.startPrank(ADMIN);
+        veRWA.approve(address(delegateFactory), tokenId);
+        delegateFactory.deployDelegator(
+            tokenId,
+            JOE,
+            (30 days)
+        );
+        vm.stopPrank();
+    }
+
 }

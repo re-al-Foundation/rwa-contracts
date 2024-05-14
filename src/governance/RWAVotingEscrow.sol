@@ -9,7 +9,7 @@ import { SafeCast } from "@openzeppelin/contracts/utils/math/SafeCast.sol";
 import { Time } from "@openzeppelin/contracts/utils/types/Time.sol";
 
 // oz upgradeable imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ERC721EnumerableUpgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC721/extensions/ERC721EnumerableUpgradeable.sol";
 
@@ -27,7 +27,7 @@ import { VotesUpgradeable } from "./utils/VotesUpgradeable.sol";
  * @author SeaZarrgh -> Refactored by Daniel Kuppitz & Chase Brown
  * @notice VotingEscrow is an ERC721 token contract that assigns voting power based on the quantity of locked tokens and
  * their vesting duration. It is designed to incentivize long-term holding and participation in governance.
- * @dev The contract extends ERC721EnumerableUpgradeable for token enumeration, OwnableUpgradeable for ownership
+ * @dev The contract extends ERC721EnumerableUpgradeable for token enumeration, Ownable2StepUpgradeable for ownership
  * features, VotesUpgradeable for governance functionalities, and UUPSUpgradeable for upgradeability. It uses a
  * specialized storage structure to track locked balances, vesting durations, and voting power checkpoints.
  *
@@ -40,7 +40,7 @@ import { VotesUpgradeable } from "./utils/VotesUpgradeable.sol";
  * The contract integrates with a Vesting contract to manage token vesting and voting power
  * updates, respectively, providing a flexible and robust governance token system.
  */
-contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, VotesUpgradeable, UUPSUpgradeable, IVotingEscrow {
+contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable, VotesUpgradeable, UUPSUpgradeable, IVotingEscrow {
     using SafeERC20 for IERC20;
     using VotingMath for uint256;
     using Checkpoints for Checkpoints.Trace208;
@@ -129,6 +129,19 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      */
     event MigrationFulfilled(address indexed migrator, uint256 indexed tokenId);
 
+    /**
+     * @notice This event is emitted when the vesting duration of a token is updated.
+     * @param tokenId Token being manipulated.
+     * @param vestingDuration New vesting duration that is set for token.
+     */
+    event VestingDurationUpdated(uint256 indexed tokenId, uint256 vestingDuration);
+
+    /**
+     * @notice This event is emitted when a new `endpointReceiver` is set.
+     * @param newRealReceiver New address stored in `endpointReceiver`.
+     */
+    event RealReceiverSet(address indexed newRealReceiver);
+
 
     // ------
     // Errors
@@ -164,10 +177,18 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
     error SelfMerge();
 
     /**
-     * @notice This errorr is emitted when a deposit is being made for a token with a remaining
+     * @notice This error is emitted when a deposit is being made for a token with a remaining
      * vesting duration less than MIN_VESTING_DURATION.
      */
     error InsufficientVestingDuration(uint256 duration);
+
+    /**
+     * @notice This error is emitted if the amount of tokens transferred to this contract is not equal
+     * to the amount of tokens received.
+     * @param received The amount of tokens received.
+     * @param intended The amount of tokens intended to receive.
+     */
+    error InsufficientTokenReceived(uint256 received, uint256 intended);
 
 
     // -----------
@@ -235,7 +256,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         // get storage
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
         // transfers tokens to this contract
-        $.lockedToken.safeTransferFrom(_msgSender(), address(this), _lockedBalance);
+        _pullTokens($.lockedToken, _msgSender(), _lockedBalance);
     }
 
     /**
@@ -306,6 +327,9 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         uint256 remainingTime = $._remainingVestingDuration[tokenId];
         uint256 payout = $._lockedBalance[tokenId];
 
+        _updateLock(tokenId, 0, 0);
+        _burn(tokenId);
+
         uint256 fee;
         uint256 penalty;
         if (remainingTime != 0) {
@@ -318,11 +342,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             // burn penalty
             IRWAToken(address($.lockedToken)).burn(penalty);
         }
-        
-        _updateLock(tokenId, 0, 0);
-        _burn(tokenId);
         $.lockedToken.safeTransfer(receiver, payout);
-
         emit LockBurned(tokenId, remainingTime, fee, penalty, payout);
     }
 
@@ -340,7 +360,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             revert InsufficientVestingDuration(remainingVestingDuration);
         }
         _updateLock(tokenId, $._lockedBalance[tokenId] + amount, $._remainingVestingDuration[tokenId]);
-        $.lockedToken.safeTransferFrom(_msgSender(), address(this), amount);
+        _pullTokens($.lockedToken, _msgSender(), amount);
     }
 
     /**
@@ -410,6 +430,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
         uint256 remainingVestingDuration = $._remainingVestingDuration[tokenId];
         // fetch lockedBalance of tokenId
         uint256 lockedBalance = $._lockedBalance[tokenId];
+        if (lockedBalance == 0) revert ZeroLockBalance();
         // store lockedBalance in another var (will be used later)
         uint256 remainingBalance = lockedBalance;
         // find timestamp of current block
@@ -420,7 +441,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             uint256 share = shares[i];
             // locked balance for this NFT is percentage of shares * total locked balance
             uint256 _lockedBalance = share * lockedBalance / totalShares;
-            if (lockedBalance == 0) revert ZeroLockBalance();
+            if (_lockedBalance == 0) revert ZeroLockBalance();
             // fetch new tokenId to mint
             uint256 newTokenId = _incrementAndGetTokenId();
             // store new tokenId in tokenIds array
@@ -467,6 +488,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
             _checkAuthorized(ownerOf(tokenId), _msgSender(), tokenId);
         }
         _updateLock(tokenId, $._lockedBalance[tokenId], vestingDuration);
+        emit VestingDurationUpdated(tokenId, vestingDuration);
     }
 
     /**
@@ -475,6 +497,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
      */
     function updateEndpointReceiver(address _newEndpointReceiver) external onlyOwner {
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
+        emit RealReceiverSet(_newEndpointReceiver);
         $.endpointReceiver = _newEndpointReceiver;
     }
 
@@ -742,6 +765,22 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, OwnableUpgradeable, Vot
     function _calculateEarlyFee(uint256 _duration) internal view returns (uint256 fee) {
         VotingEscrowStorage storage $ = _getVotingEscrowStorage();
         fee = ($.maxEarlyUnlockFee * _duration) / MAX_VESTING_DURATION;
+    }
+
+    /**
+     * @notice This internal method is used to move tokens from an address to this contract.
+     * @dev This method performs a pre-state balance check and a post-state balance check to verify the amount
+     * of tokens transferred is the exact amount that is received.
+     * @param token ERC-20 token being transferred.
+     * @param from Sender of tokens.
+     * @param amount Amount of tokens being transferred to this contract.
+     * @return amountReceived -> Amount of tokens received. If not equal to `amount`, function will revert.
+     */
+    function _pullTokens(IERC20 token, address from, uint256 amount) internal returns (uint256 amountReceived) {
+        uint256 preBal = token.balanceOf(address(this));
+        token.safeTransferFrom(_msgSender(), address(this), amount);
+        amountReceived = token.balanceOf(address(this)) - preBal;
+        if (amount != amountReceived) revert InsufficientTokenReceived(amountReceived, amount);
     }
 
     /**

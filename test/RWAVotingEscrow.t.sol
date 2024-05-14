@@ -2501,5 +2501,4 @@ contract RWAVotingEscrowTest is Utility {
         assertEq(veRWA.getAccountVotingPower(JOE), vpAfter1);
         assertEq(veRWA.getVotes(JOE), vpAfter1);
     }
-
 }

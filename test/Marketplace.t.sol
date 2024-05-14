@@ -15,7 +15,7 @@ import { RWAToken } from "../src/RWAToken.sol";
 import { Marketplace } from "../src/Marketplace.sol";
 import { VotingMath } from "../src/governance/VotingMath.sol";
 import { RevenueDistributor } from "../src/RevenueDistributor.sol";
-import { RevenueStream } from "../src/RevenueStream.sol";
+import { RevenueStreamETH } from "../src/RevenueStreamETH.sol";
 
 // local helper imports
 import "./utils/Utility.sol";
@@ -36,7 +36,7 @@ contract MarketplaceTest is Utility {
     RWAToken public rwaToken;
     Marketplace public marketplace;
     RevenueDistributor public revDistributor;
-    RevenueStream public revStream;
+    RevenueStreamETH public revStream;
 
     // helper
     ERC20Mock public mockToken;
@@ -98,7 +98,7 @@ contract MarketplaceTest is Utility {
         veRWA = RWAVotingEscrow(address(veRWAProxy));
 
         // Deploy rev stream implementation
-        revStream = new RevenueStream();
+        revStream = new RevenueStreamETH();
 
         // Deploy revDistributor contract
         revDistributor = new RevenueDistributor();
@@ -108,7 +108,6 @@ contract MarketplaceTest is Utility {
             address(revDistributor),
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
-                address(revStream), // rev stream
                 address(veRWA),
                 address(0)
             )
@@ -196,7 +195,6 @@ contract MarketplaceTest is Utility {
 
         uint256 itemTokenId;
         address itemSeller;
-        address itemOwner;
         address itemPaymentToken;
         uint256 itemPrice;
         bool itemListed;
@@ -206,12 +204,11 @@ contract MarketplaceTest is Utility {
         assertEq(veRWA.balanceOf(JOE), preBal + 1);
         assertEq(veRWA.ownerOf(tokenId), JOE);
 
-        (itemTokenId, itemSeller, itemOwner, itemPaymentToken, itemPrice, itemListed)
+        (itemTokenId, itemSeller, itemPaymentToken, itemPrice, itemListed)
             = marketplace.idToMarketItem(tokenId);
 
         assertEq(itemTokenId, 0);
         assertEq(itemSeller, address(0));
-        assertEq(itemOwner, address(0));
         assertEq(itemPaymentToken, address(0));
         assertEq(itemPrice, 0);
         assertEq(itemListed, false);
@@ -228,12 +225,11 @@ contract MarketplaceTest is Utility {
         assertEq(veRWA.balanceOf(JOE), preBal);
         assertEq(veRWA.ownerOf(tokenId), address(marketplace));
 
-        (itemTokenId, itemSeller, itemOwner, itemPaymentToken, itemPrice, itemListed)
+        (itemTokenId, itemSeller, itemPaymentToken, itemPrice, itemListed)
             = marketplace.idToMarketItem(tokenId);
 
         assertEq(itemTokenId, tokenId);
         assertEq(itemSeller, JOE);
-        assertEq(itemOwner, address(marketplace));
         assertEq(itemPaymentToken, address(rwaToken));
         assertEq(itemPrice, 100_000 ether);
         assertEq(itemListed, true);
@@ -249,7 +245,6 @@ contract MarketplaceTest is Utility {
 
         uint256 itemTokenId;
         address itemSeller;
-        address itemOwner;
         address itemPaymentToken;
         uint256 itemPrice;
         bool itemListed;
@@ -263,12 +258,11 @@ contract MarketplaceTest is Utility {
 
         assertEq(veRWA.ownerOf(tokenId), address(marketplace));
 
-        (itemTokenId, itemSeller, itemOwner, itemPaymentToken, itemPrice, itemListed)
+        (itemTokenId, itemSeller, itemPaymentToken, itemPrice, itemListed)
             = marketplace.idToMarketItem(tokenId);
 
         assertEq(itemTokenId, tokenId);
         assertEq(itemSeller, JOE);
-        assertEq(itemOwner, address(marketplace));
         assertEq(itemPaymentToken, address(rwaToken));
         assertEq(itemPrice, 100_000 ether);
         assertEq(itemListed, true);
@@ -283,12 +277,11 @@ contract MarketplaceTest is Utility {
 
         assertEq(veRWA.ownerOf(tokenId), address(marketplace));
 
-        (itemTokenId, itemSeller, itemOwner, itemPaymentToken, itemPrice, itemListed)
+        (itemTokenId, itemSeller, itemPaymentToken, itemPrice, itemListed)
             = marketplace.idToMarketItem(tokenId);
 
         assertEq(itemTokenId, tokenId);
         assertEq(itemSeller, JOE);
-        assertEq(itemOwner, address(marketplace));
         assertEq(itemPaymentToken, address(rwaToken));
         assertEq(itemPrice, 200_000 ether);
         assertEq(itemListed, true);
@@ -323,12 +316,11 @@ contract MarketplaceTest is Utility {
         assertEq(veRWA.ownerOf(tokenId), address(marketplace));
         assertEq(rwaToken.balanceOf(ALICE), price);
 
-        (itemTokenId, itemSeller, itemOwner, itemPaymentToken, itemPrice, itemListed)
+        (itemTokenId, itemSeller, itemPaymentToken, itemPrice, itemListed)
             = marketplace.idToMarketItem(tokenId);
 
         assertEq(itemTokenId, tokenId);
         assertEq(itemSeller, JOE);
-        assertEq(itemOwner, address(marketplace));
         assertEq(itemPaymentToken, address(rwaToken));
         assertEq(itemPrice, price);
         assertEq(itemListed, true);
@@ -345,7 +337,7 @@ contract MarketplaceTest is Utility {
         assertEq(veRWA.ownerOf(tokenId), ALICE);
         assertEq(rwaToken.balanceOf(ALICE), 0);
 
-        (,,,,,itemListed) = marketplace.idToMarketItem(tokenId);
+        (,,,,itemListed) = marketplace.idToMarketItem(tokenId);
         assertEq(itemListed, false);
     }
 

@@ -6,7 +6,7 @@ import { IERC20 } from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 
 // oz upgradeable imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
@@ -25,7 +25,7 @@ import { ITNGBLV3Oracle } from "./interfaces/ITNGBLV3Oracle.sol";
  * @notice This contract accrues royalties from RWAToken swap taxes and when triggered, will distribute royalties
  *         to burn, RevenueDistributor, and to ALM.
  */
-contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
+contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
     using SafeERC20 for IERC20;
 
     // ---------------
@@ -70,14 +70,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     // ------
 
     /**
-     * @notice This event is emitted when `updateFees` is executed.
-     * @param burnPortion New burn fee.
-     * @param revSharePortion New fee taken for veRWA revenue share.
-     * @param lpPortion New fee taken for adding liquidity.
-     */
-    event DistributionUpdated(uint8 burnPortion, uint8 revSharePortion, uint8 lpPortion);
-
-    /**
      * @notice This event is emitted when `_handleRoyalties` is executed.
      * @dev `sentToRevDist` + `burned` + `addedToLiq` will not equal `totalAmount`. Delta was sold for ETH to
      *      add to liquidity.
@@ -87,6 +79,74 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param addedToLiq Amount of RWA added to liquidity.
      */
     event RoyaltiesDistributed(uint256 totalAmount, uint256 sentToRevDist, uint256 burned, uint256 addedToLiq);
+
+    /**
+     * @notice This event is emitted when `updateFees` is executed.
+     * @param burnPortion New burn fee.
+     * @param revSharePortion New fee taken for veRWA revenue share.
+     * @param lpPortion New fee taken for adding liquidity.
+     */
+    event DistributionUpdated(uint8 burnPortion, uint8 revSharePortion, uint8 lpPortion);
+
+    /**
+     * @notice This event is emitted when a new `percentageDeviation` is set.
+     * @param newPercentageDeviation New value stored in `percentageDeviation`.
+     */
+    event PercentageDeviationSet(uint256 newPercentageDeviation);
+
+    /**
+     * @notice This event is emitted when a new `secondsAgo` is set.
+     * @param newSecondsAgo New value stored in `secondsAgo`.
+     */
+    event SecondsAgoSet(uint32 newSecondsAgo);
+
+    /**
+     * @notice This event is emitted when a new `distributor` is set.
+     * @param newDistributor New value stored in `distributor`.
+     */
+    event DistributorSet(address indexed newDistributor);
+
+    /**
+     * @notice This event is emitted when a new `oracle` is set.
+     * @param newOracle New value stored in `oracle`.
+     */
+    event OracleSet(address indexed newOracle);
+
+    /**
+     * @notice This event is emitted when a new `box` is set.
+     * @param newALMBox New value stored in `box`.
+     */
+    event ALMBoxSet(address indexed newALMBox);
+
+    /**
+     * @notice This event is emitted when a new `boxManager` is set.
+     * @param newBoxManager New value stored in `boxManager`.
+     */
+    event BoxManagerSet(address indexed newBoxManager);
+
+    /**
+     * @notice This event is emitted when a new `gaugeV2ALM` is set.
+     * @param newGaugeV2ALM New value stored in `gaugeV2ALM`.
+     */
+    event GaugeV2ALMSet(address indexed newGaugeV2ALM);
+
+    /**
+     * @notice This event is emitted when a new `pearl` is set.
+     * @param newPearlAddress New value stored in `pearl`.
+     */
+    event PearlAddressSet(address indexed newPearlAddress);
+
+    /**
+     * @notice This event is emitted when a new `swapRouter` is set.
+     * @param newSwapRouter New value stored in `swapRouter`.
+     */
+    event SwapRouterSet(address indexed newSwapRouter);
+
+    /**
+     * @notice This event is emitted when a new `poolFee` is set.
+     * @param newPoolFee New value stored in `poolFee`.
+     */
+    event PoolFeeSet(uint24 newPoolFee);
 
 
     // -----------
@@ -140,8 +200,9 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         revSharePortion = 2; // 2/5
         lpPortion = 1; // 1/5
 
-        poolFee = 100;
+        poolFee = 3000;
         secondsAgo = 300;
+        percentageDeviation = 200;
     }
 
 
@@ -159,6 +220,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         (uint256 amountToBurn, uint256 amountForRevShare, uint256 amountForLp, uint256 tokensForEth) 
             = getRoyaltyDistributions(amount);
 
+        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
+
         // burn
         IRWAToken(address(rwaToken)).burn(amountToBurn);
 
@@ -168,8 +231,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         // lp
         _swapTokensForETH(tokensForEth, _getQuote(tokensForEth));
         _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
-
-        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
     }
 
     /**
@@ -187,6 +248,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         (uint256 amountToBurn, uint256 amountForRevShare, uint256 amountForLp, uint256 tokensForEth) 
             = getRoyaltyDistributions(amount);
 
+        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
+
         // burn
         IRWAToken(address(rwaToken)).burn(amountToBurn);
 
@@ -196,8 +259,6 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
         // lp
         _swapTokensForETH(tokensForEth, minOut);
         _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
-
-        emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
     }
 
     /**
@@ -207,12 +268,11 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @param _revSharePortion New fee taken for veRWA revenue share.
      * @param _lpPortion New fee taken for adding liquidity.
      */
-    function updateDistribution(uint8 _burnPortion, uint8 _revSharePortion, uint8 _lpPortion) external onlyOwner {   
-        burnPortion = _burnPortion;
-        revSharePortion = _burnPortion;
-        lpPortion = _lpPortion;
-
+    function updateDistribution(uint8 _burnPortion, uint8 _revSharePortion, uint8 _lpPortion) external onlyOwner {
         emit DistributionUpdated(_burnPortion, _revSharePortion, _lpPortion);
+        burnPortion = _burnPortion;
+        revSharePortion = _revSharePortion;
+        lpPortion = _lpPortion;
     }
 
     /**
@@ -221,6 +281,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      */
     function setPercentageDeviation(uint256 _percentageDeviation) external onlyOwner {
         require(_percentageDeviation <= oracle.POOL_FEE_01(), "RoyaltyHandler: Too high");
+        emit PercentageDeviationSet(_percentageDeviation);
         percentageDeviation = _percentageDeviation;
     }
 
@@ -228,6 +289,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice Allows owner to update `secondsAgo` variable.
      */
     function setSecondsAgo(uint32 _secondsAgo) external onlyOwner {
+        emit SecondsAgoSet(_secondsAgo);
         secondsAgo = _secondsAgo;
     }
 
@@ -235,6 +297,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice Allows owner to assign distributor role to another address.
      */
     function updateDistributor(address _distributor) external onlyOwner {
+        emit DistributorSet(_distributor);
         distributor = _distributor;
     }
 
@@ -242,6 +305,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice Allows owner to update `oracle` state variable.
      */
     function updateOracle(address _oracle) external onlyOwner {
+        emit OracleSet(_oracle);
         oracle = ITNGBLV3Oracle(_oracle);
     }
 
@@ -249,6 +313,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `box` variable.
      */
     function setALMBox(address _box) external onlyOwner {
+        emit ALMBoxSet(_box);
         box = _box;
     }
     
@@ -256,6 +321,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `boxManager` variable.
      */
     function setALMBoxManager(address _boxManager) external onlyOwner {
+        emit BoxManagerSet(_boxManager);
         boxManager = ILiquidBoxManager(_boxManager);
     }
 
@@ -263,6 +329,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `gaugeV2ALM` variable.
      */
     function setGaugeV2ALM(address _gaugeV2) external onlyOwner {
+        emit GaugeV2ALMSet(_gaugeV2);
         gaugeV2ALM = IGaugeV2ALM(_gaugeV2);
     }
 
@@ -270,6 +337,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `pearl` variable.
      */
     function setPearl(address _pearl) external onlyOwner {
+        emit PearlAddressSet(_pearl);
         pearl = IERC20(_pearl);
     }
 
@@ -277,6 +345,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      * @notice This method is used to update the `swapRouter` variable.
      */
     function setSwapRouter(address _swapRouter) external onlyOwner {
+        emit SwapRouterSet(_swapRouter);
         swapRouter = ISwapRouter(_swapRouter);
     }
 
@@ -293,6 +362,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
             _fee == oracle.POOL_FEE_1(),
             "RoyaltyHandler: Invalid fee"
         );
+        emit PoolFeeSet(_fee);
         poolFee = _fee;
     }
 
@@ -301,7 +371,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      */
     function withdrawPearl(uint256 amount) external onlyOwner {
         uint256 bal = pearl.balanceOf(address(this));
-        require(bal != 0 && bal >= amount, "RoyaltyHandler: Insufficient ERC20");
+        require(amount != 0 && bal >= amount, "RoyaltyHandler: Insufficient ERC20");
         pearl.safeTransfer(msg.sender, amount);
     }
 
@@ -310,7 +380,7 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
      */
     function harvestPearlRewards() external onlyOwner returns (uint256) {
         uint256 preBal = IERC20(pearl).balanceOf(address(this));
-        gaugeV2ALM.collectReward();
+        gaugeV2ALM.claimFees();
         return IERC20(pearl).balanceOf(address(this)) - preBal;
     }
 
@@ -359,8 +429,8 @@ contract RoyaltyHandler is UUPSUpgradeable, OwnableUpgradeable {
     /**
      * @notice This internal method is used to fetch minimum amount quotes for swaps
      */
-    function _getQuote(uint256 amountIn) internal returns (uint256 amountOut) {
-        uint256 amountIn = amountIn - ((amountIn * (poolFee + percentageDeviation)) / oracle.POOL_FEE_100());
+    function _getQuote(uint256 amountIn) internal view returns (uint256 amountOut) {
+        amountIn = amountIn - ((amountIn * (poolFee + percentageDeviation)) / oracle.POOL_FEE_100());
 
         amountOut = oracle.consultWithFee(
             address(rwaToken),

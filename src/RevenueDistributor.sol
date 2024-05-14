@@ -7,7 +7,7 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 
 // oz upgradeable imports
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
 // local imports
 import { IRevenueStream } from "./interfaces/IRevenueStream.sol";
@@ -23,7 +23,7 @@ import { RevenueStreamETH } from "./RevenueStreamETH.sol";
  *         These methods will convert any revenue tokens to ETH then distribute that ETH to the `revStreamETH` contract where
  *         a checkpoint will be hit and the assets will become claimable to RWA stakeholders.
  */
-contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
+contract RevenueDistributor is Ownable2StepUpgradeable, UUPSUpgradeable {
     using SafeERC20 for IERC20;
 
     // ---------------
@@ -44,6 +44,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     address public veRwaNFT;
     /// @dev Stores local WETH address.
     IWETH public WETH;
+    /// @dev Mapping used to fetch the RevenueStream contract address for a revenueToken (if set).
+    mapping(address revenueToken => address revenueStream) public revenueStreamForToken;
 
     
     // ---------
@@ -65,10 +67,18 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
 
     /**
      * @notice This event is emitted when revenue is distributed (as ETH) from this contract to a RevenueStreamETH contract.
-     * @param revStreamETH Address of revenue stream contract that received `token`.
-     * @param amount Amount of `token` sent.
+     * @param revStreamETH Address of revenue stream contract that received revenue.
+     * @param amount Amount of ETH deposited into RevenueStreamETH.
      */
-    event RevenueDistributed(address indexed revStreamETH, uint256 amount);
+    event ETHRevenueDistributed(address indexed revStreamETH, uint256 amount);
+
+    /**
+     * @notice This event is emitted when revenue is distributed from this contract to a RevenueStream contract.
+     * @param token Address of revenue token that was distributed.
+     * @param revStream Address of revenue stream contract that received revenue.
+     * @param amount Amount of revenue token deposited into RevenueStream.
+     */
+    event ERC20RevenueDistributed(address indexed token, address indexed revStream, uint256 amount);
 
     /**
      * @notice This event is emitted when an ERC-20 revenue token is converted to ETH prior to distribution.
@@ -98,6 +108,32 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      */
     event ETHReceived(address sender, uint256 amount);
 
+    /**
+     * @notice This event is emitted when a new `canDistribute` is set.
+     * @param newDistributor New value stored in `canDistribute`.
+     * @param canDistribute If true, `newDistributor` can distribute revenue.
+     */
+    event DistributorSet(address indexed newDistributor, bool canDistribute);
+
+    /**
+     * @notice This event is emitted when a new `WETH` is set.
+     * @param newWETHAddress New value stored in `WETH`.
+     */
+    event WETHAddressSet(address indexed newWETHAddress);
+
+    /**
+     * @notice This event is emitted when a new `revStreamETH` is set.
+     * @param newRevenueStreamETH New value stored in `revStreamETH`.
+     */
+    event RevenueStreamETHSet(address indexed newRevenueStreamETH);
+
+    /**
+     * @notice This event is emitted when a RevenueStream is assigned to a revenue token.
+     * @param token revenue token address.
+     * @param newRevenueStream RevenueStream contract address.
+     */
+    event RevenueStreamForTokenSet(address indexed token, address indexed newRevenueStream);
+
 
     // -----------
     // Constructor
@@ -115,12 +151,11 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     /**
      * @notice Initializes RevenueDistributor
      * @param _admin Address to be assigned as default admin.
-     * @param _revStreamETH Contract address for RevenueStreamETH contract
      * @param _veRwa Address of VotingEscrowRWA contract.
+     * @param _weth Address of WETH.
      */
     function initialize(
         address _admin,
-        address _revStreamETH,
         address _veRwa,
         address _weth
     ) external initializer {
@@ -130,7 +165,6 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         __Ownable_init(_admin);
         __UUPSUpgradeable_init();
 
-        revStreamETH = RevenueStreamETH(payable(_revStreamETH));
         veRwaNFT = _veRwa;
         WETH = IWETH(_weth);
     }
@@ -163,6 +197,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         bytes calldata _data
     ) external isDistributor returns (uint256 _amountOut) {
         require(isRevToken[_token], "invalid revenue token");
+        require(revenueStreamForToken[_token] == address(0), "Token not meant to be swapped");
         require(_amount != 0, "amount cannot be 0");
 
         uint256 _before = IERC20(_token).balanceOf(address(this));
@@ -172,7 +207,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         require(_amountOut != 0, "insufficient output amount");
 
         uint256 _after = IERC20(_token).balanceOf(address(this));
-        require(_after == _before - _amount, "invalid input amount");
+        require(_after >= _before - _amount, "invalid input amount");
         
         _distributeETH();
     }
@@ -205,7 +240,9 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
             uint256 amount = _amounts[i];
 
             require(isRevToken[token], "invalid revenue token");
+            require(revenueStreamForToken[token] == address(0), "Token not meant to be swapped");
             require(amount != 0, "amount cannot be 0");
+
             uint256 _before = IERC20(token).balanceOf(address(this));
             require(_before >= amount, "Insufficient balance");
 
@@ -225,6 +262,41 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     }
 
     /**
+     * @notice This method will take a specified amount of a revenue token and deposit it into a RevenueStream contract
+     * so it can be claimed by a veRWA holder.
+     * @param _token Revenue token to distribute (aka deposit into RevenueStream contract).
+     * @param _amount Amount of _token.
+     */
+    function distributeToken(address _token, uint256 _amount) external isDistributor {
+        require(isRevToken[_token], "invalid revenue token");
+        require(revenueStreamForToken[_token] != address(0), "No RevenueStream assigned to token");
+        require(_amount != 0, "amount cannot be 0");
+
+        _distributeERC20(_token, _amount);
+    }
+
+    /**
+     * @notice This method will distribute a batch of revenue tokens, depositing each token into a RevenuStream contract.
+     * @param _tokens Array of revenue tokens to distribute (aka deposit into RevenueStream contract).
+     * @param _amounts Amounts of _tokens[i].
+     */   
+    function distributeTokenBatch(address[] memory _tokens, uint256[] memory _amounts) external isDistributor {
+        require(_tokens.length == _amounts.length, "Lengths do not match");
+        for (uint256 i; i < _tokens.length;) {
+
+            require(isRevToken[_tokens[i]], "invalid revenue token");
+            require(revenueStreamForToken[_tokens[i]] != address(0), "No RevenueStream assigned to token");
+            require(_amounts[i] != 0, "amount cannot be 0");
+
+            _distributeERC20(_tokens[i], _amounts[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /**
      * @notice Permisioned method for distributing ETH to a designated RevenueStreamETH contract.
      */
     function distributeETH() external isDistributor {
@@ -237,6 +309,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      * @param _canDistribute If true, `_distributor` can distribute revenue.
      */
     function setDistributor(address _distributor, bool _canDistribute) external onlyOwner {
+        require(_distributor != address(0), "Cannot be address(0)");
+        emit DistributorSet(_distributor, _canDistribute);
         canDistribute[_distributor] = _canDistribute;
     }
 
@@ -244,6 +318,8 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      * @notice Permissioned method
      */
     function setWeth(address _weth) external onlyOwner {
+        require(_weth != address(0), "Cannot be address(0)");
+        emit WETHAddressSet(_weth);
         WETH = IWETH(_weth);
     }
 
@@ -254,6 +330,7 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
      */
     function updateRevenueStream(address payable _newRevStream) external onlyOwner {
         require(_newRevStream != address(0), "Cannot be address(0)");
+        emit RevenueStreamETHSet(_newRevStream);
         revStreamETH = RevenueStreamETH(_newRevStream);
     }
 
@@ -268,6 +345,22 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
         revenueTokens.push(_revToken);
 
         emit RevTokenAdded(_revToken);
+    }
+
+    /**
+     * @notice This method is used to add a RevenueStream contract to an already supported revenue token.
+     * @dev If a revenue token has a RevenueStream contract assigned, it means that token will not be
+     * swapped for ETH upon distribution. It will only be distributed as the raw token.
+     * @param _revToken Address of ERC-20 revenue token.
+     * @param _revStream RevenueStream contract address for token.
+     */
+    function setRevenueStreamForToken(address _revToken, address _revStream) external onlyOwner {
+        require(isRevToken[_revToken], "token not added");
+        require(revenueStreamForToken[_revToken] != _revStream, "revStream already set");
+
+        revenueStreamForToken[_revToken] = _revStream;
+
+        emit RevenueStreamForTokenSet(_revToken, _revStream);
     }
 
     /**
@@ -339,7 +432,17 @@ contract RevenueDistributor is OwnableUpgradeable, UUPSUpgradeable {
     function _distributeETH() internal {
         uint256 amount = address(this).balance;
         revStreamETH.depositETH{value: amount}();
-        emit RevenueDistributed(address(revStreamETH), amount);
+        emit ETHRevenueDistributed(address(revStreamETH), amount);
+    }
+
+    /**
+     * @notice Method for depositing ERC20 revenue tokens to a designated RevenueStream contract.
+     */
+    function _distributeERC20(address _token, uint256 _amount) internal {
+        address revStream = revenueStreamForToken[_token];
+        IERC20(_token).approve(revStream, _amount);
+        IRevenueStream(revStream).deposit(_amount);
+        emit ERC20RevenueDistributed(_token, revStream, _amount);
     }
 
     /**

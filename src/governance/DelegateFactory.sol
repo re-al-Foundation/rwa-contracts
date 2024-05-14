@@ -2,16 +2,16 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 import { UpgradeableBeacon } from "@openzeppelin/contracts/proxy/beacon/UpgradeableBeacon.sol";
 import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
+import { BeaconProxy } from "@openzeppelin/contracts/proxy/beacon/BeaconProxy.sol";
 
 // local imports
 import { Delegator } from "./Delegator.sol";
 import { IDelegator } from "../interfaces/IDelegator.sol";
-import { FetchableBeaconProxy } from "../proxy/FetchableBeaconProxy.sol";
 
 /**
  * @title DelegateFactory
@@ -20,7 +20,7 @@ import { FetchableBeaconProxy } from "../proxy/FetchableBeaconProxy.sol";
  *         A permissioned admin can create delegator contracts to deposit Voting Escrow tokens to delegate voting power
  *         to a delegatee.
  */
-contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuardUpgradeable {
+contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
 
     // ---------------
     // State Variables
@@ -38,6 +38,8 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
     address[] public delegators;
     /// @notice UpgradeableBeacon contract instance. Deployed by this contract upon initialization.
     UpgradeableBeacon public beacon;
+    /// @notice Stores the maximum amount of delegators we can have deployed at one time.
+    uint256 public delegatorLimit;
 
 
     // ------
@@ -55,6 +57,13 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
      * @param _delegator Address of revoked delegator.
      */
     event DelegatorDeleted(address indexed _delegator);
+
+    /**
+     * @notice This event is emitted when a new `canDelegate` is set.
+     * @param newDelegatorRole New value stored in `canDelegate`.
+     * @param canDelegate If true, `newDelegatorRole` address can delegate via deployDelegator.
+     */
+    event DelegatorRoleSet(address indexed newDelegatorRole, bool canDelegate);
 
     
     // -----------
@@ -90,6 +99,7 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
 
         veRWA = IERC721Enumerable(_veRWA);
         beacon = new UpgradeableBeacon(_initDelegatorBase, address(this));
+        delegatorLimit = 100;
     }
 
 
@@ -108,12 +118,13 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
         require(canDelegate[msg.sender] || msg.sender == owner(), "DelegateFactory: Not authorized");
         require(_delegatee != address(0), "delegatee cannot be address(0)");
         require(_duration != 0, "duration must be greater than 0");
+        require(delegatorLimit > delegators.length, "delegator limit cannot be exceeded");
 
         // take token
         veRWA.transferFrom(msg.sender, address(this), _tokenId);
 
         // create delegator
-        FetchableBeaconProxy newDelegatorBeacon = new FetchableBeaconProxy(
+        BeaconProxy newDelegatorBeacon = new BeaconProxy(
             address(beacon),
             abi.encodeWithSelector(Delegator.initialize.selector,
                 address(veRWA),
@@ -172,6 +183,7 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
      * @param _canDelegate If true, `_delegatingEOA` can delegate.
      */
     function setCanDelegate(address _delegatingEOA, bool _canDelegate) external onlyOwner {
+        emit DelegatorRoleSet(_delegatingEOA, _canDelegate);
         canDelegate[_delegatingEOA] = _canDelegate;
     }
 
@@ -181,6 +193,14 @@ contract DelegateFactory is UUPSUpgradeable, OwnableUpgradeable, ReentrancyGuard
      */
     function updateDelegatorImplementation(address _newDelegatorImp) external onlyOwner {
         beacon.upgradeTo(_newDelegatorImp);
+    }
+
+    /**
+     * @notice This function allows the factory owner to update the delegatorLimit.
+     * @param _newLimit New limit to how many delegators can be deployed at one time.
+     */
+    function updateDelegatorLimit(uint256 _newLimit) external onlyOwner {
+        delegatorLimit = _newLimit;
     }
 
     /**

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.19;
 
 // oz imports
-import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
+import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 import { ERC20Upgradeable } from "@openzeppelin/contracts-upgradeable/token/ERC20/ERC20Upgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
@@ -11,7 +11,7 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
  * @author @chasebrownn
  * @notice ERC-20 contract for $RWA token. This contract does contain a taxing mechanism on swaps.
  */
-contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
+contract RWAToken is UUPSUpgradeable, Ownable2StepUpgradeable, ERC20Upgradeable {
 
     // ---------------
     // State Variables
@@ -22,7 +22,6 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     /// @notice If true, `account` is excluded from fees (aka whitelisted).
     mapping(address account => bool) public isExcludedFromFees;
     /// @notice If true, `account` is blacklisted from buying, selling, or transferring tokens.
-    /// @dev Unless the recipient or sender is whitelisted.
     mapping(address account => bool) public isBlacklisted;
     /// @notice If true, address can burn tokens.
     mapping(address => bool) public canBurn;
@@ -72,6 +71,24 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      */
     event FeeUpdated(uint256 oldFee, uint256 newFee);
 
+    /**
+     * @notice This event is emitted when a new `royaltyHandler` is set.
+     * @param newRoyaltyHandler New address stored in `royaltyHandler`.
+     */
+    event RoyaltyHandlerSet(address indexed newRoyaltyHandler);
+
+    /**
+     * @notice This event is emitted when a new `lzReceiver` is set.
+     * @param newRealReceiver New address stored in `lzReceiver`.
+     */
+    event RealReceiverSet(address indexed newRealReceiver);
+
+    /**
+     * @notice This event is emitted when a new `votingEscrowRWA` is set.
+     * @param newRWAVotingEscrow New address stored in `votingEscrowRWA`.
+     */
+    event RWAVotingEscrowSet(address indexed newRWAVotingEscrow);
+
 
     // ------
     // Errors
@@ -87,6 +104,21 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @notice This error is emitted from an invalid address(0) input.
      */
     error ZeroAddress();
+
+    /**
+     * @notice This error is emitted when a caller is not authorized.
+     */
+    error NotAuthorized(address caller);
+
+    /**
+     * @notice This error is emitted when the max suply is exceeded.
+     */
+    error MaxSupplyExceeded();
+
+    /**
+     * @notice This error is emitted when a tax is applied, but no RoyaltyHandler address is stored.
+     */
+    error RoyaltyHandlerNotAssigned();
 
 
     // -----------
@@ -144,12 +176,15 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     function setRoyaltyHandler(address _royaltyHandler) external onlyOwner {
         if (_royaltyHandler == address(0)) revert ZeroAddress();
 
-        isExcludedFromFees[royaltyHandler] = false;
-        canBurn[royaltyHandler] = false;
+        if (royaltyHandler != address(0)) {
+            isExcludedFromFees[royaltyHandler] = false;
+            canBurn[royaltyHandler] = false;
+        }
 
         isExcludedFromFees[_royaltyHandler] = true;
         canBurn[_royaltyHandler] = true;
 
+        emit RoyaltyHandlerSet(_royaltyHandler);
         royaltyHandler = _royaltyHandler;
     }
 
@@ -160,12 +195,15 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     function setReceiver(address _receiver) external onlyOwner {
         if (_receiver == address(0)) revert ZeroAddress();
 
-        isExcludedFromFees[lzReceiver] = false;
-        canMint[lzReceiver] = false;
+        if (lzReceiver != address(0)) {
+            isExcludedFromFees[lzReceiver] = false;
+            canMint[lzReceiver] = false;
+        }
 
         isExcludedFromFees[_receiver] = true;
         canMint[_receiver] = true;
 
+        emit RealReceiverSet(_receiver);
         lzReceiver = _receiver;
     }
 
@@ -176,14 +214,17 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
     function setVotingEscrowRWA(address _veRWA) external onlyOwner {
         if (_veRWA == address(0)) revert ZeroAddress();
 
-        isExcludedFromFees[votingEscrowRWA] = false;
-        canBurn[votingEscrowRWA] = false;
-        canMint[votingEscrowRWA] = false;
+        if (votingEscrowRWA != address(0)) {
+            isExcludedFromFees[votingEscrowRWA] = false;
+            canBurn[votingEscrowRWA] = false;
+            canMint[votingEscrowRWA] = false;
+        }
 
         isExcludedFromFees[_veRWA] = true;
         canBurn[_veRWA] = true;
         canMint[_veRWA] = true;
 
+        emit RWAVotingEscrowSet(_veRWA);
         votingEscrowRWA = _veRWA;
     }
 
@@ -224,7 +265,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @param amount Amount of tokens to burn.
      */
     function burn(uint256 amount) public {
-        require(canBurn[msg.sender], "RWAToken: Not authorized");
+        if (!canBurn[msg.sender]) revert NotAuthorized(msg.sender);
         _burn(msg.sender, amount);
     }
 
@@ -233,7 +274,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @param amount Amount of tokens to mint.
      */
     function mint(uint256 amount) external {
-        require(canMint[msg.sender], "RWAToken: Not authorized");
+        if (!canMint[msg.sender]) revert NotAuthorized(msg.sender);
         _mint(msg.sender, amount);
     }
 
@@ -243,7 +284,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
      * @param amount Amount of tokens to mint.
      */
     function mintFor(address who, uint256 amount) external {
-        require(canMint[msg.sender], "RWAToken: Not authorized");
+        if (!canMint[msg.sender]) revert NotAuthorized(msg.sender);
         _mint(who, amount);
     }
 
@@ -268,7 +309,7 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
         if (isBlacklisted[from] && to != owner()) revert Blacklisted(from);
         if (isBlacklisted[to]) revert Blacklisted(to);
 
-        bool excludedAccount = isExcludedFromFees[from] || isExcludedFromFees[to];
+        bool excludedAccount = isExcludedFromFees[from] || isExcludedFromFees[to] || isExcludedFromFees[msg.sender];
 
         if (!excludedAccount) { // if not whitelisted
 
@@ -279,13 +320,13 @@ contract RWAToken is UUPSUpgradeable, OwnableUpgradeable, ERC20Upgradeable {
                 feeAmount = (amount * fee) / 100;       
                 amount -= feeAmount;
 
-                require(royaltyHandler != address(0), "RWAToken: No royalty handler assigned");
+                if (royaltyHandler == address(0)) revert RoyaltyHandlerNotAssigned();
                 super._update(from, royaltyHandler, feeAmount);
             }
         }
 
         super._update(from, to, amount);
-        require(totalSupply() <= MAX_SUPPLY, "RWAToken: max. supply exceeded");
+        if (totalSupply() > MAX_SUPPLY) revert MaxSupplyExceeded();
     }
 
     /**

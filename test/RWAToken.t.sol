@@ -10,7 +10,7 @@ import { Checkpoints } from "@openzeppelin/contracts/utils/structs/Checkpoints.s
 import { IERC20Metadata } from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 // local imports
-import { RevenueStream } from "../src/RevenueStream.sol";
+import { RevenueStreamETH } from "../src/RevenueStreamETH.sol";
 import { RevenueDistributor } from "../src/RevenueDistributor.sol";
 import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
 import { VotingEscrowVesting } from "../src/governance/VotingEscrowVesting.sol";
@@ -27,6 +27,7 @@ import { IUniswapV2Router02 } from "../src/interfaces/IUniswapV2Router02.sol";
 import { IUniswapV2Router01 } from "../src/interfaces/IUniswapV2Router01.sol";
 import { IUniswapV2Pair } from "../src/interfaces/IUniswapV2Pair.sol";
 import { IUniswapV2Factory } from "../src/interfaces/IUniswapV2Factory.sol";
+import { IQuoterV2 } from "../src/interfaces/IQuoterV2.sol";
 
 /**
  * @title RWATokenTest
@@ -38,7 +39,7 @@ contract RWATokenTest is Utility {
 
     // ~ Contracts ~
 
-    RevenueStream public revStream;
+    RevenueStreamETH public revStream;
     RevenueDistributor public revDistributor;
     RWAVotingEscrow public veRWA;
     VotingEscrowVesting public vesting;
@@ -46,15 +47,6 @@ contract RWATokenTest is Utility {
     RoyaltyHandler public royaltyHandler;
     DelegateFactory public delegateFactory;
     Delegator public delegator;
-
-    // proxies
-    ERC1967Proxy public revStreamProxy;
-    ERC1967Proxy public revDistributorProxy;
-    ERC1967Proxy public veRWAProxy;
-    ERC1967Proxy public royaltyHandlerProxy;
-    ERC1967Proxy public vestingProxy;
-    ERC1967Proxy public rwaTokenProxy;
-    ERC1967Proxy public delegateFactoryProxy;
 
     // ~ Variables ~
 
@@ -74,7 +66,7 @@ contract RWATokenTest is Utility {
         rwaToken = new RWAToken();
 
         // Deploy proxy for $RWA Token
-        rwaTokenProxy = new ERC1967Proxy(
+        ERC1967Proxy rwaTokenProxy = new ERC1967Proxy(
             address(rwaToken),
             abi.encodeWithSelector(RWAToken.initialize.selector,
                 ADMIN
@@ -88,7 +80,7 @@ contract RWATokenTest is Utility {
         vesting = new VotingEscrowVesting();
 
         // Deploy proxy for vesting contract
-        vestingProxy = new ERC1967Proxy(
+        ERC1967Proxy vestingProxy = new ERC1967Proxy(
             address(vesting),
             abi.encodeWithSelector(VotingEscrowVesting.initialize.selector,
                 ADMIN
@@ -103,7 +95,7 @@ contract RWATokenTest is Utility {
         veRWA = new RWAVotingEscrow();
 
         // Deploy proxy for veRWA
-        veRWAProxy = new ERC1967Proxy(
+        ERC1967Proxy veRWAProxy = new ERC1967Proxy(
             address(veRWA),
             abi.encodeWithSelector(RWAVotingEscrow.initialize.selector,
                 address(rwaToken),
@@ -117,18 +109,14 @@ contract RWATokenTest is Utility {
 
         // ~ Revenue Distributor Deployment ~
 
-        // Deploy base contract for beacon
-        revStream = new RevenueStream();
-
         // Deploy revDistributor contract
         revDistributor = new RevenueDistributor();
 
         // Deploy proxy for revDistributor
-        revDistributorProxy = new ERC1967Proxy(
+        ERC1967Proxy revDistributorProxy = new ERC1967Proxy(
             address(revDistributor),
             abi.encodeWithSelector(RevenueDistributor.initialize.selector,
                 ADMIN,
-                address(revStream),
                 address(veRWA),
                 address(0)
             )
@@ -142,7 +130,7 @@ contract RWATokenTest is Utility {
         royaltyHandler = new RoyaltyHandler();
 
         // Deploy proxy for royaltyHandler
-        royaltyHandlerProxy = new ERC1967Proxy(
+        ERC1967Proxy royaltyHandlerProxy = new ERC1967Proxy(
             address(royaltyHandler),
             abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
                 ADMIN,
@@ -150,8 +138,8 @@ contract RWATokenTest is Utility {
                 address(rwaToken),
                 WETH,
                 MUMBAI_UNIV2_ROUTER,
-                address(0),
-                address(0)
+                UNREAL_BOX_MANAGER,
+                UNREAL_TNGBLV3ORACLE
             )
         );
         royaltyHandler = RoyaltyHandler(payable(address(royaltyHandlerProxy)));
@@ -166,7 +154,7 @@ contract RWATokenTest is Utility {
         delegateFactory = new DelegateFactory();
 
         // Deploy DelegateFactory proxy
-        delegateFactoryProxy = new ERC1967Proxy(
+        ERC1967Proxy delegateFactoryProxy = new ERC1967Proxy(
             address(delegateFactory),
             abi.encodeWithSelector(DelegateFactory.initialize.selector,
                 address(veRWA),
@@ -180,7 +168,7 @@ contract RWATokenTest is Utility {
         // ~ Config ~
 
         // vm.prank(ADMIN);
-        // revStream = RevenueStream(revDistributor.createNewRevStream(address(rwaToken)));
+        // revStream = RevenueStreamETH(revDistributor.createNewRevStream(address(rwaToken)));
 
         // set votingEscrow on vesting contract
         vm.prank(ADMIN);
@@ -231,6 +219,41 @@ contract RWATokenTest is Utility {
     // Unit Tests
     // ----------
 
+    /// @dev Verifies the initial state variables of a new RWAToken instance.
+    function test_rwaToken_initializer() public {
+        RWAToken newRWAToken = new RWAToken();
+        ERC1967Proxy newRWATokenProxy = new ERC1967Proxy(
+            address(newRWAToken),
+            abi.encodeWithSelector(RWAToken.initialize.selector,
+                ADMIN
+            )
+        );
+        newRWAToken = RWAToken(address(newRWATokenProxy));
+
+        assertEq(newRWAToken.name(), "re.al");
+        assertEq(newRWAToken.symbol(), "RWA");
+        assertEq(newRWAToken.owner(), ADMIN);
+
+        assertEq(newRWAToken.isExcludedFromFees(address(newRWAToken)), true);
+        assertEq(newRWAToken.isExcludedFromFees(ADMIN), true);
+        assertEq(newRWAToken.isExcludedFromFees(address(0)), true);
+
+        assertEq(newRWAToken.fee(), 5);
+    }
+
+    /// @dev Verifies restrictions during initialization of a new RWAToken instance.
+    function test_rwaToken_initializer_restrictions() public {
+        RWAToken newRWAToken = new RWAToken();
+
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRWAToken),
+            abi.encodeWithSelector(RWAToken.initialize.selector,
+                address(0)
+            )
+        );
+    }
+
     /// @dev Verifies proper state changes when a user transfer tokens to another user.
     ///      Normal pier to pier transfers will result in 0 tax.
     function test_rwaToken_transfer() public {
@@ -251,11 +274,98 @@ contract RWATokenTest is Utility {
         vm.prank(JOE);
         rwaToken.transfer(ALICE, amountTokens);
 
-        // ~ Post-state check
+        // ~ Post-state check ~
 
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(ALICE), amountTokens);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+    }
+
+    /// @dev Verifies restrictions when the RWAToken::transfer function is initiated.
+    function test_rwaToken_transfer_restrictions() public {
+        uint256 amountTokens = 10_000 ether;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.prank(ADMIN);
+        rwaToken.setAutomatedMarketMakerPair(ALICE, true);
+
+        vm.store(address(rwaToken), bytes32(uint256(6)), bytes32(uint256(uint160(address(0)))));
+        assertEq(rwaToken.royaltyHandler(), address(0));
+
+        // A tax cannot be applied if there's no RoyaltyHandler assigned.
+        vm.prank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.RoyaltyHandlerNotAssigned.selector));
+        rwaToken.transfer(ALICE, amountTokens);
+    }
+
+    /// @dev Verifies proper state changes when a user transfers tokens to an AMM
+    ///      or receives tokens from an AMM. When this occurs, a tax is applied.
+    function test_rwaToken_transfer_fees() public {
+
+        // ~ Config ~
+
+        uint256 amountTokens = 100;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.prank(ADMIN);
+        rwaToken.setAutomatedMarketMakerPair(ALICE, true);
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.balanceOf(JOE), amountTokens);
+        assertEq(rwaToken.balanceOf(ALICE), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+
+        // ~ Execute transfer to AMM ~
+
+        vm.prank(JOE);
+        rwaToken.transfer(ALICE, amountTokens);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.balanceOf(JOE), 0);
+        assertEq(rwaToken.balanceOf(ALICE), 95);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 5);
+
+        // ~ Execute transfer from AMM ~
+
+        vm.prank(ALICE);
+        rwaToken.transfer(JOE, 95);
+
+        // ~ Post-state check ~
+
+        assertLt(rwaToken.balanceOf(JOE), 95);
+        assertEq(rwaToken.balanceOf(ALICE), 0);
+        assertGt(rwaToken.balanceOf(address(royaltyHandler)), 5);
+    }
+
+    /// @dev Verifies proper state changes when a user is blacklisted
+    function test_rwaToken_transfer_BL() public {
+
+        uint256 amountTokens = 10_000 ether;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.prank(ADMIN);
+        rwaToken.modifyBlacklist(JOE, true);
+
+        // blacklisted address cannot send tokens anywhere else but the owner
+        vm.startPrank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.Blacklisted.selector, JOE));
+        rwaToken.transfer(ALICE, amountTokens);
+        rwaToken.transfer(ADMIN, amountTokens);
+        vm.stopPrank();
+
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.startPrank(ADMIN);
+        rwaToken.modifyBlacklist(JOE, false);
+        rwaToken.modifyBlacklist(ALICE, true);
+        vm.stopPrank();
+
+        // blacklisted address cannot receive tokens
+        vm.prank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.Blacklisted.selector, ALICE));
+        rwaToken.transfer(ALICE, amountTokens);
     }
 
     /// @dev Verifies proper state changes when a user transfer tokens to another user.
@@ -275,7 +385,7 @@ contract RWATokenTest is Utility {
 
         assertEq(rwaToken.balanceOf(JOE), amountTokens);
         assertEq(rwaToken.balanceOf(ALICE), 0);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
 
         // ~ Execute transfer ~
 
@@ -286,7 +396,7 @@ contract RWATokenTest is Utility {
 
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(ALICE), amountTokens);
-        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
     }
 
     /// @dev Uses fuzzing to verify proper state changes when a user transfer tokens to another user.
@@ -316,8 +426,376 @@ contract RWATokenTest is Utility {
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
     }
 
-    /// @dev Verifies proper state changes when updateFees is executed.
-    function test_rwaToken_royaltyHandler_updateDistribution() public {
+    /// @dev Verifies proper state changes when RWAToken::updateFees is called.
+    function test_rwaToken_updateFees() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.fee(), 5);
+
+        // ~ Admin executes updateFees ~
+
+        vm.prank(ADMIN);
+        rwaToken.updateFee(7);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.fee(), 7);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::updateFees is called with unaccepted args.
+    function test_rwaToken_updateFees_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert();
+        rwaToken.updateFee(7);
+
+        // Fee cannot exceed 10
+        vm.prank(ADMIN);
+        vm.expectRevert();
+        rwaToken.updateFee(11);
+    }
+
+    /// @dev Verifies proper state changes when RWAToken::setRoyaltyHandler is called.
+    function test_rwaToken_setRoyaltyHandler() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.royaltyHandler(), address(royaltyHandler));
+        assertEq(rwaToken.isExcludedFromFees(address(royaltyHandler)), true);
+        assertEq(rwaToken.canBurn(address(royaltyHandler)), true);
+        assertEq(rwaToken.isExcludedFromFees(JOE), false);
+        assertEq(rwaToken.canBurn(JOE), false);
+
+        // ~ Admin executes setRoyaltyHandler ~
+
+        vm.prank(ADMIN);
+        rwaToken.setRoyaltyHandler(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.royaltyHandler(), JOE);
+        assertEq(rwaToken.isExcludedFromFees(address(royaltyHandler)), false);
+        assertEq(rwaToken.canBurn(address(royaltyHandler)), false);
+        assertEq(rwaToken.isExcludedFromFees(JOE), true);
+        assertEq(rwaToken.canBurn(JOE), true);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::setRoyaltyHandler is called with unaccepted args.
+    function test_rwaToken_setRoyaltyHandler_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert();
+        rwaToken.setRoyaltyHandler(JOE);
+
+        // Input cannot be address(0)
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.ZeroAddress.selector));
+        rwaToken.setRoyaltyHandler(address(0));
+    }
+
+    /// @dev Verifies proper state changes when RWAToken::setReceiver is called.
+    function test_rwaToken_setReceiver() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.lzReceiver(), address(this));
+        assertEq(rwaToken.isExcludedFromFees(address(this)), true);
+        assertEq(rwaToken.canMint(address(this)), true);
+        assertEq(rwaToken.isExcludedFromFees(JOE), false);
+        assertEq(rwaToken.canMint(JOE), false);
+
+        // ~ Admin executes setReceiver ~
+
+        vm.prank(ADMIN);
+        rwaToken.setReceiver(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.lzReceiver(), JOE);
+        assertEq(rwaToken.isExcludedFromFees(address(this)), false);
+        assertEq(rwaToken.canMint(address(this)), false);
+        assertEq(rwaToken.isExcludedFromFees(JOE), true);
+        assertEq(rwaToken.canMint(JOE), true);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::setReceiver is called with unaccepted args.
+    function test_rwaToken_setReceiver_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert();
+        rwaToken.setReceiver(JOE);
+
+        // Input cannot be address(0)
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.ZeroAddress.selector));
+        rwaToken.setReceiver(address(0));
+    }
+
+    /// @dev Verifies proper state changes when RWAToken::setVotingEscrowRWA is called.
+    function test_rwaToken_setVotingEscrowRWA() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.votingEscrowRWA(), address(veRWA));
+        assertEq(rwaToken.isExcludedFromFees(address(veRWA)), true);
+        assertEq(rwaToken.canMint(address(veRWA)), true);
+        assertEq(rwaToken.canBurn(address(veRWA)), true);
+        assertEq(rwaToken.isExcludedFromFees(JOE), false);
+        assertEq(rwaToken.canMint(JOE), false);
+        assertEq(rwaToken.canBurn(JOE), false);
+
+        // ~ Admin executes setVotingEscrowRWA ~
+
+        vm.prank(ADMIN);
+        rwaToken.setVotingEscrowRWA(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.votingEscrowRWA(), JOE);
+        assertEq(rwaToken.isExcludedFromFees(address(veRWA)), false);
+        assertEq(rwaToken.canMint(address(veRWA)), false);
+        assertEq(rwaToken.canBurn(address(veRWA)), false);
+        assertEq(rwaToken.isExcludedFromFees(JOE), true);
+        assertEq(rwaToken.canMint(JOE), true);
+        assertEq(rwaToken.canBurn(JOE), true);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::setVotingEscrowRWA is called with unaccepted args.
+    function test_rwaToken_setVotingEscrowRWA_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert();
+        rwaToken.setVotingEscrowRWA(JOE);
+
+        // Input cannot be address(0)
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.ZeroAddress.selector));
+        rwaToken.setVotingEscrowRWA(address(0));
+    }
+
+    /// @dev Verifies proper state changes when RWAToken::setAutomatedMarketMakerPair is called.
+    function test_rwaToken_setAutomatedMarketMakerPair() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.automatedMarketMakerPairs(JOE), false);
+
+        // ~ Admin executes setAutomatedMarketMakerPair ~
+
+        vm.prank(ADMIN);
+        rwaToken.setAutomatedMarketMakerPair(JOE, true);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.automatedMarketMakerPairs(JOE), true);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::setAutomatedMarketMakerPair is called with unaccepted args.
+    function test_rwaToken_setAutomatedMarketMakerPair_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert();
+        rwaToken.setAutomatedMarketMakerPair(JOE, true);
+
+        // Input cannot be address(0)
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.ZeroAddress.selector));
+        rwaToken.setAutomatedMarketMakerPair(address(0), true);
+
+        // Cannot set a pair that's already set
+        vm.prank(ADMIN);
+        vm.expectRevert();
+        rwaToken.setAutomatedMarketMakerPair(JOE, false);
+    }
+
+    /// @dev Verifies proper state changes when RWAToken::modifyBlacklist is called.
+    function test_rwaToken_modifyBlacklist() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.isBlacklisted(JOE), false);
+
+        // ~ Admin executes modifyBlacklist ~
+
+        vm.prank(ADMIN);
+        rwaToken.modifyBlacklist(JOE, true);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.isBlacklisted(JOE), true);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::modifyBlacklist is called with unaccepted args.
+    function test_rwaToken_modifyBlacklist_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert();
+        rwaToken.modifyBlacklist(JOE, true);
+
+        // Input cannot be address(0)
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.ZeroAddress.selector));
+        rwaToken.modifyBlacklist(address(0), true);
+    }
+
+    /// @dev Verifies proper state changes when RWAToken::burn is called.
+    function test_rwaToken_burn() public {
+        uint256 amount = 10;
+        rwaToken.mintFor(address(veRWA), amount);
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.balanceOf(address(veRWA)), amount);
+        assertEq(rwaToken.totalSupply(), amount);
+
+        // ~ Admin executes burn ~
+
+        vm.prank(address(veRWA));
+        rwaToken.burn(amount);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.balanceOf(address(veRWA)), 0);
+        assertEq(rwaToken.totalSupply(), 0);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::burn is called with unaccepted args.
+    function test_rwaToken_burn_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.NotAuthorized.selector, JOE));
+        rwaToken.burn(1);
+    }
+
+    /// @dev Verifies proper state changes when RWAToken::mint is called.
+    function test_rwaToken_mint() public {
+        uint256 amount = 10;
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.balanceOf(address(this)), 0);
+        assertEq(rwaToken.totalSupply(), 0);
+
+        // ~ Admin executes mint ~
+
+        rwaToken.mint(amount);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.balanceOf(address(this)), amount);
+        assertEq(rwaToken.totalSupply(), amount);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::mint is called with unaccepted args.
+    function test_rwaToken_mint_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.NotAuthorized.selector, JOE));
+        rwaToken.mint(1);
+
+        // Cannot mint over max supply
+        uint256 max = rwaToken.MAX_SUPPLY();
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.MaxSupplyExceeded.selector));
+        rwaToken.mint(max + 1);
+    }
+
+    /// @dev Verifies proper state changes when RWAToken::mintFor is called.
+    function test_rwaToken_mintFor() public {
+        uint256 amount = 10;
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.balanceOf(JOE), 0);
+        assertEq(rwaToken.totalSupply(), 0);
+
+        // ~ Admin executes mintFor ~
+
+        rwaToken.mintFor(JOE, amount);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.balanceOf(JOE), amount);
+        assertEq(rwaToken.totalSupply(), amount);
+    }
+
+    /// @dev Verifies restrictions when RWAToken::mintFor is called with unaccepted args.
+    function test_rwaToken_mintFor_restrictions() public {
+        // Only owner can call
+        vm.prank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(RWAToken.NotAuthorized.selector, JOE));
+        rwaToken.mintFor(JOE, 1);
+    }
+
+    // ~ RoyaltyHandler ~
+
+    /// @dev Verifies restrictions when initializing a new RoyaltyHandler contract.
+    function test_royaltyHandler_initialize_restrictions() public {
+        RoyaltyHandler newRoyaltyHandler = new RoyaltyHandler();
+
+        // Admin cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRoyaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                address(0),
+                address(revDistributor),
+                address(rwaToken),
+                WETH,
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+
+        // RevenueDistributor cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRoyaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                ADMIN,
+                address(0),
+                address(rwaToken),
+                WETH,
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+
+        // rwaToken cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRoyaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                ADMIN,
+                address(revDistributor),
+                address(0),
+                WETH,
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+
+        // WETH cannot be address(0)
+        vm.expectRevert();
+        new ERC1967Proxy(
+            address(newRoyaltyHandler),
+            abi.encodeWithSelector(RoyaltyHandler.initialize.selector,
+                ADMIN,
+                address(revDistributor),
+                address(rwaToken),
+                address(0),
+                MUMBAI_UNIV2_ROUTER,
+                address(0),
+                address(0)
+            )
+        );
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::updateDistribution is executed.
+    function test_royaltyHandler_updateDistribution() public {
 
         // ~ Pre-state check ~
 
@@ -325,7 +803,7 @@ contract RWATokenTest is Utility {
         assertEq(royaltyHandler.revSharePortion(), 2);
         assertEq(royaltyHandler.lpPortion(), 1);
 
-        // ~ Execute updateFees ~
+        // ~ Execute updateDistribution ~
 
         vm.prank(ADMIN);
         royaltyHandler.updateDistribution(4, 4, 2);
@@ -335,5 +813,181 @@ contract RWATokenTest is Utility {
         assertEq(royaltyHandler.burnPortion(), 4);
         assertEq(royaltyHandler.revSharePortion(), 4);
         assertEq(royaltyHandler.lpPortion(), 2);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setPercentageDeviation is executed.
+    function test_royaltyHandler_setPercentageDeviation() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(royaltyHandler.percentageDeviation(), 200);
+
+        // ~ Execute setPercentageDeviation ~
+
+        vm.prank(ADMIN);
+        vm.expectRevert("RoyaltyHandler: Too high");
+        royaltyHandler.setPercentageDeviation(10000);
+
+        vm.prank(ADMIN);
+        royaltyHandler.setPercentageDeviation(100);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.percentageDeviation(), 100);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setSecondsAgo is executed.
+    function test_royaltyHandler_setSecondsAgo() public {
+
+        // ~ Pre-state check ~
+
+        assertEq(royaltyHandler.secondsAgo(), 300);
+
+        // ~ Execute setSecondsAgo ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.setSecondsAgo(100);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.secondsAgo(), 100);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::updateDistributor is executed.
+    function test_royaltyHandler_updateDistributor() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(royaltyHandler.distributor(), JOE);
+
+        // ~ Execute updateDistributor ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.updateDistributor(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.distributor(), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::updateOracle is executed.
+    function test_royaltyHandler_updateOracle() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(address(royaltyHandler.oracle()), JOE);
+
+        // ~ Execute updateOracle ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.updateOracle(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler.oracle()), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setALMBoxManager is executed.
+    function test_royaltyHandler_setALMBoxManager() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(address(royaltyHandler.boxManager()), JOE);
+
+        // ~ Execute setALMBoxManager ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.setALMBoxManager(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler.boxManager()), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setPearl is executed.
+    function test_royaltyHandler_setPearl() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(address(royaltyHandler.pearl()), JOE);
+
+        // ~ Execute setPearl ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.setPearl(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler.pearl()), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::setSwapRouter is executed.
+    function test_royaltyHandler_setSwapRouter() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(address(royaltyHandler.swapRouter()), JOE);
+
+        // ~ Execute setSwapRouter ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.setSwapRouter(JOE);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler.swapRouter()), JOE);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::updateFee is executed.
+    function test_royaltyHandler_updateFee() public {
+
+        // ~ Pre-state check ~
+
+        assertNotEq(royaltyHandler.poolFee(), 1000);
+
+        // ~ Execute setSwapRouter ~
+
+        vm.prank(ADMIN);
+        vm.expectRevert("RoyaltyHandler: Invalid fee");
+        royaltyHandler.updateFee(777);
+
+        vm.prank(ADMIN);
+        royaltyHandler.updateFee(1000);
+
+        // ~ Post-state check ~
+
+        assertEq(royaltyHandler.poolFee(), 1000);
+    }
+
+    /// @dev Verifies proper state changes when RoyaltyHandler::withdrawPearl is executed.
+    function test_royaltyHandler_withdrawPearl() public {
+        uint256 amount = 10;
+        rwaToken.mintFor(address(royaltyHandler), amount);
+
+        vm.prank(ADMIN);
+        royaltyHandler.setPearl(address(rwaToken));
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), amount);
+        assertEq(rwaToken.balanceOf(ADMIN), 0);
+
+        // ~ Admin executes burn ~
+        
+        vm.prank(ADMIN);
+        vm.expectRevert("RoyaltyHandler: Insufficient ERC20");
+        royaltyHandler.withdrawPearl(0);
+
+        vm.prank(ADMIN);
+        vm.expectRevert("RoyaltyHandler: Insufficient ERC20");
+        royaltyHandler.withdrawPearl(amount+1);
+
+        vm.prank(ADMIN);
+        royaltyHandler.withdrawPearl(amount);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+        assertEq(rwaToken.balanceOf(ADMIN), amount);
     }
 }

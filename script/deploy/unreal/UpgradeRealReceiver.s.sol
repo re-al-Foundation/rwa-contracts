@@ -22,7 +22,7 @@ import "../../../test/utils/Constants.sol";
  */
 contract UpgradeRealReceiver is DeployUtility {
 
-    // ~ Contracts ~s
+    // ~ Contracts ~
     RealReceiver public receiver;
 
     // ~ Variables ~

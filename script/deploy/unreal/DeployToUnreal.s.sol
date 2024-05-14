@@ -19,6 +19,7 @@ import { Delegator } from "../../../src/governance/Delegator.sol";
 // revenue management
 import { RevenueDistributor } from "../../../src/RevenueDistributor.sol";
 import { RevenueStreamETH } from "../../../src/RevenueStreamETH.sol";
+import { RevenueStream } from "../../../src/RevenueStream.sol";
 // migration
 import { RealReceiver } from "../../../src/RealReceiver.sol";
 // mocks
@@ -43,7 +44,7 @@ import "../../../test/utils/Constants.sol";
 
     @dev To verify manually: 
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
-    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api
 */
 
 /**
@@ -64,6 +65,7 @@ contract DeployToUnreal is DeployUtility {
     DelegateFactory public delegateFactory;
     RevenueDistributor public revDistributor;
     RevenueStreamETH public revStreamETH;
+    RevenueStream public revStreamRWA;
     RealReceiver public receiver;
     // helper
     VotingEscrowRWAAPI public api;
@@ -184,7 +186,6 @@ contract DeployToUnreal is DeployUtility {
                 address(rwaToken),
                 WETH9,
                 SWAP_ROUTER,
-                QUOTER,
                 UNREAL_BOX_MANAGER,
                 UNREAL_TNGBLV3ORACLE
             )
@@ -206,6 +207,21 @@ contract DeployToUnreal is DeployUtility {
         );
         console2.log("revStreamETH", address(revStreamETHProxy));
         revStreamETH = RevenueStreamETH(payable(address(revStreamETHProxy)));
+
+        // Deploy revStreamRWA contract
+        revStreamRWA = new RevenueStream(address(rwaToken));
+
+        // Deploy proxy for revStreamRWA
+        ERC1967Proxy revStreamProxy = new ERC1967Proxy(
+            address(revStreamRWA),
+            abi.encodeWithSelector(RevenueStream.initialize.selector,
+                address(revDistributor),
+                address(veRWA),
+                adminAddress
+            )
+        );
+        console2.log("revStreamETH", address(revStreamProxy));
+        revStreamRWA = RevenueStream(address(revStreamProxy));
 
 
         // Deploy Delegator implementation
@@ -252,14 +268,16 @@ contract DeployToUnreal is DeployUtility {
         veRWA.updateEndpointReceiver(address(receiver));
 
         // RevenueDistributor config
-        revDistributor.updateRevenueStream(payable(address(revStreamETH)));
         // add revenue streams
         revDistributor.addRevenueToken(address(rwaToken)); // from RWA buy/sell taxes
         revDistributor.addRevenueToken(UNREAL_DAI); // DAI - bridge yield (ETH too)
         revDistributor.addRevenueToken(UNREAL_MORE); // MORE - Borrowing fees
         revDistributor.addRevenueToken(USTB); // USTB - caviar incentives, basket rent yield, marketplace fees
         // add necessary selectors for swaps
-        revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")), true);
+        revDistributor.setSelectorForTarget(SWAP_ROUTER, bytes4(keccak256("multicall(bytes[])")), true); // TODO: Confirm the real targets
+        // add Revenue streams
+        revDistributor.updateRevenueStream(payable(address(revStreamETH)));
+        revDistributor.setRevenueStreamForToken(address(rwaToken), address(revStreamRWA));
 
         // revStreamETH config
         // TODO: Opt out of rebase on USTB
@@ -268,8 +286,9 @@ contract DeployToUnreal is DeployUtility {
         rwaToken.setVotingEscrowRWA(address(veRWA));
         rwaToken.setReceiver(address(receiver));
         rwaToken.excludeFromFees(address(revDistributor), true);
-        rwaToken.excludeFromFees(SWAP_ROUTER, true);
+        //rwaToken.excludeFromFees(SWAP_ROUTER, true);
         rwaToken.setRoyaltyHandler(address(royaltyHandler));
+        rwaToken.excludeFromFees(address(revStreamRWA), true);
         
         // RoyaltyHandler config
         royaltyHandler.setPearl(PEARL);
@@ -294,6 +313,7 @@ contract DeployToUnreal is DeployUtility {
         _saveDeploymentAddress("RevenueDistributor", address(revDistributor));
         _saveDeploymentAddress("RoyaltyHandler", address(royaltyHandler));
         _saveDeploymentAddress("RevenueStreamETH", address(revStreamETH));
+        _saveDeploymentAddress("RevenueStreamRWA", address(revStreamRWA));
         _saveDeploymentAddress("DelegateFactory", address(delegateFactory));
         _saveDeploymentAddress("API", address(api));
 

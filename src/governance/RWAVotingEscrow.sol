@@ -778,7 +778,7 @@ contract RWAVotingEscrow is ERC721EnumerableUpgradeable, Ownable2StepUpgradeable
      */
     function _pullTokens(IERC20 token, address from, uint256 amount) internal returns (uint256 amountReceived) {
         uint256 preBal = token.balanceOf(address(this));
-        token.safeTransferFrom(_msgSender(), address(this), amount);
+        token.safeTransferFrom(from, address(this), amount);
         amountReceived = token.balanceOf(address(this)) - preBal;
         if (amount != amountReceived) revert InsufficientTokenReceived(amountReceived, amount);
     }

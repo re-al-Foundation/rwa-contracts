@@ -285,6 +285,7 @@ contract DeployAll is DeployUtility {
         rwaToken.excludeFromFees(address(revDistributor), true);
         rwaToken.setRoyaltyHandler(address(royaltyHandler));
         rwaToken.excludeFromFees(address(revStreamRWA), true);
+        rwaToken.excludeFromFees(REAL_NFTMANAGER, true);
         
         // RoyaltyHandler config
         royaltyHandler.setPearl(REAL_PEARL);
@@ -319,11 +320,10 @@ contract DeployAll is DeployUtility {
         // TODO: Add all revenue tokens
         // TODO: revDistributor.setRevenueStreamForToken(address(rwaToken), address(revStreamRWA));
 
-        // TODO: Create the RWA/WETH pair, initialize, and add liquidity
-        // TODO: Set RWA/WETH pair on RWAToken as automatedMarketMakerPair via RwaToken.setAutomatedMarketMakerPair(pair, true);
-        // TODO: Set RWA/WETH fee on RoyaltyHandler
-        // TODO: Create LiquidBox and GaugeV2ALM for RWA/WETH pair -> Set on RoyaltyHandler
-        // TODO: Deploy and set ExactInputWrapper if needed
+        // TODO: Create the RWA/WETH pair, initialize, and add liquidity ✅
+        // TODO: Set RWA/WETH pair on RWAToken as automatedMarketMakerPair via RwaToken.setAutomatedMarketMakerPair(pair, true); ✅
+        // TODO: Set RWA/WETH fee on RoyaltyHandler ✅
+        // TODO: Create LiquidBox and GaugeV2ALM for RWA/WETH pair -> Set on RoyaltyHandler ✅
         // TODO: Set any permissions on any necessary Gelato Function callers
 
         // TODO: If mainnet, transfer ownership to multisig

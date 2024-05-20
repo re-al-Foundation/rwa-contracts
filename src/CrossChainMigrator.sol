@@ -232,36 +232,32 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         bytes calldata adapterParams
     ) payable external {
         if (!migrationActive) revert MigrationNotActive();
-
-        // Transfer NFT into this contract. Keep custody
-        passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenId);
-
         _checkAdapterParams(remoteChainId, SEND_NFT, adapterParams, 0);
 
-        (uint256 startTime,
-        uint256 endTime,
-        uint256 lockedAmount,
-        uint256 multiplier,
-        uint256 claimed,
-        uint256 maxPayout) = passiveIncomeNFT.locks(_tokenId);
-
-        uint256 amountTokens;
-        if (multiplier != piCalculator.determineMultiplier(BOOST_START, BOOST_END, startTime, uint8((endTime - startTime) / 30 days))) {
-            // if early claim, just mint them remaining in `maxPayout`.
-            amountTokens = maxPayout;
-        }
-        else {
-            // otherwise, just calculate amount to mint/lock as normal.
-            amountTokens = lockedAmount + ((lockedAmount * (multiplier - 1e18)) / 1e18) - claimed;
-        }
+        LockCache memory lCache;
+        (lCache.startTime,
+        lCache.endTime,
+        lCache.lockedAmount,
+        lCache.multiplier,
+        lCache.claimed,
+        lCache.maxPayout) = passiveIncomeNFT.locks(_tokenId);
 
         // if lock is expired -> revert
-        if (block.timestamp >= endTime) {
+        if (block.timestamp >= lCache.endTime) {
             revert ExpiredNFT(_tokenId);
         }
 
-        uint256 duration = endTime - block.timestamp;
+        uint256 amountTokens;
+        if (lCache.multiplier != piCalculator.determineMultiplier(BOOST_START, BOOST_END, lCache.startTime, uint8((lCache.endTime - lCache.startTime) / 30 days))) {
+            // if early claim, just mint them remaining in `maxPayout`.
+            amountTokens = lCache.maxPayout;
+        }
+        else {
+            // otherwise, just calculate amount to mint/lock as normal.
+            amountTokens = lCache.lockedAmount + ((lCache.lockedAmount * (lCache.multiplier - 1e18)) / 1e18) - lCache.claimed;
+        }
 
+        uint256 duration = lCache.endTime - block.timestamp;
         if (duration > MAX_VESTING_DURATION) {
             duration = MAX_VESTING_DURATION;
         }
@@ -272,6 +268,9 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
             amountTokens,
             SafeCast.toUint208(amountTokens.calculateVotingPower(duration))
         );
+
+        // Transfer NFT into this contract. Keep custody
+        passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenId);
         
         _lzSend(
             remoteChainId,
@@ -303,14 +302,12 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         bytes calldata adapterParams
     ) payable external nonReentrant {
         if (!migrationActive) revert MigrationNotActive();
+        _checkAdapterParams(remoteChainId, SEND_NFT_BATCH, adapterParams, 0);
 
         uint256[] memory lockedAmounts = new uint256[](_tokenIds.length);
         uint256[] memory durations = new uint256[](_tokenIds.length);
 
         for (uint256 i; i < _tokenIds.length;) {
-            // Transfer NFT into this contract. Keep custody
-            passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenIds[i]);
-
             LockCache memory lCache;
 
             (lCache.startTime,
@@ -320,8 +317,12 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
             lCache.claimed,
             lCache.maxPayout) = passiveIncomeNFT.locks(_tokenIds[i]);
 
-            uint8 durationInMonths = uint8((lCache.endTime - lCache.startTime) / 30 days);
+            // if lock is expired -> revert
+            if (block.timestamp >= lCache.endTime) {
+                revert ExpiredNFT(_tokenIds[i]);
+            }
 
+            uint8 durationInMonths = uint8((lCache.endTime - lCache.startTime) / 30 days);
             if (lCache.multiplier != piCalculator.determineMultiplier(BOOST_START, BOOST_END, lCache.startTime, durationInMonths)) {
                 // if early claim, just mint them remaining in `maxPayout`.
                 lockedAmounts[i] = lCache.maxPayout;
@@ -331,13 +332,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
                 lockedAmounts[i] = lCache.lockedAmount + ((lCache.lockedAmount * (lCache.multiplier - 1e18)) / 1e18) - lCache.claimed;
             }
 
-            // if lock is expired -> revert
-            if (block.timestamp >= lCache.endTime) {
-                revert ExpiredNFT(_tokenIds[i]);
-            }
-
             durations[i] = lCache.endTime - block.timestamp;
-
             if (durations[i] > MAX_VESTING_DURATION) {
                 durations[i] = MAX_VESTING_DURATION;
             }
@@ -349,12 +344,13 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
                 SafeCast.toUint208(lockedAmounts[i].calculateVotingPower(durations[i]))
             );
 
+            // Transfer NFT into this contract. Keep custody
+            passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenIds[i]);
+
             unchecked {
                 ++i;
             }
         }
-
-        _checkAdapterParams(remoteChainId, SEND_NFT_BATCH, adapterParams, 0);
 
         _lzSend(
             remoteChainId,
@@ -387,13 +383,12 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
     ) external payable {
         if (!migrationActive) revert MigrationNotActive();
         require(tngblToken.balanceOf(msg.sender) >= _amount, "CrossChainMigrator: Insufficient balance");
-
-        tngblToken.transferFrom(msg.sender, address(this), _amount);
-
         _checkAdapterParams(remoteChainId, SEND, adapterParams, 0);
-        bytes memory lzPayload = abi.encode(SEND, abi.encodePacked(to), _amount);
 
         emit MigrationInFlight_TNGBL(msg.sender, _amount);
+        tngblToken.transferFrom(msg.sender, address(this), _amount);
+
+        bytes memory lzPayload = abi.encode(SEND, abi.encodePacked(to), _amount);
         _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
     }
 

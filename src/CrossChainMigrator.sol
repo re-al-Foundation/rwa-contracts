@@ -93,6 +93,11 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
     error ExpiredNFT(uint256 tokenId);
 
     /**
+     * @notice This error is emitted when a user attempts to mirgate an expired NFT and the NFT is NOT expired.
+     */
+    error NotExpiredNFT(uint256 tokenId);
+
+    /**
      * @notice This error is emitted when a migration is attempted and `migrationActive` is false.
      */
     error MigrationNotActive();
@@ -101,6 +106,11 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      * @notice This error is emitted when address(0) is found in an input variable.
      */
     error ZeroAddress();
+
+    /**
+     * @notice This error is emitted if the amount of tokens to mint is 0.
+     */
+    error InsufficientTokens();
 
 
     // ------
@@ -115,6 +125,14 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
      * @param vp Voting power that will be granted with the new veRWA token.
      */
     event MigrationMessageSent_PINFT(address indexed account, uint256 indexed tokenId, uint256 amount, uint256 vp);
+
+    /**
+     * @notice This event is emitted when there's an expired NFT is mirgated successfully.
+     * @param account Address of migrator.
+     * @param tokenId Token identifier that was migrated.
+     * @param amount Amount of RWA that will be minted to the migrator directly.
+     */
+    event MigrationMessageSent_ExpiredPINFT(address indexed account, uint256 indexed tokenId, uint256 amount);
 
     /**
      * @notice This event is emitted when there's a successful execution of `migrateTokens`.'
@@ -247,15 +265,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
             revert ExpiredNFT(_tokenId);
         }
 
-        uint256 amountTokens;
-        if (lCache.multiplier != piCalculator.determineMultiplier(BOOST_START, BOOST_END, lCache.startTime, uint8((lCache.endTime - lCache.startTime) / 30 days))) {
-            // if early claim, just mint them remaining in `maxPayout`.
-            amountTokens = lCache.maxPayout;
-        }
-        else {
-            // otherwise, just calculate amount to mint/lock as normal.
-            amountTokens = lCache.lockedAmount + ((lCache.lockedAmount * (lCache.multiplier - 1e18)) / 1e18) - lCache.claimed;
-        }
+        uint256 amountTokens = _amountTokensToMint(lCache);
 
         uint256 duration = lCache.endTime - block.timestamp;
         if (duration > MAX_VESTING_DURATION) {
@@ -272,14 +282,8 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         // Transfer NFT into this contract. Keep custody
         passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenId);
         
-        _lzSend(
-            remoteChainId,
-            abi.encode(SEND_NFT, abi.encodePacked(to), amountTokens, duration),
-            refundAddress,
-            zroPaymentAddress,
-            adapterParams,
-            msg.value
-        );
+        bytes memory lzPayload = abi.encode(SEND_NFT, abi.encodePacked(to), amountTokens, duration);
+        _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
     }
 
     /**
@@ -322,15 +326,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
                 revert ExpiredNFT(_tokenIds[i]);
             }
 
-            uint8 durationInMonths = uint8((lCache.endTime - lCache.startTime) / 30 days);
-            if (lCache.multiplier != piCalculator.determineMultiplier(BOOST_START, BOOST_END, lCache.startTime, durationInMonths)) {
-                // if early claim, just mint them remaining in `maxPayout`.
-                lockedAmounts[i] = lCache.maxPayout;
-            }
-            else {
-                // otherwise, just calculate amount to mint/lock as normal.
-                lockedAmounts[i] = lCache.lockedAmount + ((lCache.lockedAmount * (lCache.multiplier - 1e18)) / 1e18) - lCache.claimed;
-            }
+            lockedAmounts[i] = _amountTokensToMint(lCache);
 
             durations[i] = lCache.endTime - block.timestamp;
             if (durations[i] > MAX_VESTING_DURATION) {
@@ -352,14 +348,66 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
             }
         }
 
-        _lzSend(
-            remoteChainId,
-            abi.encode(SEND_NFT_BATCH, abi.encodePacked(to), lockedAmounts, durations),
-            refundAddress,
-            zroPaymentAddress,
-            adapterParams,
-            msg.value
-        );
+        bytes memory lzPayload = abi.encode(SEND_NFT_BATCH, abi.encodePacked(to), lockedAmounts, durations);
+        _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
+    }
+
+    /**
+     * @notice This method is used to migrate a batch of expired PassiveIncome NFTs from Polygon to Real chain.
+     * @dev This method will take a user's expired PI NFTs specified and send a message to the Polygon LayerZero endpoint to be
+     *      later passed to the destination chain for a batch migration. Since these NFTs are expired, the `to` address will not
+     *      receive an NFT on the destination chain, but instead receive $RWA tokens.
+     *      msg.value must not be 0. Specify an amount to pay for gas. You can get a gas quote from endpoint::estimateFees().
+     *      This method will revert if the tokens being migrated are not expired.
+     * @param _tokenIds Token identifiers of expired PI NFTs that are being migrated to the new chain.
+     * @param to Receiver on destination chain of migrated NFT.
+     * @param refundAddress Address of EOA to receive a refund if fees needed is less than what was quoted.
+     * @param adapterParams Extra parameter that is passed in the event the migrator wants to receive an airdrop of native ETH
+     *        on the destination chain. For more info on how to use this param:
+     *        https://layerzero.gitbook.io/docs/evm-guides/advanced/relayer-adapter-parameters
+     */
+    function migrateExpiredNFTBatch(
+        uint256[] memory _tokenIds,
+        address to,
+        address payable refundAddress,
+        address zroPaymentAddress,
+        bytes calldata adapterParams
+    ) payable external nonReentrant {
+        if (!migrationActive) revert MigrationNotActive();
+        _checkAdapterParams(remoteChainId, SEND, adapterParams, 0);
+
+        uint256 amountTokens;
+        for (uint256 i; i < _tokenIds.length;) {
+            LockCache memory lCache;
+
+            (lCache.startTime,
+            lCache.endTime,
+            lCache.lockedAmount,
+            lCache.multiplier,
+            lCache.claimed,
+            lCache.maxPayout) = passiveIncomeNFT.locks(_tokenIds[i]);
+
+            // if lock is NOT expired -> revert
+            if (lCache.endTime > block.timestamp) {
+                revert NotExpiredNFT(_tokenIds[i]);
+            }
+
+            uint256 amountTokensForNFT = _amountTokensToMint(lCache);
+            if (amountTokensForNFT == 0) revert InsufficientTokens();
+            
+            amountTokens += amountTokensForNFT;
+
+            emit MigrationMessageSent_ExpiredPINFT(msg.sender, _tokenIds[i], amountTokensForNFT);
+            // Transfer NFT into this contract. Keep custody
+            passiveIncomeNFT.transferFrom(msg.sender, address(this), _tokenIds[i]);
+
+            unchecked {
+                ++i;
+            }
+        }
+
+        bytes memory lzPayload = abi.encode(SEND, abi.encodePacked(to), amountTokens);
+        _lzSend(remoteChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
     }
 
     /**
@@ -382,7 +430,7 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         bytes calldata adapterParams
     ) external payable {
         if (!migrationActive) revert MigrationNotActive();
-        require(tngblToken.balanceOf(msg.sender) >= _amount, "CrossChainMigrator: Insufficient balance");
+        require(tngblToken.balanceOf(msg.sender) >= _amount && _amount > 0, "CrossChainMigrator: Insufficient balance");
         _checkAdapterParams(remoteChainId, SEND, adapterParams, 0);
 
         emit MigrationInFlight_TNGBL(msg.sender, _amount);
@@ -565,10 +613,70 @@ contract CrossChainMigrator is OwnableUpgradeable, NonblockingLzAppUpgradeable, 
         return lzEndpoint.estimateFees(dstChainId, address(this), payload, useZro, adapterParams);
     }
 
+    /**
+     * @dev Estimates the fees required for migrating tokens to another chain using LayerZero. This function is
+     * useful for users to understand the cost of migration before initiating the transaction.
+     * This method specifically quotes for expired NFTs being migrated.
+     *
+     * @param dstChainId The destination chain ID for the migration.
+     * @param toAddress The address on the destination chain to receive the tokens.
+     * @param tokenIds Array of tokenIds being migrated.
+     * @param useZro Indicates whether to use ZRO token for paying fees.
+     * @param adapterParams Custom adapter parameters for LayerZero message.
+     * @return nativeFee Estimated native token fee for migration.
+     * @return zroFee Estimated ZRO token fee for migration, if ZRO is used.
+     */
+    function estimateMigrateExpiredNFTFee(
+        uint16 dstChainId,
+        bytes calldata toAddress,
+        uint256[] memory tokenIds,
+        bool useZro,
+        bytes calldata adapterParams
+    ) public view returns (uint256 nativeFee, uint256 zroFee) {
+        uint256 amountTokens;
+        for (uint256 i; i < tokenIds.length;) {
+            LockCache memory lCache;
+            (lCache.startTime,
+            lCache.endTime,
+            lCache.lockedAmount,
+            lCache.multiplier,
+            lCache.claimed,
+            lCache.maxPayout) = passiveIncomeNFT.locks(tokenIds[i]);
+            amountTokens += _amountTokensToMint(lCache);
+            unchecked {
+                ++i;
+            }
+        }
+        // mock the payload for migrate()
+        bytes memory payload = abi.encode(SEND, toAddress, amountTokens);
+        return lzEndpoint.estimateFees(dstChainId, address(this), payload, useZro, adapterParams);
+    }
+
 
     // ----------------
     // Internal Methods
     // ----------------
+
+    /**
+     * @notice This internal method takes the lock data for a specific passive income NFT and calculates the amount
+     * of tokens to mint on the destination chain.
+     * @dev The legacy NFT contract, passiveIncomeNFT, contains a bug that does not calculate the proper amount of tokens
+     * an NFT should allow the user to claim after an early claim is performed.
+     * This method is able to detect if an early claim was performed prior to migration by detecting if the original multiplier
+     * has been modified. If so, we can assume an early claim occured and only mint the user an amount equal to maxPayout.
+     * @param lCache An object containing all lock data of the passive income NFT.
+     */
+    function _amountTokensToMint(LockCache memory lCache) internal view returns (uint256) {
+        uint8 durationInMonths = uint8((lCache.endTime - lCache.startTime) / 30 days);
+        if (lCache.multiplier != piCalculator.determineMultiplier(BOOST_START, BOOST_END, lCache.startTime, durationInMonths)) {
+            // if early claim, just mint them remaining in `maxPayout`.
+            return lCache.maxPayout;
+        }
+        else {
+            // otherwise, just calculate amount to mint/lock as normal.
+            return lCache.lockedAmount + ((lCache.lockedAmount * (lCache.multiplier - 1e18)) / 1e18) - lCache.claimed;
+        }
+    }
 
     /**
      * @notice This method burns the TNGBL balance in this contracts.

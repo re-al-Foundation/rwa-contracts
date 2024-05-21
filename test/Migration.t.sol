@@ -475,8 +475,198 @@ contract MigrationTest is Utility {
         vm.stopPrank();
     }
 
-    /// @notice Verifies proper state changes when CrossChainMigrator::migrateNFTBatch is executed.
-    function test_migrator_migrateNFTBatch_single() public {
+    /// @notice Verifies proper state changes when CrossChainMigrator::migrateExpiredNFTBatch is executed.
+    function test_migrator_migrateExpiredNFTBatch_single() public {
+        // ~ Config ~
+
+        amountToLock = 1_000 ether;
+        durationInMonths = 10; // months
+        totalDuration = (uint256(durationInMonths) * 30 days);
+        uint256 tokenId = _mintPassiveIncomeNFT(JOE, amountToLock, durationInMonths);
+
+        (uint256 startTime,
+        uint256 endTime,
+        uint256 lockedAmount,
+        /** multiplier */,
+        /** claimed */,
+        uint256 maxPayout) = passiveIncomeNFTV1.locks(tokenId);
+
+        // create adapterParams for custom gas.
+        adapterParams = abi.encodePacked(uint16(1), uint256(200000));
+
+        // get quote for fees
+        (amountETH,) = migrator.estimateMigrateExpiredNFTFee(
+            uint16(block.chainid),
+            abi.encodePacked(JOE),
+            _asSingletonArrayUint(tokenId),
+            false,
+            adapterParams
+        );
+        vm.deal(JOE, amountETH);
+
+        uint256 preSupply = rwaToken.totalSupply();
+        uint256 preBal = rwaToken.balanceOf(JOE);
+
+        // ~ Pre-state check ~
+
+        // v1
+        assertEq(passiveIncomeNFTV1.ownerOf(tokenId), JOE);
+        assertEq(startTime, block.timestamp);
+        assertEq(endTime, block.timestamp + totalDuration);
+        assertEq(lockedAmount, amountToLock);
+        assertGt(maxPayout, 0);
+
+        // v2
+        assertEq(veRWA.totalSupply(), 0);
+        assertEq(rwaToken.totalSupply(), preSupply);
+        assertEq(rwaToken.balanceOf(JOE), preBal);
+
+        // ~ Execute migrateNFT ~
+
+        skip(endTime);
+        vm.startPrank(JOE);
+        passiveIncomeNFTV1.approve(address(migrator), tokenId);
+        migrator.migrateExpiredNFTBatch{value:amountETH}(
+            _asSingletonArrayUint(tokenId),
+            JOE,
+            payable(JOE),
+            address(0),
+            adapterParams
+        );
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+
+        // v1
+        assertEq(passiveIncomeNFTV1.ownerOf(tokenId), address(migrator));
+
+        // v2
+        assertEq(veRWA.totalSupply(), 0);
+        assertEq(veRWA.getAccountVotingPower(JOE), 0);
+        assertEq(rwaToken.totalSupply(), preSupply + lockedAmount + maxPayout);
+        assertEq(rwaToken.balanceOf(JOE), preBal + lockedAmount + maxPayout);
+    }
+
+    /// @notice Verifies proper state changes when CrossChainMigrator::migrateExpiredNFTBatch is executed.
+    function test_migrator_migrateExpiredNFTBatch_batch() public {
+        vm.pauseGasMetering();
+
+        // ~ Config ~
+
+        uint256 numTokens = 10;
+        amountToLock = 1_000 ether;
+        durationInMonths = 10; // months
+        totalDuration = (uint256(durationInMonths) * 30 days);
+
+        uint256[] memory tokenIds = new uint256[](numTokens);
+        uint256[] memory lockedAmounts = new uint256[](numTokens);
+        uint256[] memory durations = new uint256[](numTokens);
+
+        uint256[] memory startTime = new uint256[](numTokens);
+        uint256[] memory endTime = new uint256[](numTokens);
+        uint256[] memory lockedAmount = new uint256[](numTokens);
+        uint256[] memory maxPayout = new uint256[](numTokens);
+
+        for (uint256 i; i < numTokens; ++i) {
+            tokenIds[i] = _mintPassiveIncomeNFT(JOE, amountToLock, durationInMonths);
+
+            (startTime[i],
+            endTime[i],
+            lockedAmount[i],
+            /** multiplier */,
+            /** claimed */,
+            maxPayout[i]) = passiveIncomeNFTV1.locks(tokenIds[i]);
+
+            lockedAmounts[i] = lockedAmount[i] + maxPayout[i];
+            durations[i] = endTime[i] - startTime[i];
+        }
+
+        // create adapterParams for custom gas.
+        adapterParams = abi.encodePacked(uint16(1), uint256(200000));
+
+        // get quote for fees
+        (amountETH,) = migrator.estimateMigrateExpiredNFTFee(
+            uint16(block.chainid),
+            abi.encodePacked(JOE),
+            tokenIds,
+            false,
+            adapterParams
+        );
+
+        vm.deal(JOE, amountETH);
+
+        uint256 veRWATokenId = veRWA.getTokenId();
+        uint256 preSupply = rwaToken.totalSupply();
+        uint256 preBal = rwaToken.balanceOf(JOE);
+
+        // ~ Pre-state check ~
+
+        // v1
+        for (uint256 i; i < numTokens; ++i) {
+            assertEq(passiveIncomeNFTV1.ownerOf(tokenIds[i]), JOE);
+            assertEq(startTime[i], block.timestamp);
+            assertEq(endTime[i], block.timestamp + totalDuration);
+            assertEq(lockedAmount[i], amountToLock);
+            assertGt(maxPayout[i], 0);
+        }
+
+        // v2
+        assertEq(veRWA.totalSupply(), 0);
+        assertEq(veRWA.balanceOf(JOE), 0);
+        assertEq(veRWA.getAccountVotingPower(JOE), 0);
+        assertEq(rwaToken.totalSupply(), preSupply);
+        assertEq(rwaToken.balanceOf(JOE), preBal);
+
+        // ~ Execute migrateExpiredNFTBatch ~
+
+        // Joe approves transfer
+        for (uint256 i; i < numTokens; ++i) {
+            vm.prank(JOE);
+            passiveIncomeNFTV1.approve(address(migrator), tokenIds[i]);
+        }
+
+        // Joe tries to migrate his un-expired NFT
+        vm.startPrank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(CrossChainMigrator.NotExpiredNFT.selector, tokenIds[0]));
+        migrator.migrateExpiredNFTBatch{value:amountETH}(
+            tokenIds,
+            JOE,
+            payable(JOE),
+            address(0),
+            adapterParams
+        );
+        vm.stopPrank();
+
+        // skip to expiration date
+        skip(endTime[0]);
+
+        // Joe successfully migrates all expired NFTs
+        vm.startPrank(JOE);
+        migrator.migrateExpiredNFTBatch{value:amountETH}(
+            tokenIds,
+            JOE,
+            payable(JOE),
+            address(0),
+            adapterParams
+        );
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+
+        for (uint256 i; i < numTokens; ++i) {      
+            // v1
+            assertEq(passiveIncomeNFTV1.ownerOf(tokenIds[i]), address(migrator));
+        }
+
+        // v2
+        assertEq(veRWA.totalSupply(), 0);
+        assertEq(veRWA.getAccountVotingPower(JOE), 0);
+
+        assertEq(rwaToken.totalSupply(), preSupply + ((lockedAmount[0] + maxPayout[0]) * numTokens));
+        assertEq(rwaToken.balanceOf(JOE), preBal + (lockedAmount[0] + maxPayout[0]) * numTokens);
+    }
+
+    function test_migrator_migrateNFTBatch_batch() public {
         vm.pauseGasMetering();
 
         // ~ Config ~

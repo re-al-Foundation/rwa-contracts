@@ -614,4 +614,13 @@ contract DelegationTest is Utility {
         vm.stopPrank();
     }
 
+    function test_delegation_transferOwnership() public {
+        assertEq(delegateFactory.owner(), ADMIN);
+        vm.prank(ADMIN);
+        delegateFactory.transferOwnership(JOE);
+        vm.prank(JOE);
+        delegateFactory.acceptOwnership();
+        assertEq(delegateFactory.owner(), JOE);
+    }
+
 }

@@ -5925,4 +5925,67 @@ contract MainDeploymentTest is Utility {
         // check GaugeV2ALM balance/state
         assertGt(IERC20(box).balanceOf(gALM), 0);
     }
+
+    function test_mainDeployment_revDist_transferOwnership() public {
+        assertEq(revDistributor.owner(), ADMIN);
+        vm.prank(ADMIN);
+        revDistributor.transferOwnership(JOE);
+        vm.prank(JOE);
+        revDistributor.acceptOwnership();
+        assertEq(revDistributor.owner(), JOE);
+    }
+
+    function test_mainDeployment_revStreamETH_transferOwnership() public {
+        assertEq(revStreamETH.owner(), ADMIN);
+        vm.prank(ADMIN);
+        revStreamETH.transferOwnership(JOE);
+        vm.prank(JOE);
+        revStreamETH.acceptOwnership();
+        assertEq(revStreamETH.owner(), JOE);
+    }
+
+    function test_mainDeployment_revStream_transferOwnership() public {
+        assertEq(revStream.owner(), ADMIN);
+        vm.prank(ADMIN);
+        revStream.transferOwnership(JOE);
+        vm.prank(JOE);
+        revStream.acceptOwnership();
+        assertEq(revStream.owner(), JOE);
+    }
+
+    function test_mainDeployment_royaltyHandler_transferOwnership() public {
+        assertEq(royaltyHandler.owner(), ADMIN);
+        vm.prank(ADMIN);
+        royaltyHandler.transferOwnership(JOE);
+        vm.prank(JOE);
+        royaltyHandler.acceptOwnership();
+        assertEq(royaltyHandler.owner(), JOE);
+    }
+
+    function test_mainDeployment_rwaToken_transferOwnership() public {
+        assertEq(rwaToken.owner(), ADMIN);
+        vm.prank(ADMIN);
+        rwaToken.transferOwnership(JOE);
+        vm.prank(JOE);
+        rwaToken.acceptOwnership();
+        assertEq(rwaToken.owner(), JOE);
+    }
+
+    function test_mainDeployment_votingEscrow_transferOwnership() public {
+        assertEq(veRWA.owner(), ADMIN);
+        vm.prank(ADMIN);
+        veRWA.transferOwnership(JOE);
+        vm.prank(JOE);
+        veRWA.acceptOwnership();
+        assertEq(veRWA.owner(), JOE);
+    }
+
+    function test_mainDeployment_votingEscrowVesting_transferOwnership() public {
+        assertEq(vesting.owner(), ADMIN);
+        vm.prank(ADMIN);
+        vesting.transferOwnership(JOE);
+        vm.prank(JOE);
+        vesting.acceptOwnership();
+        assertEq(vesting.owner(), JOE);
+    }
 }

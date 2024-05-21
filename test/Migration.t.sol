@@ -1256,5 +1256,19 @@ contract MigrationTest is Utility {
             )
         );
     }
+
+    function test_migrator_transferOwnership() public {
+        assertEq(receiver.owner(), ADMIN);
+        vm.prank(ADMIN);
+        receiver.transferOwnership(JOE);
+        assertEq(receiver.owner(), JOE);
+    }
+
+    function test_receiver_transferOwnership() public {
+        assertEq(receiver.owner(), ADMIN);
+        vm.prank(ADMIN);
+        receiver.transferOwnership(JOE);
+        assertEq(receiver.owner(), JOE);
+    }
 }
 

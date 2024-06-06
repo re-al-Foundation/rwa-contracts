@@ -759,6 +759,9 @@ contract MarketplaceTest is Utility {
         // ~ Pre-state check ~
 
         assertEq(marketplace.isPaymentToken(address(mockToken)), false);
+        address[] memory paymentTokens = marketplace.getPaymentTokens();
+        assertEq(paymentTokens.length, 1);
+        assertEq(paymentTokens[0], address(rwaToken));
 
         // ~ Add new token ~ 
 
@@ -768,6 +771,10 @@ contract MarketplaceTest is Utility {
         // ~ Post-state check ~
 
         assertEq(marketplace.isPaymentToken(address(mockToken)), true);
+        paymentTokens = marketplace.getPaymentTokens();
+        assertEq(paymentTokens.length, 2);
+        assertEq(paymentTokens[0], address(rwaToken));
+        assertEq(paymentTokens[1], address(mockToken));
     }
 
     /// @dev This unit test verifies restrictions when Marketplace::addPaymentToken is executed
@@ -794,6 +801,9 @@ contract MarketplaceTest is Utility {
         // ~ Pre-state check ~
 
         assertEq(marketplace.isPaymentToken(address(rwaToken)), true);
+        address[] memory paymentTokens = marketplace.getPaymentTokens();
+        assertEq(paymentTokens.length, 1);
+        assertEq(paymentTokens[0], address(rwaToken));
 
         // ~ remove payment token ~ 
 
@@ -803,6 +813,8 @@ contract MarketplaceTest is Utility {
         // ~ Post-state check ~
 
         assertEq(marketplace.isPaymentToken(address(rwaToken)), false);
+        paymentTokens = marketplace.getPaymentTokens();
+        assertEq(paymentTokens.length, 0);
     }
 
     /// @dev This unit test verifies restrictions when Marketplace::removePaymentToken is executed
@@ -824,11 +836,68 @@ contract MarketplaceTest is Utility {
         marketplace.removePaymentToken(address(mockToken));
     }
 
-    function test_setFee() public {}
+    /// @dev This unit test verifies proper state changes when Marketplace::setFee is executed.
+    function test_marketplace_setFee() public {
+        // ~ Pre-state check ~
 
-    function test_setFee_restrictions() public {}
+        assertEq(marketplace.fee(), 25);
 
-    function test_setRevDistributor() public {}
+        // ~ Set new fee ~ 
 
-    function test_setRevDistributor_restrictions() public {}
+        vm.prank(ADMIN);
+        marketplace.setFee(50);
+
+        // ~ Post-state check ~
+
+        assertEq(marketplace.fee(), 50);
+    }
+
+    /// @dev This unit test verifies restrictions when Marketplace::setFee is executed
+    ///      with unacceptable conditions.
+    function test_marketplace_setFee_restrictions() public {
+        // Only callable by owner.
+        vm.prank(JOE);
+        vm.expectRevert();
+        marketplace.setFee(50);
+
+        // Cannot be >= 1000
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CommonErrors.ValueTooHigh.selector, 101, 100));
+        marketplace.setFee(101);
+    }
+
+    /// @dev This unit test verifies proper state changes when Marketplace::setRevDistributor is executed.
+    function test_marketplace_setRevDistributor() public {
+        // ~ Pre-state check ~
+
+        assertEq(marketplace.revDistributor(), address(revDistributor));
+
+        // ~ Set revenue distributor ~ 
+
+        vm.prank(ADMIN);
+        marketplace.setRevDistributor(address(222));
+
+        // ~ Post-state check ~
+
+        assertEq(marketplace.revDistributor(), address(222));
+    }
+
+    /// @dev This unit test verifies restrictions when Marketplace::setRevDistributor is executed
+    ///      with unacceptable conditions.
+    function test_marketplace_setRevDistributor_restrictions() public {
+        // Only callable by owner.
+        vm.prank(JOE);
+        vm.expectRevert();
+        marketplace.setRevDistributor(address(222));
+
+        // Cannot input address(0).
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CommonErrors.InvalidZeroAddress.selector));
+        marketplace.setRevDistributor(address(0));
+
+        // Cannot set address that's already set
+        vm.prank(ADMIN);
+        vm.expectRevert(abi.encodeWithSelector(CommonErrors.ValueUnchanged.selector));
+        marketplace.setRevDistributor(address(revDistributor));
+    }
 }

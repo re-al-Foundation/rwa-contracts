@@ -49,10 +49,10 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
     uint256 public fee;
 
-    address public revDistributor; // TODO: RevDistributor?
+    address public revDistributor;
 
     mapping(address => bool) public isPaymentToken; // TODO: Multiple payment tokens?
-    mapping(uint256 => MarketItem) public idToMarketItem;
+    mapping(uint256 => MarketItem) public idToMarketItem; // tokenId to listing object 
     //mapping(address => Collection) public _itemsByOwner;
     mapping(address => address[]) private _routerPaths;
 
@@ -112,7 +112,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
     error InsufficientETH(uint256 amountApproved, uint256 price);
 
-    error LowLevelETHCallFailed(address recipient, uint256 amount);
+    error LowLevelCallFailed(address recipient, uint256 amount);
 
     error SellerCantPurchaseToken(address seller, uint256 tokenId);
 
@@ -136,13 +136,19 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         address _revDist, // revenue distributor
         address _admin
     ) external initializer {
+        _nftContractAddress.requireNonZeroAddress();
+        _revDist.requireNonZeroAddress();
+        _admin.requireNonZeroAddress();
+
         __UUPSUpgradeable_init();
         __Ownable_init(_admin);
 
         fee = 25; // 2.5%
 
-        paymentTokens.push(_initialPaymentToken);
-        isPaymentToken[_initialPaymentToken] = true;
+        if (_initialPaymentToken != address(0)) {
+            paymentTokens.push(_initialPaymentToken);
+            isPaymentToken[_initialPaymentToken] = true;
+        }
         nftContract = RWAVotingEscrow(_nftContractAddress);
         _listedItems = new Collection();
         revDistributor = _revDist;
@@ -169,6 +175,8 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      *
      * @custom:error InvalidPaymentToken Thrown if paymentToken is not supported.
      * @custom:error CallerIsNotOwnerOrSeller Thrown if the msg.sender is not owner nor seller.
+     * @custom:event MarketItemCreated If the token being listed is a new listing.
+     * @custom:event MarketItemUpdated If the token is already listed and is being updated.
      */
     function listMarketItem(uint256 tokenId, address paymentToken, uint256 price) external nonReentrant {
         if (!isPaymentToken[paymentToken] && paymentToken != address(0)) revert InvalidPaymentToken(paymentToken);
@@ -214,6 +222,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      *
      * @custom:error InvalidTokenId Thrown if tokenId is not listed.
      * @custom:error CallerIsNotOwnerOrSeller Thrown if the msg.sender is not seller.
+     * @custom:event MarketItemDelisted Emitted if a tokenId was delisted.
      */
     function delistMarketItem(uint256 tokenId) external nonReentrant {
         MarketItem storage item = idToMarketItem[tokenId];
@@ -241,7 +250,8 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      * @custom:error InvalidTokenId Thrown if tokenId is not listed.
      * @custom:error SellerCantPurchaseToken Thrown if buyer is the same as seller.
      * @custom:error InsufficientETH Thrown if amount of ETH is not sufficient for purchase.
-     * @custom:error LowLevelETHCallFailed Thrown if the low level .call to transfer ETH has failed.
+     * @custom:error LowLevelCallFailed Thrown if the low level .call to transfer ETH has failed.
+     * @custom:event MarketItemSold Emitted when the token sale has completed. Contains all sale info of token, seller, and buyer.
      */
     function purchaseMarketItem(uint256 tokenId) payable external nonReentrant {
         MarketItem storage item = idToMarketItem[tokenId];
@@ -256,7 +266,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         if (seller == msg.sender) revert SellerCantPurchaseToken(msg.sender, tokenId);
 
         uint256 feeAmount;
-        if (price > 0) {
+        if (price != 0) {
             if (paymentToken == address(0)) { // ETH as payment
                 if (msg.value != price) revert InsufficientETH(msg.value, price);
 
@@ -266,16 +276,16 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
                 bool sent;
                 if (feeAmount != 0) {
                     (sent,) = revDistributor.call{value: feeAmount}("");
-                    if (!sent) revert LowLevelETHCallFailed(revDistributor, feeAmount);
+                    if (!sent) revert LowLevelCallFailed(revDistributor, feeAmount);
                 }
                 (sent,) = seller.call{value: payout}("");
-                if (!sent) revert LowLevelETHCallFailed(seller, payout);
+                if (!sent) revert LowLevelCallFailed(seller, payout);
 
             } else { // ERC-20 as payment
-                IERC20(paymentToken).safeTransferFrom(buyer, address(this), price);
+                uint256 amountReceived = _pullTokens(buyer, paymentToken, price);
 
-                feeAmount = (price * fee) / 1000;
-                uint256 payout = price - feeAmount;
+                feeAmount = (amountReceived * fee) / 1000;
+                uint256 payout = amountReceived - feeAmount;
                 
                 if (feeAmount != 0) {
                     IERC20(paymentToken).safeTransfer(revDistributor, feeAmount);
@@ -297,6 +307,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      *
      * @custom:error InvalidZeroAddress Thrown if tokenAddress == addr(0)
      * @custom:error PaymentTokenAlreadyAdded Thrown if tokenAddress is already supported as a valid paymentToken.
+     * @custom:event PaymentTokenAdded Token has been added as payment token.
      */
     function addPaymentToken(address tokenAddress) external onlyOwner {
         tokenAddress.requireNonZeroAddress();
@@ -313,6 +324,7 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
      *
      * @custom:error InvalidZeroAddress Thrown if tokenAddress == addr(0)
      * @custom:error PaymentTokenAlreadyAdded Thrown if tokenAddress is not a valid paymentToken.
+     * @custom:event PaymentTokenRemoved Token has been removed from payment tokens.
      */
     function removePaymentToken(address tokenAddress) external onlyOwner {
         tokenAddress.requireNonZeroAddress();
@@ -332,15 +344,26 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
 
     /**
      * @dev Sets the TX fee that is applied to each purchase.
+     *
+     * @param fee_ New fee. Has 1 basis point (i.e. 25 == 2.5%).
+     *
+     * @custom:error ValueTooHigh `fee_` must be less than 100 (10%).
+     * @custom:event FeeSet Emitted when the new fee has been set.
      */
     function setFee(uint256 fee_) external onlyOwner {
-        fee_.requireLessThanOrEqualToUint256(1000);
+        fee_.requireLessThanOrEqualToUint256(100);
         emit FeeSet(fee_);
         fee = fee_;
     }
 
     /**
      * @dev Sets the address where TX fees are being sent to.
+     *
+     * @param revDistributor_ New Revenue Distributor address.
+     *
+     * @custom:error InvalidZeroAddress `revDistributor_` must not be equal to address(0).
+     * @custom:error ValueUnchanged `revDistributor_` must not be equal to current Revenue Distributor.
+     * @custom:event RevenueDistributorSet Emitted when the new address has been set as revDistributors.
      */
     function setRevDistributor(address revDistributor_) external onlyOwner {
         revDistributor_.requireNonZeroAddress();
@@ -364,9 +387,16 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     }
 
     /**
-     * @dev Returns a page of listed market items.
+     * @dev Returns a page of listed market items. Meant as UI helper.
+     *
+     * @param lastItemId Where to begin with page load.
+     * @param pageSize Amount of elements to load in page.
+     * @param ascending If true, will load items in ascending order from array.
+     *
+     * @return items -> Array of listed items returned based on filters provided. Will
+     * return as MarketItem objects containing all data of listing.
      */
-    function fetchMarketItems( // TODO: Loads sequentially??? Could cause issues - either replace Collection or load ALL tokens (not just listed)
+    function fetchMarketItems(
         uint256 lastItemId,
         uint256 pageSize,
         bool ascending
@@ -385,44 +415,14 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         }
     }
 
-    // --------------
-    // Public Methods
-    // --------------
-
-    // /**
-    //  * @dev Returns a page of listed market items.
-    //  */
-    // function fetchItemsByOwner(
-    //     address owner,
-    //     uint256 lastItemId,
-    //     uint256 pageSize,
-    //     bool ascending
-    // ) public view returns (MarketItem[] memory items) {
-    //     Collection collection = _itemsByOwner[owner];
-    //     if (address(collection) != address(0)) {
-    //         (
-    //             Collection.Item memory first,
-    //             uint256 numItems
-    //         ) = _countRemainingItems(
-    //                 collection,
-    //                 lastItemId,
-    //                 ascending,
-    //                 pageSize
-    //             );
-    //         items = new MarketItem[](numItems);
-    //         Collection.Item memory current = first;
-    //         for (uint256 i = 0; i < numItems; i++) {
-    //             items[i] = idToMarketItem[current.itemId];
-    //             current = collection.getNext(current, ascending);
-    //         }
-    //     }
-    // }
-
     /**
-     * @dev Returns a list of items.
+     * @dev Returns a list of marktet items based on tokenIds provided.
+     * @param itemIds TokenIds of market items being fetched.
+     * @return items -> Array of listed items returned based on tokenIds provided. Will
+     * return as MarketItem objects containing all data of each tokenId listing.
      */
     function fetchItems(uint256[] calldata itemIds)
-        public
+        external
         view
         returns (MarketItem[] memory items)
     {
@@ -440,6 +440,15 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
     // Private Methods
     // ---------------
 
+    /**
+     * @dev Removes listing from contract. In the process will update token's vesting schedule back to normal,
+     * transfer the token to the recipient's custody, and remove the listing from the contract's collection.
+     * This method is only called if the item being removed is either purchased or delisted by the seller.
+     *
+     * @param item Item being removed from listing.
+     * @param tokenId TokenId of item being removed.
+     * @param recipient Address recipient of token.
+     */
     function _removeListing(MarketItem storage item, uint256 tokenId, address recipient) internal {
         // restore vesting duration & transfer NFT to new owner
         nftContract.updateVestingDuration(tokenId, item.remainingTime);
@@ -450,6 +459,17 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         _listedItems.remove(tokenId);
     }
 
+    /**
+     * @dev This method will fetch items from the collection of listings and organize them based on input.
+     *
+     * @param collection Collection items are being fetched from.
+     * @param lastItemId The last item being loaded previously.
+     * @param ascending If true, load items in ascending order.
+     * @param limit Number of items to return. If collection is large enough, will be equal to `numItems`.
+     *
+     * @return firstItem -> first item to load from collection in new page.
+     * @return numItems -> Num of items to load. Takes into account firstItem.
+     */
     function _countRemainingItems(
         Collection collection,
         uint256 lastItemId,
@@ -466,18 +486,31 @@ contract Marketplace is OwnableUpgradeable, ReentrancyGuardUpgradeable, UUPSUpgr
         }
     }
 
-    function _isBurned(uint256 tokenId) private view returns (bool) {
-        try IERC721(nftContract).ownerOf(tokenId) returns (address owner) {
-            return owner == address(0);
-        } catch {
-            return true;
-        }
-    }
 
-
-    // ---------------
+    // ----------------
     // Internal Methods
-    // ---------------
+    // ----------------
+
+    /**
+     * @dev Transfers a specified amount of a supported asset from a user's address directly to this contract, adjusted
+     * based on the redemption requirements. We assess the contract's balance before the transfer and after the transfer
+     * to ensure the proper amount of tokens received is accounted. This comes in handy in the event a rebase rounding error
+     * results in a slight deviation between amount transferred and the amount received.
+     * @param user The address from which the asset will be pulled.
+     * @param asset The address of the supported asset to be transferred.
+     * @param amount The intended amount of the asset to transfer from the user. The function calculates the actual
+     * transfer based on the asset’s pending redemption needs.
+     * @return received The actual amount of the asset received to this contract, which may differ from
+     * the intended amount due to transaction fees.
+     */
+    function _pullTokens(address user, address asset, uint256 amount)
+        internal
+        returns (uint256 received)
+    {
+        uint256 balanceBefore = IERC20(asset).balanceOf(address(this));
+        IERC20(asset).safeTransferFrom(user, address(this), amount);
+        received = IERC20(asset).balanceOf(address(this)) - balanceBefore;
+    }
 
     /**
      * @notice Overriden from UUPSUpgradeable

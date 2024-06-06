@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.13;
 
+import { console } from "forge-std/Script.sol";
 import { DeployUtility } from "../../base/DeployUtility.sol";
 
 // local imports
@@ -26,8 +27,7 @@ import "../../../test/utils/Constants.sol";
 
 /** 
     @dev To run: 
-    forge script script/write/mainnet/TransferOwnership.s.sol:TransferOwnership --broadcast --legacy \
-    --gas-estimate-multiplier 600
+    forge script script/write/mainnet/TransferOwnership.s.sol:TransferOwnership --broadcast --legacy --gas-estimate-multiplier 600 -vvvv
 */
 
 /**
@@ -53,7 +53,7 @@ contract TransferOwnership is DeployUtility {
 
     // ~ Variables ~
 
-    address constant public NEW_OWNER = address(0); // TODO
+    address constant public NEW_OWNER = REAL_MULTISIG;
 
     bytes32 public constant DEFAULT_ADMIN_ROLE = 0x00;
 
@@ -80,33 +80,34 @@ contract TransferOwnership is DeployUtility {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
         require(NEW_OWNER != address(0));
+        console.log(NEW_OWNER);
 
         receiver.transferOwnership(NEW_OWNER);
         require(receiver.owner() == NEW_OWNER);
 
-        revDistributor.transferOwnership(NEW_OWNER);
-        require(revDistributor.owner() == NEW_OWNER);
+        revDistributor.transferOwnership(NEW_OWNER); /// @dev 2step
+        require(revDistributor.pendingOwner() == NEW_OWNER);
 
-        revStreamRWA.transferOwnership(NEW_OWNER);
-        require(revStreamRWA.owner() == NEW_OWNER);
+        revStreamRWA.transferOwnership(NEW_OWNER); /// @dev 2step
+        require(revStreamRWA.pendingOwner() == NEW_OWNER);
 
-        revStreamETH.transferOwnership(NEW_OWNER);
-        require(revStreamETH.owner() == NEW_OWNER);
+        revStreamETH.transferOwnership(NEW_OWNER); /// @dev 2step
+        require(revStreamETH.pendingOwner() == NEW_OWNER);
 
-        royaltyHandler.transferOwnership(NEW_OWNER);
-        require(royaltyHandler.owner() == NEW_OWNER);
+        royaltyHandler.transferOwnership(NEW_OWNER); /// @dev 2step
+        require(royaltyHandler.pendingOwner() == NEW_OWNER);
 
-        rwaToken.transferOwnership(NEW_OWNER);
-        require(rwaToken.owner() == NEW_OWNER);
+        rwaToken.transferOwnership(NEW_OWNER); /// @dev 2step
+        require(rwaToken.pendingOwner() == NEW_OWNER);
 
-        delegateFactory.transferOwnership(NEW_OWNER);
-        require(delegateFactory.owner() == NEW_OWNER);
+        delegateFactory.transferOwnership(NEW_OWNER); /// @dev 2step
+        require(delegateFactory.pendingOwner() == NEW_OWNER);
 
-        veRWA.transferOwnership(NEW_OWNER);
-        require(veRWA.owner() == NEW_OWNER);
+        veRWA.transferOwnership(NEW_OWNER); /// @dev 2step
+        require(veRWA.pendingOwner() == NEW_OWNER);
 
-        vesting.transferOwnership(NEW_OWNER);
-        require(vesting.owner() == NEW_OWNER);
+        vesting.transferOwnership(NEW_OWNER); /// @dev 2step
+        require(vesting.pendingOwner() == NEW_OWNER);
 
         api.grantRole(DEFAULT_ADMIN_ROLE, NEW_OWNER);
         require(api.hasRole(DEFAULT_ADMIN_ROLE, NEW_OWNER));

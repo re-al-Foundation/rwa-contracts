@@ -148,6 +148,13 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
      */
     event PoolFeeSet(uint24 newPoolFee);
 
+    /**
+     * @notice This event is emitted when assets are withdrawn from this contract.
+     * @param token Address of asset being withdrawn. If == address(0), ETH was withdrawn.
+     * @param amount Amount of asset withdrawn.
+     */
+    event FundsWithdrawn(address token, uint256 amount);
+
 
     // -----------
     // Constructor
@@ -263,6 +270,29 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
             _swapTokensForETH(tokensForEth, minOut);
             _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
         }
+    }
+
+    /**
+     * @notice This permissioned external method is used to withdraw ETH from this contract.
+     * @param amount Amount of ETH to withdraw.
+     */
+    function withdrawETH(uint256 amount) external onlyOwner {
+        require(address(this).balance >= amount && amount != 0, "RoyaltyHandler: Invalid amount");
+        emit FundsWithdrawn(address(0), amount);
+        (bool success,) = owner().call{value:amount}("");
+        require(success, "RoyaltyHandler: ETH Withdraw failed");
+    }
+
+    /**
+     * @notice This permissioned external method is used to withdraw ERC20 tokens from this contract.
+     * @param token Contract address of ERC20 token that's being withdrawn.
+     * @param amount Amount of ERC20 tokens to withdraw.
+     */
+    function withdrawERC20(address token, uint256 amount) external onlyOwner {
+        require(token != address(0), "RoyaltyHandler: token cannot be address 0");
+        require(IERC20(token).balanceOf(address(this)) >= amount && amount != 0, "RoyaltyHandler: Invalid amount");
+        emit FundsWithdrawn(token, amount);
+        IERC20(token).safeTransfer(owner(), amount);
     }
 
     /**

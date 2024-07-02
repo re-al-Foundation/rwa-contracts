@@ -1032,6 +1032,54 @@ contract MainDeploymentTest is Utility {
         }
     }
 
+    /// @dev Verifies proper state changes when withdrawETH is called.
+    function test_mainDeployment_royaltyHandler_withdrawETH() public {
+
+        // ~ Config ~
+
+        uint256 amountETH = 10 ether;
+        vm.deal(address(royaltyHandler), amountETH);
+
+        // ~ Pre-state check ~
+
+        assertEq(address(royaltyHandler).balance, amountETH);
+        uint256 preBalOwner = ADMIN.balance;
+
+        // ~ withdrawETH ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.withdrawETH(amountETH);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler).balance, 0);
+        assertEq(ADMIN.balance, preBalOwner + amountETH);
+    }
+
+    /// @dev Verifies proper state changes when withdrawERC20 is called.
+    function test_mainDeployment_royaltyHandler_withdrawERC20() public {
+
+        // ~ Config ~
+
+        uint256 amountTokens = 10 ether;
+        rwaToken.mintFor(address(royaltyHandler), amountTokens);
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), amountTokens);
+        uint256 preBalOwner = rwaToken.balanceOf(ADMIN);
+
+        // ~ withdrawERC20 ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.withdrawERC20(address(rwaToken), amountTokens);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+        assertEq(rwaToken.balanceOf(ADMIN), preBalOwner + amountTokens);
+    }
+
 
     // ~ VotingEscrowRWA Tests ~
 

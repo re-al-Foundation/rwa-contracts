@@ -867,20 +867,125 @@ contract MainDeploymentTest is Utility {
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
     }
 
+    /// @dev Verifies proper state changes when RoyaltyHandler::distributeRoyaltiesMinOut is called.
+    function test_mainDeployment_royaltyHandler_distributeRoyalties_noFuzz() public {
+
+        // ~ Config ~
+
+        uint256 amountTokens = 100 ether;
+        rwaToken.mintFor(address(royaltyHandler), amountTokens);
+
+        uint256 burnPortion = (amountTokens * royaltyHandler.burnPortion()) / rwaToken.fee(); // 2/5
+        uint256 revSharePortion = (amountTokens * royaltyHandler.revSharePortion()) / rwaToken.fee(); // 2/5
+
+        (uint256 burnQ, uint256 revShareQ,,) = royaltyHandler.getRoyaltyDistributions(amountTokens);
+        assertEq(burnPortion, burnQ);
+        assertEq(revSharePortion, revShareQ);
+        
+        uint256 preSupply = rwaToken.totalSupply();
+
+        // ~ Pre-state check ~
+    
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), amountTokens);
+        
+        assertEq(rwaToken.totalSupply(), preSupply);
+        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
+        
+        // check boxALM balance/state
+        assertEq(rwaToken.balanceOf(box), 0);
+        assertEq(IERC20(WETH).balanceOf(box), 0);
+
+        // check GaugeV2ALM balance/state
+        assertEq(IERC20(box).balanceOf(gALM), 0);
+
+        // ~ Execute transfer -> distribute ~
+
+        vm.startPrank(ADMIN);
+        royaltyHandler.distributeRoyaltiesMinOut(rwaToken.balanceOf(address(royaltyHandler)), 0);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+    
+        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
+        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
+
+        // check boxALM balance/state
+        assertGt(rwaToken.balanceOf(box), 0);
+        assertGt(IERC20(WETH).balanceOf(box), 0);
+
+        // check GaugeV2ALM balance/state
+        assertGt(IERC20(box).balanceOf(gALM), 0);
+    }
+
+    /// @dev Uses fuzing to verify proper state changes when RoyaltyHandler::distributeRoyaltiesMinOut is called.
+    function test_mainDeployment_royaltyHandler_distributeRoyalties_fuzzing(uint256 amountTokens) public {
+        amountTokens = bound(amountTokens, .0000001 ether, 100 ether);
+
+        // ~ Config ~
+
+        rwaToken.mintFor(address(royaltyHandler), amountTokens);
+
+        uint256 burnPortion = (amountTokens * royaltyHandler.burnPortion()) / rwaToken.fee(); // 2/5
+        uint256 revSharePortion = (amountTokens * royaltyHandler.revSharePortion()) / rwaToken.fee(); // 2/5
+
+        (uint256 burnQ, uint256 revShareQ,,) = royaltyHandler.getRoyaltyDistributions(amountTokens);
+        assertEq(burnPortion, burnQ);
+        assertEq(revSharePortion, revShareQ);
+        
+        uint256 preSupply = rwaToken.totalSupply();
+
+        // ~ Pre-state check ~
+    
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), amountTokens);
+        
+        assertEq(rwaToken.totalSupply(), preSupply);
+        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
+        
+        // check boxALM balance/state
+        assertEq(rwaToken.balanceOf(box), 0);
+        assertEq(IERC20(WETH).balanceOf(box), 0);
+
+        // check GaugeV2ALM balance/state
+        assertEq(IERC20(box).balanceOf(gALM), 0);
+
+        // ~ Execute transfer -> distribute ~
+
+        vm.startPrank(ADMIN);
+        royaltyHandler.distributeRoyaltiesMinOut(rwaToken.balanceOf(address(royaltyHandler)), 0);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+    
+        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
+        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
+
+        // check boxALM balance/state
+        assertGt(rwaToken.balanceOf(box), 0);
+        assertGt(IERC20(WETH).balanceOf(box), 0);
+
+        // check GaugeV2ALM balance/state
+        assertGt(IERC20(box).balanceOf(gALM), 0);
+    }
+
     /// @dev Verifies proper taxation and distribution after fees have been modified.
-    function test_mainDeployment_royaltyHandler_distributeRoyalties() public {
+    function test_mainDeployment_royaltyHandler_distributeRoyalties_newTaxes() public {
 
         // ~ Config ~
 
         uint256 amountETH = 10 ether;
         vm.deal(JOE, amountETH);
 
+        vm.prank(ADMIN);
+        royaltyHandler.updateDistribution(0, 1, 0);
+        vm.prank(ADMIN);
+        rwaToken.updateFee(2);
+
         uint256 quote = _getQuoteBuy(amountETH);
         uint256 taxedAmount = quote * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
-        uint256 burnPortion = (taxedAmount * royaltyHandler.burnPortion()) / rwaToken.fee(); // 2/5
-        uint256 revSharePortion = (taxedAmount * royaltyHandler.revSharePortion()) / rwaToken.fee(); // 2/5
+        uint256 burnPortion = (taxedAmount * royaltyHandler.burnPortion()) / 1; // 0/1
+        uint256 revSharePortion = (taxedAmount * royaltyHandler.revSharePortion()) / 1; // 1/1
 
         (uint256 burnQ, uint256 revShareQ, uint256 lp, uint256 tokensForEth) = royaltyHandler.getRoyaltyDistributions(taxedAmount);
         assertEq(burnPortion, burnQ);
@@ -919,11 +1024,12 @@ contract MainDeploymentTest is Utility {
         assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
 
         // check boxALM balance/state
-        assertGt(rwaToken.balanceOf(box), 0);
-        assertGt(IERC20(WETH).balanceOf(box), 0);
-
-        // check GaugeV2ALM balance/state
-        assertGt(IERC20(box).balanceOf(gALM), 0);
+        if (royaltyHandler.lpPortion() != 0) {
+            assertGt(rwaToken.balanceOf(box), 0);
+            assertGt(IERC20(WETH).balanceOf(box), 0);
+            // check GaugeV2ALM balance/state
+            assertGt(IERC20(box).balanceOf(gALM), 0);
+        }
     }
 
 

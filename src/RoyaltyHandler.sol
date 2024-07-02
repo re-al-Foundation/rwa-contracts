@@ -223,14 +223,16 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
         emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
 
         // burn
-        IRWAToken(address(rwaToken)).burn(amountToBurn);
+        if (amountToBurn != 0) IRWAToken(address(rwaToken)).burn(amountToBurn);
 
         // rev share
-        rwaToken.safeTransfer(revDistributor, amountForRevShare);
+        if (amountForRevShare != 0) rwaToken.safeTransfer(revDistributor, amountForRevShare);
 
         // lp
-        _swapTokensForETH(tokensForEth, _getQuote(tokensForEth));
-        _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
+        if (amountForLp != 0) {
+            _swapTokensForETH(tokensForEth, _getQuote(tokensForEth));
+            _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
+        }
     }
 
     /**
@@ -251,14 +253,16 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
         emit RoyaltiesDistributed(amount, amountForRevShare, amountToBurn, amountForLp);
 
         // burn
-        IRWAToken(address(rwaToken)).burn(amountToBurn);
+        if (amountToBurn != 0) IRWAToken(address(rwaToken)).burn(amountToBurn);
 
         // rev share
-        rwaToken.safeTransfer(revDistributor, amountForRevShare);
+        if (amountForRevShare != 0) rwaToken.safeTransfer(revDistributor, amountForRevShare);
 
         // lp
-        _swapTokensForETH(tokensForEth, minOut);
-        _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
+        if (amountForLp != 0) {
+            _swapTokensForETH(tokensForEth, minOut);
+            _addLiquidity(amountForLp, WETH.balanceOf(address(this)));
+        }
     }
 
     /**
@@ -415,7 +419,7 @@ contract RoyaltyHandler is UUPSUpgradeable, Ownable2StepUpgradeable {
 
         amountToBurn = (amount * burnPortion) / totalFee; // 2/5 default
         amountForRevShare = (amount * revSharePortion) / totalFee; // 2/5 default
-        amountForLp = amount - amountToBurn - amountForRevShare; // 1/5 default
+        amountForLp = (amount * lpPortion) / totalFee; // 1/5 default
 
         tokensForEth = amountForLp / 2;
         amountForLp -= tokensForEth;

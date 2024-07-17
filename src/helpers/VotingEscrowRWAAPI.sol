@@ -8,6 +8,8 @@ import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils
 // local imports
 import { RWAVotingEscrow } from "../governance/RWAVotingEscrow.sol";
 import { VotingEscrowVesting } from "../governance/VotingEscrowVesting.sol";
+import { DelegateFactory } from "../governance/DelegateFactory.sol";
+import { Delegator } from "../governance/Delegator.sol";
 import { RevenueStreamETH } from "../RevenueStreamETH.sol";
 
 contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
@@ -16,6 +18,8 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     // State Variables
     // ---------------
 
+    /// @dev Contract reference for DelegateFactory.
+    DelegateFactory public constant delegateFactory = DelegateFactory(0x4Bc715a61dF515944907C8173782ea83d196D0c9);
     /// @dev Contract reference for RWAVotingEscrow.
     RWAVotingEscrow public veRWA;
     /// @dev Contract reference for VotingEscrowVesting.
@@ -33,6 +37,22 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
         uint256 remainingDuration;
         /// @dev Voting power of token.
         uint256 votingPower;
+    }
+
+    /// @dev Object used to return delegated veRWA token data.
+    struct DelegatedTokenData {
+        /// @dev Token identifier.
+        uint256 tokenId;
+        /// @dev Amount of RWA locked in token.
+        uint256 lockedAmount;
+        /// @dev Remaining duration left to vest until lock expired.
+        uint256 remainingDuration;
+        /// @dev Voting power of token.
+        uint256 votingPower;
+        /// @dev Timestamp of when delegation is expected to expire.
+        uint256 expirationDate;
+        /// @dev Creator of delegation and original owner of NFT.
+        address owner;
     }
 
     /// @dev Object used to return veRWA vesting data.
@@ -131,10 +151,46 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
         tokenData = new TokenData[](amount);
 
         for (uint256 i; i < amount;) {
-            tokenData[i].tokenId = veRWA.tokenOfOwnerByIndex(account, i);
-            tokenData[i].lockedAmount = veRWA.getLockedAmount(tokenData[i].tokenId);
-            tokenData[i].remainingDuration = veRWA.getRemainingVestingDuration(tokenData[i].tokenId);
-            tokenData[i].votingPower = veRWA.getPastVotingPower(tokenData[i].tokenId, block.timestamp-1);
+            tokenData[i] = TokenData({
+                tokenId: veRWA.tokenOfOwnerByIndex(account, i),
+                lockedAmount: veRWA.getLockedAmount(tokenData[i].tokenId),
+                remainingDuration: veRWA.getRemainingVestingDuration(tokenData[i].tokenId),
+                votingPower: veRWA.getPastVotingPower(tokenData[i].tokenId, block.timestamp-1)
+            });
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /**
+     * @notice Returns an array of tokenIds (with extensive data) that are delegated to an addrres.
+     * @param account Address of account we wish to query delegation data for (if any).
+     * @return tokenData Array of delegated token data that's delegated to `account`.
+     * @return num Length of tokenData.
+     */
+    function getDelegatedNFTsByAccountWithData(address account) external view returns (DelegatedTokenData[] memory tokenData, uint256 num) {
+        // grab all delegators
+        address[] memory delegators = delegateFactory.getDelegatorsArray();
+        tokenData = new DelegatedTokenData[](delegators.length);
+
+        // loop through delegators and return any tokens that are delegated to account
+        for (uint256 i; i < delegators.length;) {
+            Delegator delegator = Delegator(delegators[i]);
+            if (delegator.delegatee() == account) {
+                uint256 tokenId = delegator.delegatedToken();
+                tokenData[num] = DelegatedTokenData({
+                    tokenId: tokenId,
+                    lockedAmount: veRWA.getLockedAmount(tokenId),
+                    remainingDuration: veRWA.getRemainingVestingDuration(tokenId),
+                    votingPower: veRWA.getPastVotingPower(tokenId, block.timestamp-1),
+                    expirationDate: delegateFactory.delegatorExpiration(address(delegator)),
+                    owner: delegator.creator()
+                });
+                unchecked {
+                    ++num;
+                }
+            }
             unchecked {
                 ++i;
             }

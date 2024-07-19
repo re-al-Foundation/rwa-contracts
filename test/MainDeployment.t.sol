@@ -3434,6 +3434,7 @@ contract MainDeploymentTest is Utility {
             address(swapRouter),
             data1
         );
+        revDistributor.distributeETH();
         vm.stopPrank();
 
         // ~ Post-state check ~
@@ -3579,6 +3580,7 @@ contract MainDeploymentTest is Utility {
             targets,
             data
         );
+        revDistributor.distributeETH();
         vm.stopPrank();
 
         // ~ Post-state check ~
@@ -4832,6 +4834,7 @@ contract MainDeploymentTest is Utility {
             address(swapRouter),
             data
         );
+        revDistributor.distributeETH();
         vm.stopPrank();
 
         // ~ Post-state check ~

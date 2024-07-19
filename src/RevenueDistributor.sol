@@ -208,8 +208,6 @@ contract RevenueDistributor is Ownable2StepUpgradeable, UUPSUpgradeable {
 
         uint256 _after = IERC20(_token).balanceOf(address(this));
         require(_after >= _before - _amount, "invalid input amount");
-        
-        _distributeETH();
     }
 
     /**
@@ -258,7 +256,6 @@ contract RevenueDistributor is Ownable2StepUpgradeable, UUPSUpgradeable {
         }
 
         require(totalDeposit != 0, "insufficient output amount");
-        _distributeETH();
     }
 
     /**

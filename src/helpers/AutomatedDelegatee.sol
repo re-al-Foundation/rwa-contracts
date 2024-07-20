@@ -16,8 +16,8 @@ import { RevenueStreamETH } from "../RevenueStreamETH.sol";
  * @title AutomatedDelegatee
  * @author @chasebrownn
  * @notice This contract takes delegation of a VotingEscrowRWA token and automates the claiming of rewards and transfers
- *         those rewards to a dedicated delegatee address. Ideally, this contract will work in tandum with a gelato task to 
- *         automate the deliverance of rewards to the specified delegatee.
+ * those rewards to a dedicated delegatee address. Ideally, this contract will work in tandum with a gelato task to 
+ * automate the deliverance of rewards to the specified delegatee.
  *
  * Key Features:
  * - This contract must be delegated voting power of a veRWA token.
@@ -86,7 +86,18 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
     receive() external payable {}
 
     /**
-     * @notice TODO
+     * @notice This external method is used to claim any claimable rewards from the Revenue Stream contract
+     * on behalf of the delegatee.
+     * @dev This method will revert if the amount claimable is not greater than `minClaimable`. This is used to
+     * save gas on an automated method. I.e. we don't want this method being executed if the amount of claimable
+     * revenue is less than the gas it would cost to execute the claim.
+     * Once the rewards are claimed, it will be sent directly to the delegatee address.
+     * If an automation tool is being used to automate the claiming of rewards to the delegatee, this is the method
+     * you want to automate. And ideally, you should simulate the tx before executing to avoid wasting gas on a
+     * reverted call. Gelato tasks are a great solution to simulate and automate in a single tool.
+     *
+     * @param minClaimable Minimum amount that must be claimable in order to execute this method.
+     * @return claimed Amount of ETH claimed.
      */
     function claimRewards(uint256 minClaimable) external returns (uint256 claimed) {
         uint256 amountClaimable = claimable();
@@ -101,7 +112,15 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
     }
 
     /**
-     * @notice TODO
+     * @notice This external method is used to claim any claimable rewards from the Revenue Stream contract
+     * on behalf of the delegatee. However, it claimes in increments to prevent clogs.
+     * @dev This method differs from `claimRewards` in that it will claim in increments. When revenue is
+     * distributed to the Revenue Stream contract for claiming it creates an index in an array. It uses a
+     * rolling window model to track claimable revenue. In the event there are too many indexes to iterate
+     * in 1 transaction, you can perform the claim in smaller iterations to eventually claim all claimable ETH.
+     *
+     * @param numIndexes Number of indexes to claim.
+     * @return claimed Amount of ETH claimed.
      */
     function claimRewardsIncrement(uint256 numIndexes) external returns (uint256 claimed) {
         // claim in increments
@@ -138,7 +157,9 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
     // ----------------
 
     /**
-     * @notice TODO
+     * @notice This internal method sends ETH using `.call` to a specified address.
+     * @param to Where we're sending ETH.
+     * @param amount Amount of ETH being sent.
      */
     function _sendETH(address to, uint256 amount) internal {
         (bool success,) = to.call{value:amount}("");

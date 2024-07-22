@@ -11,7 +11,6 @@ import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/acc
 
 // local imports
 import { IRevenueStream } from "./interfaces/IRevenueStream.sol";
-import { IRevenueStreamETH } from "./interfaces/IRevenueStreamETH.sol";
 import { IWETH } from "./interfaces/IWETH.sol";
 import { RevenueStreamETH } from "./RevenueStreamETH.sol";
 

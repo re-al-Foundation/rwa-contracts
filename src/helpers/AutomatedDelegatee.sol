@@ -105,6 +105,7 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
         if (minClaimable > amountClaimable) revert InvalidAmount(amountClaimable);
         // claim
         claimed = REV_STREAM.claimETH();
+        emit RewardsClaimed(claimed, delegatee);
         // increment totalClaimed
         totalClaimed += claimed;
         // send ETH to delegatee
@@ -125,6 +126,7 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
     function claimRewardsIncrement(uint256 numIndexes) external returns (uint256 claimed) {
         // claim in increments
         claimed = REV_STREAM.claimETHIncrement(numIndexes);
+        emit RewardsClaimed(claimed, delegatee);
         // increment totalClaimed
         totalClaimed += claimed;
         // send ETH to delegatee
@@ -148,10 +150,11 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
     /**
      * @notice Returns amount of ETH that is claimable.
      */
-    function claimable() public view returns (uint256) {
-        return REV_STREAM.claimable(address(this));
+    function claimable() public view returns (uint256 amount) {
+        (amount,,,,) = REV_STREAM.claimable(address(this));
     }
     
+
     // ----------------
     // Internal Methods
     // ----------------

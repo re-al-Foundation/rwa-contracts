@@ -179,7 +179,6 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         uint256 indexes;
 
         (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(msg.sender, numIndexes);
-        require(amount > 0, "no claimable amount");
 
         lastClaimIndex[msg.sender] += indexes;
 
@@ -230,9 +229,19 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      * @notice View method that returns amount of revenue that is claimable, given a specific `account`.
      * @param account Address of shareholder.
      * @return amount Amount of revenue that is currently claimable.
+     * @return cyclesClaimable Array of cycles that have claimable revenue for the account.
+     * @return amountsClaimable Array of amounts of revenue that are claimable within the cycle. Indexes correspond with cyclesClaimable.
+     * @return num Number of cycles that contain claimable revenue.
+     * @return indexes Total indexes that have yet to be claimed or iterated over.
      */
-    function claimable(address account) external view returns (uint256 amount) {
-        (amount,,,,) = _claimable(account, MAX_INT);
+    function claimable(address account) external view returns (
+        uint256 amount,
+        uint256[] memory cyclesClaimable,
+        uint256[] memory amountsClaimable,
+        uint256 num,
+        uint256 indexes
+    ) {
+        (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(account, MAX_INT);
     }
     /**
      * @notice View method that returns amount of revenue that is claimable within a range of cycles, given a specific `account`
@@ -240,9 +249,19 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      * @param account Address of shareholder.
      * @param numIndexes Number of cycles to fetch claimable from.
      * @return amount Amount of revenue that is currently claimable.
+     * @return cyclesClaimable Array of cycles that have claimable revenue for the account.
+     * @return amountsClaimable Array of amounts of revenue that are claimable within the cycle. Indexes correspond with cyclesClaimable.
+     * @return num Number of cycles that contain claimable revenue.
+     * @return indexes Total indexes that have yet to be claimed or iterated over.
      */
-    function claimableIncrement(address account, uint256 numIndexes) external view returns (uint256 amount) {
-        (amount,,,,) = _claimable(account, numIndexes);
+    function claimableIncrement(address account, uint256 numIndexes) external view returns (
+        uint256 amount,
+        uint256[] memory cyclesClaimable,
+        uint256[] memory amountsClaimable,
+        uint256 num,
+        uint256 indexes
+    ) {
+        (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(account, numIndexes);
     }
 
     /**

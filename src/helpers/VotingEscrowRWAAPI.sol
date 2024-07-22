@@ -351,8 +351,8 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
      * @notice Returns amount of ETH that is claimable by `account`.
      * @param account Address with claimable revenue.
      */
-    function getClaimable(address account) external view returns (uint256) {
-        return revStream.claimable(account);
+    function getClaimable(address account) external view returns (uint256 claimable) {
+        (claimable,,,,) = revStream.claimable(account);
     }
     
     // ----------------

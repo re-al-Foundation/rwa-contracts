@@ -5,6 +5,7 @@ pragma solidity ^0.8.19;
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { ERC721Enumerable } from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 // oz upgradeable imports
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
@@ -45,6 +46,8 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     address public votingEscrow;
     /// @dev Stores the address of the RevenueDistributor contract.
     address public revenueDistributor;
+    /// @dev Stores the address of a designated signer for verifying signature claims.
+    address public signer;
 
 
     // ------
@@ -89,6 +92,10 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      * @param amount Amount of ETH sent.
      */
     error ETHTransferFailed(address recipient, uint256 amount);
+
+    error InvalidSigner(address);
+
+    error InvalidIndex(uint256 indexGiven, uint256 lastClaimed);
 
     
     // -----------
@@ -192,7 +199,26 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         (bool sent,) = payable(msg.sender).call{value: amount}("");
         if (!sent) revert ETHTransferFailed(msg.sender, amount);
 
-        emit RevenueClaimed(msg.sender, cycle, amount);
+        emit RevenueClaimed(msg.sender, cycle, amount); 
+    }
+ 
+    function claimWithSignature(uint256 amount, uint256 currentIndex, uint256 indexes, bytes memory signature) external {
+        bytes32 data = keccak256(abi.encodePacked(msg.sender, amount, currentIndex, indexes));
+        address messageSigner = ECDSA.recover(data, signature);
+
+        // verify signer
+        if (messageSigner != signer) revert InvalidSigner(messageSigner);
+
+        // verify lastClaimIndex[msg.sender] == currentIndex
+        uint256 lastClaimed = lastClaimIndex[msg.sender];
+        if (lastClaimed != currentIndex) revert InvalidIndex(currentIndex, lastClaimed);
+
+        // update lastClaimIndex
+        lastClaimIndex[msg.sender] += indexes;
+
+        // transfer ETH to msg.sender
+        (bool sent,) = payable(msg.sender).call{value: amount}("");
+        if (!sent) revert ETHTransferFailed(msg.sender, amount);
     }
 
     /**

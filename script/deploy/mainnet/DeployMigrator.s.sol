@@ -21,7 +21,7 @@ import "../../../test/utils/Constants.sol";
 /**
  * @title DeployMigrator
  * @author Chase Brown
- * @notice This script deploys CrossChainMigrator to Mumbai
+ * @notice This script deploys CrossChainMigrator to Re.al
  */
 contract DeployMigrator is DeployUtility {
 

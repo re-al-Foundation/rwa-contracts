@@ -41,7 +41,7 @@ contract AutomatedDelegateeTest is Utility {
 
     // Actors
     address public constant DELEGATOR_ADMIN = 0x946C569791De3283f33372731d77555083c329da;
-    address public constant DELEGATEE       = address(bytes20(bytes("DELEGATEE")));
+    address public constant DELEGATEE       = 0x0E140Adb0a70569f0A8b3d48ab8c8c580939a120;
 
     function setUp() public {
         vm.createSelectFork(REAL_RPC_URL, 165700);
@@ -153,5 +153,29 @@ contract AutomatedDelegateeTest is Utility {
         (claimable,,,, postIndexes) = REV_STREAM.claimable(address(automatedDelegatee));
         assertEq(postIndexes, 0);
         assertEq(claimable, 0);
+    }
+
+    /// @dev Verifies proper state changes when AutomatedDelegatee::withdrawETH is called.
+    function test_automatedDelegatee_withdrawETH() public {
+
+        // ~ Config ~
+
+        uint256 amountETH = 10 ether;
+        vm.deal(address(automatedDelegatee), amountETH);
+
+        // ~ Pre-state check ~
+
+        assertEq(address(automatedDelegatee).balance, amountETH);
+        uint256 preBalOwner = ADMIN.balance;
+
+        // ~ withdrawETH ~
+
+        vm.prank(ADMIN);
+        automatedDelegatee.withdrawETH(amountETH);
+
+        // ~ Post-state check ~
+
+        assertEq(address(automatedDelegatee).balance, 0);
+        assertEq(ADMIN.balance, preBalOwner + amountETH);
     }
 }

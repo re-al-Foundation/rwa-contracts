@@ -1,15 +1,11 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.19;
 
-// oz imports\
+// oz imports
 import { OwnableUpgradeable } from "@openzeppelin/contracts-upgradeable/access/OwnableUpgradeable.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 
 // local imports
-import { RWAVotingEscrow } from "../governance/RWAVotingEscrow.sol";
-import { VotingEscrowVesting } from "../governance/VotingEscrowVesting.sol";
-import { DelegateFactory } from "../governance/DelegateFactory.sol";
-import { Delegator } from "../governance/Delegator.sol";
 import { RevenueStreamETH } from "../RevenueStreamETH.sol";
 
 /**
@@ -140,6 +136,15 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
     function withdrawETH(uint256 amount) external onlyOwner {
         if (amount > address(this).balance || amount == 0) revert InvalidAmount(amount);
         _sendETH(owner(), amount);
+    }
+
+    /**
+     * @notice This permissioned external method is used to update the `delegatee` state variable.
+     * @param newDelegatee New delegatee address.
+     */
+    function updateDelegatee(address newDelegatee) external onlyOwner {
+        if (newDelegatee == address(0)) revert ZeroAddressException();
+        delegatee = newDelegatee;
     }
 
 

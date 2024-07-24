@@ -221,10 +221,10 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         uint256 amount,
         uint256 currentIndex,
         uint256 indexes,
-        uint256[] memory cyclesClaimable,
-        uint256[] memory amountsClaimable,
+        uint256[] calldata cyclesClaimable,
+        uint256[] calldata amountsClaimable,
         uint256 num,
-        bytes memory signature
+        bytes calldata signature
     ) external nonReentrant {
         bytes32 data = keccak256(
             abi.encodePacked(msg.sender, amount, currentIndex, indexes, cyclesClaimable, amountsClaimable, num)

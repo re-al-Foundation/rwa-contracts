@@ -36,17 +36,53 @@ contract RevenueStreamETHSignatureTest is Utility {
     RWAVotingEscrow public VE_RWA = RWAVotingEscrow(0xa7B4E29BdFf073641991b44B283FD77be9D7c0F4);
 
     // Actors
-    address public constant DELEGATOR_ADMIN = 0x946C569791De3283f33372731d77555083c329da;
+    address public constant MULTISIG = 0x946C569791De3283f33372731d77555083c329da;
+    uint256 public constant delegatedTokenId = 1555;
+    
+    uint256 public privateKey = 12345;
+    address public signer;
+
+    struct ClaimData {
+        uint256 amount;
+        uint256 currentIndex;
+        uint256[] cyclesClaimable;
+        uint256[] amountsClaimable;
+        uint256 num;
+        uint256 indexes;
+    }
 
     function setUp() public {
         vm.createSelectFork(REAL_RPC_URL, 184960);
 
         // upgrade RevenueStreamETH -> gives us claimWithSignature
-        vm.startPrank(DELEGATOR_ADMIN);
+        vm.startPrank(MULTISIG);
         RevenueStreamETH newRevStream = new RevenueStreamETH();
         REV_STREAM.upgradeToAndCall(address(newRevStream), "");
         vm.stopPrank();
+
+        // create address for signer from pk
+        signer = vm.addr(privateKey);
+
+        // set signer on RevStream
+        vm.prank(MULTISIG);
+        REV_STREAM.setSigner(signer);
+
+        // multisig transfers token to new JOE address
+        vm.prank(MULTISIG);
+        VE_RWA.transferFrom(MULTISIG, JOE, delegatedTokenId);
+
+        // distribute some ETH so JOE has some to claim
+        uint256 amount = 1 ether;
+        vm.deal(address(REV_DISTRIBUTOR), amount);
+        vm.prank(address(REV_DISTRIBUTOR));
+        REV_STREAM.depositETH{value: amount}();
+        skip(1);
     }
+
+
+    // -------
+    // Utility
+    // -------
 
     /// @notice packs v, r, s into signature bytes
     function _packRsv(uint8 v, bytes32 r, bytes32 s) internal pure returns (bytes memory) {
@@ -59,24 +95,60 @@ contract RevenueStreamETHSignatureTest is Utility {
         return sig;
     }
 
-    function testSignature1() public {
-        uint256 privateKey = 123;
-        // Computes the address for a given private key.
-        address alice = vm.addr(privateKey);
+    /// @dev Verifies signature
+    function _claimSignature(address account, uint256 amount, uint256 currentIndex, uint256 newIndex, bytes memory signature) internal {
+        // create the hash from data
+        emit log_named_bytes("sig", signature);
+        // use hash + signature to verify signer address
+        bytes32 data = keccak256(abi.encodePacked(account, amount, currentIndex, newIndex));
 
-        // Test valid signature
-        bytes32 messageHash = keccak256("Signed by Alice");
+        address signerAddress = ECDSA.recover(data, signature);
+        emit log_named_address("signerAddress", signerAddress);
 
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, messageHash);
-        address signer = ecrecover(messageHash, v, r, s);
-
-        assertEq(signer, alice);
+        assertEq(signer, signerAddress);
     }
 
-    function testSignature2() public {
-        uint256 privateKey = 123;
-        address signer = vm.addr(privateKey);
-        emit log_named_address("signer", signer);
+    /// @dev This internal method will use the `signer` PK to sign a data packet for the account to then execute
+    /// a call to claimWithSignature.
+    function _signAndClaim(address account, ClaimData memory claimData) internal {
+        // signer signs data hash
+        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+            privateKey,
+            keccak256(
+                // create data hash
+                abi.encodePacked(
+                    account,
+                    claimData.amount,
+                    claimData.currentIndex,
+                    claimData.indexes,
+                    claimData.cyclesClaimable,
+                    claimData.amountsClaimable,
+                    claimData.num
+                )
+            )
+        );
+
+        // claimWithSignature
+        vm.prank(account);
+        REV_STREAM.claimWithSignature(
+            claimData.amount,
+            claimData.currentIndex,
+            claimData.indexes,
+            claimData.cyclesClaimable,
+            claimData.amountsClaimable,
+            claimData.num,
+            _packRsv(v, r, s)
+        );
+    }
+
+
+    // ----------
+    // Unit Tests
+    // ----------
+
+    /// @dev Verifies the use of `vm.sign` and `ECDSA.recover`.
+    function testSignature() public {
+        emit log_named_address("signerAddress", signer);
 
         address account = JOE;
         uint256 amount = 1 ether;
@@ -87,17 +159,82 @@ contract RevenueStreamETHSignatureTest is Utility {
 
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(privateKey, data);
 
-        claimSignature(account, amount, currentIndex, newIndex, _packRsv(v, r, s));
+        _claimSignature(account, amount, currentIndex, newIndex, _packRsv(v, r, s));
 
     }
 
-    function claimSignature(address account, uint256 amount, uint256 currentIndex, uint256 newIndex, bytes memory signature) internal {
-        // create the hash from data
-        emit log_named_bytes("sig", signature);
-        // use hash + signature to verify signer address
-        bytes32 data = keccak256(abi.encodePacked(account, amount, currentIndex, newIndex));
+    /// @dev Verifies proper usage of RevenueStreamETH::claimWithSignature.
+    function test_revStreamETH_claimWithSignature_claimAll() public {
+        // ~ Config ~
 
-        address signer = ECDSA.recover(data, signature);
-        emit log_named_address("signer", signer);
+        ClaimData memory claimData;
+
+        (claimData.amount,
+        claimData.cyclesClaimable,
+        claimData.amountsClaimable,
+        claimData.num,
+        claimData.indexes) = REV_STREAM.claimable(JOE);
+        claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
+
+        // ~ Pre-state check ~
+
+        uint256 preBal = JOE.balance;
+
+        // ~ Execute claimWithSignature ~
+
+        _signAndClaim(JOE, claimData);
+
+        // ~ Post-state check ~
+
+        assertEq(JOE.balance, preBal + claimData.amount);
+        assertEq(REV_STREAM.lastClaimIndex(JOE), claimData.currentIndex + claimData.indexes);
+    }
+
+    /// @dev Verifies proper usage of RevenueStreamETH::claimWithSignature when not all indexes were claimed at once.
+    function test_revStreamETH_claimWithSignature_claimMinusOne() public {
+        // ~ Config ~
+
+        ClaimData memory claimData;
+
+        (uint256 fullAmount,,,, uint256 totalIndexes) = REV_STREAM.claimable(JOE);
+        (claimData.amount,
+        claimData.cyclesClaimable,
+        claimData.amountsClaimable,
+        claimData.num,
+        claimData.indexes) = REV_STREAM.claimableIncrement(JOE, totalIndexes-1);
+        claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
+
+        // ~ Pre-state check ~
+
+        uint256 preBal = JOE.balance;
+
+        // ~ Execute claimWithSignature ~
+
+        _signAndClaim(JOE, claimData);
+
+        // ~ Post-state check 1 ~
+
+        assertEq(claimData.amount, 0);
+        assertEq(REV_STREAM.lastClaimIndex(JOE), claimData.currentIndex + claimData.indexes);
+        (claimData.amount,
+        claimData.cyclesClaimable,
+        claimData.amountsClaimable,
+        claimData.num,
+        claimData.indexes
+        ) = REV_STREAM.claimable(JOE);
+        assertEq(claimData.indexes, 1);
+        assertEq(claimData.amountsClaimable[0], fullAmount);
+        
+        claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
+
+        // ~ Execute claimWithSignature ~
+
+        _signAndClaim(JOE, claimData);
+
+        // ~ Post-state check 2 ~
+
+        assertEq(claimData.amount, fullAmount);
+        assertEq(JOE.balance, preBal + claimData.amount);
+        assertEq(REV_STREAM.lastClaimIndex(JOE), claimData.currentIndex + claimData.indexes);
     }
 }

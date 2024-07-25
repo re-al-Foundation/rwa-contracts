@@ -47,7 +47,7 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     /// @dev Stores the address of the RevenueDistributor contract.
     address public revenueDistributor;
     /// @dev Stores the address of a designated signer for verifying signature claims.
-    address public signer; // TODO Create setter
+    address public signer;
 
 
     // ------
@@ -99,11 +99,25 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      */
     error ETHTransferFailed(address recipient, uint256 amount);
 
+    /**
+     * @notice This error is thrown when an invalid address parameter is entered into a setter.
+     */
     error InvalidAddress();
 
-    error InvalidSigner(address);
+    /**
+     * @notice This error is thrown when an invalid address parameter is entered into a setter.
+     * @param recoveredSigner is the address fetched via ECDSA.recover when verifying a signature.
+     */
+    error InvalidSigner(address recoveredSigner);
 
-    error InvalidIndex(uint256 indexGiven, uint256 lastClaimed);
+    /**
+     * @notice This error is thrown when an index provided to claimWithSignature does not match the current
+     * last claimed index of the account.
+     * @param account Account with an invalid index provided.
+     * @param indexGiven The index provided.
+     * @param lastClaimed The stored index in lastClaimedIndex[account].
+     */
+    error InvalidIndex(address account, uint256 indexGiven, uint256 lastClaimed);
 
     
     // -----------
@@ -234,9 +248,9 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         // verify signer
         if (messageSigner != signer) revert InvalidSigner(messageSigner);
 
-        // verify lastClaimIndex[msg.sender] == currentIndex
+        // verify true lastClaimIndex == currentIndex
         uint256 lastClaimed = lastClaimIndex[msg.sender];
-        if (lastClaimed != currentIndex) revert InvalidIndex(currentIndex, lastClaimed);
+        if (lastClaimed != currentIndex) revert InvalidIndex(msg.sender, currentIndex, lastClaimed);
 
         // update lastClaimIndex
         lastClaimIndex[msg.sender] += indexes;
@@ -511,6 +525,11 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         return (expired, expiredCycles, num, indexes);
     }
 
+    /**
+     * @notice This internal method is used to transfer ETH from this contract to a specified target address.
+     * @param to Recipient address of ETH.
+     * @param amount Amount of ETH to transfer.
+     */
     function _sendETH(address to, uint256 amount) internal {
         (bool sent,) = payable(to).call{value: amount}("");
         if (!sent) revert ETHTransferFailed(to, amount);

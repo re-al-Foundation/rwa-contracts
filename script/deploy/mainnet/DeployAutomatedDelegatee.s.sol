@@ -42,14 +42,14 @@ contract DeployAutomatedDelegatee is DeployUtility {
         // deploy AutomatedDelegatee
         AutomatedDelegatee automatedDelegatee = new AutomatedDelegatee();
         // deploy proxy
-        ERC1967Proxy automatedDelegateeProxy = new ERC1967Proxy(
-            address(automatedDelegatee),
-            abi.encodeWithSelector(AutomatedDelegatee.initialize.selector,
-                ADMIN,
-                DELEGATEE
-            )
-        );
-        automatedDelegatee = AutomatedDelegatee(payable(address(automatedDelegateeProxy)));
+        // ERC1967Proxy automatedDelegateeProxy = new ERC1967Proxy(
+        //     address(automatedDelegatee),
+        //     abi.encodeWithSelector(AutomatedDelegatee.initialize.selector,
+        //         ADMIN,
+        //         DELEGATEE
+        //     )
+        // );
+        // automatedDelegatee = AutomatedDelegatee(payable(address(automatedDelegateeProxy)));
 
         vm.stopBroadcast();
     }

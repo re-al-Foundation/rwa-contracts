@@ -147,6 +147,18 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
         delegatee = newDelegatee;
     }
 
+    /**
+     * @notice This view method is used by the Gelato resolver to check whether or not the automated call would fail.
+     * @param minClaimable Minimum amount that must be claimable in order to execute claimRewards.
+     * @return canExec If true, requirements have been met to yield a successful call to claimRewards.
+     * @return execPayload Call data for Gelato to use on target contract (this).
+     */
+    function checker(uint256 minClaimable) external view returns (bool canExec, bytes memory execPayload) {
+        uint256 amountClaimable = claimable();
+        canExec = minClaimable <= amountClaimable;
+        execPayload = abi.encodeCall(this.claimRewards, (minClaimable));
+    }
+
 
     // --------------
     // Public Methods

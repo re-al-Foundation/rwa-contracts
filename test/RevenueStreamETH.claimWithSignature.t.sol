@@ -110,7 +110,8 @@ contract RevenueStreamETHSignatureTest is Utility {
                     claimData.indexes,
                     claimData.cyclesClaimable,
                     claimData.amountsClaimable,
-                    claimData.num
+                    claimData.num,
+                    block.timestamp
                 )
             )
         );
@@ -130,6 +131,7 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable,
             claimData.amountsClaimable,
             claimData.num,
+            block.timestamp,
             _sign(account, claimData)
         );
     }
@@ -243,7 +245,8 @@ contract RevenueStreamETHSignatureTest is Utility {
                     claimData.indexes,
                     claimData.cyclesClaimable,
                     claimData.amountsClaimable,
-                    claimData.num
+                    claimData.num,
+                    block.timestamp
                 )
             )
         );
@@ -258,6 +261,7 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable,
             claimData.amountsClaimable,
             claimData.num,
+            block.timestamp,
             _packRsv(v, r, s)
         );
     }
@@ -285,7 +289,8 @@ contract RevenueStreamETHSignatureTest is Utility {
                     claimData.indexes,
                     claimData.cyclesClaimable,
                     claimData.amountsClaimable,
-                    claimData.num
+                    claimData.num,
+                    block.timestamp
                 )
             )
         );
@@ -300,6 +305,7 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable,
             claimData.amountsClaimable,
             claimData.num,
+            block.timestamp,
             _packRsv(v, r, s)
         );
     }
@@ -327,6 +333,7 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable,
             claimData.amountsClaimable,
             claimData.num,
+            block.timestamp,
             signature
         );
     }
@@ -354,6 +361,7 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable,
             claimData.amountsClaimable,
             claimData.num,
+            block.timestamp,
             signature
         );
     }
@@ -381,6 +389,7 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable,
             claimData.amountsClaimable,
             claimData.num,
+            block.timestamp,
             signature
         );
     }
@@ -410,6 +419,7 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable, // discrepancy
             claimData.amountsClaimable,
             claimData.num,
+            block.timestamp,
             signature
         );
     }
@@ -439,6 +449,7 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable,
             claimData.amountsClaimable, // discrepancy
             claimData.num,
+            block.timestamp,
             signature
         );
     }
@@ -466,6 +477,38 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.cyclesClaimable,
             claimData.amountsClaimable,
             claimData.num + 1, // discrepancy
+            block.timestamp,
+            signature
+        );
+    }
+
+    /// @dev Verifies using an expired signature will cause a revert.
+    function test_revStreamETH_claimWithSignature_expiredSignature() public {
+        ClaimData memory claimData;
+
+        (claimData.amount,
+        claimData.cyclesClaimable,
+        claimData.amountsClaimable,
+        claimData.num,
+        claimData.indexes) = REV_STREAM.claimable(JOE);
+        claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
+
+        bytes memory signature = _sign(JOE, claimData);
+
+        uint256 deadline = block.timestamp;
+        skip(2);
+
+        // claimWithSignature with discrepancy -> revert
+        vm.prank(JOE);
+        vm.expectRevert(abi.encodeWithSelector(RevenueStreamETH.SignatureExpired.selector, block.timestamp, deadline));
+        REV_STREAM.claimWithSignature(
+            claimData.amount,
+            claimData.currentIndex,
+            claimData.indexes,
+            claimData.cyclesClaimable,
+            claimData.amountsClaimable,
+            claimData.num,
+            deadline, // expired
             signature
         );
     }

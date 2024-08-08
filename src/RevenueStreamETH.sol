@@ -119,6 +119,8 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      */
     error InvalidIndex(address account, uint256 indexGiven, uint256 lastClaimed);
 
+    error SignatureExpired(uint256 currentTimestamp, uint256 deadline);
+
     
     // -----------
     // Constructor
@@ -238,12 +240,16 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         uint256[] calldata cyclesClaimable,
         uint256[] calldata amountsClaimable,
         uint256 num,
+        uint256 deadline,
         bytes calldata signature
     ) external nonReentrant {
         bytes32 data = keccak256(
-            abi.encodePacked(msg.sender, amount, currentIndex, indexes, cyclesClaimable, amountsClaimable, num)
+            abi.encodePacked(msg.sender, amount, currentIndex, indexes, cyclesClaimable, amountsClaimable, num, deadline)
         );
         address messageSigner = ECDSA.recover(data, signature);
+
+        // verify deadline
+        if (block.timestamp > deadline) revert SignatureExpired(block.timestamp, deadline);
 
         // verify signer
         if (messageSigner != signer) revert InvalidSigner(messageSigner);

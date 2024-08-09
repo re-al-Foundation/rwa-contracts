@@ -119,6 +119,11 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      */
     error InvalidIndex(address account, uint256 indexGiven, uint256 lastClaimed);
 
+    /**
+     * @notice This error is thrown when a signature used in claimWithSignature is expired.
+     * @param currentTimestamp Current timestamp when call is made.
+     * @param deadline Timestamp when the signature was supposed to be used by.
+     */
     error SignatureExpired(uint256 currentTimestamp, uint256 deadline);
 
     

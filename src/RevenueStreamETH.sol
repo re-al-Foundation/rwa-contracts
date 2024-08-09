@@ -236,6 +236,7 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      * @param cyclesClaimable Array of cycles we wish to claim from.
      * @param amountsClaimable Amounts being claimed in each cycle in cyclesClaimable.
      * @param num Length of cyclesClaimable & amountsClaimable.
+     * @param deadline Timestamp signature must be used by until it's deemed expired/stale.
      * @param signature Signature hash.
      */
     function claimWithSignature(

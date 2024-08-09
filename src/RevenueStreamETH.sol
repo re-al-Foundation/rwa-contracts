@@ -244,7 +244,16 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         bytes calldata signature
     ) external nonReentrant {
         bytes32 data = keccak256(
-            abi.encodePacked(msg.sender, amount, currentIndex, indexes, cyclesClaimable, amountsClaimable, num, deadline)
+            abi.encodePacked(
+                msg.sender,
+                amount,
+                currentIndex,
+                indexes,
+                cyclesClaimable,
+                amountsClaimable,
+                num,
+                deadline
+            )
         );
         address messageSigner = ECDSA.recover(data, signature);
 

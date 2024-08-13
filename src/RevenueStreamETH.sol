@@ -5,6 +5,7 @@ pragma solidity ^0.8.19;
 import { IERC721 } from "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 import { ERC721Enumerable } from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
 import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
+import { ECDSA } from "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 
 // oz upgradeable imports
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
@@ -45,6 +46,8 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     address public votingEscrow;
     /// @dev Stores the address of the RevenueDistributor contract.
     address public revenueDistributor;
+    /// @dev Stores the address of a designated signer for verifying signature claims.
+    address public signer;
 
 
     // ------
@@ -60,10 +63,10 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     /**
      * @notice This event is emitted when revenue is claimed by an eligible shareholder.
      * @param claimer Address that claimed revenue.
-     * @param cycle Cycle in which claim took place.
      * @param amount Amount of ETH claimed.
+     * @param indexes Amount of indexes claimed.
      */
-    event RevenueClaimed(address indexed claimer, uint256 indexed cycle, uint256 amount);
+    event RevenueClaimed(address indexed claimer, uint256 amount, uint256 indexes);
 
     /**
      * @notice This event is emitted when expired revenue is skimmed and sent back to the RevenueDistributor.
@@ -78,6 +81,12 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      */
     event TimeUntilExpiredSet(uint256 newTimeUntilExpired);
 
+    /**
+     * @notice This event is emitted when setSigner is executed.
+     * @param newSigner New `signer` address.
+     */
+    event SignerSet(address indexed newSigner);
+
 
     // ------
     // Errors
@@ -89,6 +98,33 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      * @param amount Amount of ETH sent.
      */
     error ETHTransferFailed(address recipient, uint256 amount);
+
+    /**
+     * @notice This error is thrown when an invalid address parameter is entered into a setter.
+     */
+    error InvalidAddress();
+
+    /**
+     * @notice This error is thrown when an invalid address parameter is entered into a setter.
+     * @param recoveredSigner is the address fetched via ECDSA.recover when verifying a signature.
+     */
+    error InvalidSigner(address recoveredSigner);
+
+    /**
+     * @notice This error is thrown when an index provided to claimWithSignature does not match the current
+     * last claimed index of the account.
+     * @param account Account with an invalid index provided.
+     * @param indexGiven The index provided.
+     * @param lastClaimed The stored index in lastClaimedIndex[account].
+     */
+    error InvalidIndex(address account, uint256 indexGiven, uint256 lastClaimed);
+
+    /**
+     * @notice This error is thrown when a signature used in claimWithSignature is expired.
+     * @param currentTimestamp Current timestamp when call is made.
+     * @param deadline Timestamp when the signature was supposed to be used by.
+     */
+    error SignatureExpired(uint256 currentTimestamp, uint256 deadline);
 
     
     // -----------
@@ -171,15 +207,12 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     function claimETHIncrement(uint256 numIndexes) public nonReentrant returns (uint256 amount) {
         require(numIndexes != 0, "RevenueStreamETH: numIndexes cant be 0");
 
-        uint256 cycle = currentCycle();
-
         uint256[] memory cyclesClaimable;
         uint256[] memory amountsClaimable;
         uint256 num;
         uint256 indexes;
 
         (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(msg.sender, numIndexes);
-        require(amount > 0, "no claimable amount");
 
         lastClaimIndex[msg.sender] += indexes;
 
@@ -190,10 +223,70 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
             }
         }
 
-        (bool sent,) = payable(msg.sender).call{value: amount}("");
-        if (!sent) revert ETHTransferFailed(msg.sender, amount);
+        _sendETH(msg.sender, amount);
+        emit RevenueClaimed(msg.sender, amount, indexes);
+    }
+    
+    /**
+     * @notice This method allows an EOA to perform a claim with data that has been verified via a signature
+     * from the dedicated `signer` address.
+     * @param amount Amount of ETH being claimed.
+     * @param currentIndex The current index of whicht the msg.sender last claimed.
+     * @param indexes How many indexes (from cycles) we wish to cover in this claim.
+     * @param cyclesClaimable Array of cycles we wish to claim from.
+     * @param amountsClaimable Amounts being claimed in each cycle in cyclesClaimable.
+     * @param num Length of cyclesClaimable & amountsClaimable.
+     * @param deadline Timestamp signature must be used by until it's deemed expired/stale.
+     * @param signature Signature hash.
+     */
+    function claimWithSignature(
+        uint256 amount,
+        uint256 currentIndex,
+        uint256 indexes,
+        uint256[] calldata cyclesClaimable,
+        uint256[] calldata amountsClaimable,
+        uint256 num,
+        uint256 deadline,
+        bytes calldata signature
+    ) external nonReentrant {
+        bytes32 data = keccak256(
+            abi.encodePacked(
+                msg.sender,
+                amount,
+                currentIndex,
+                indexes,
+                cyclesClaimable,
+                amountsClaimable,
+                num,
+                deadline
+            )
+        );
+        address messageSigner = ECDSA.recover(data, signature);
 
-        emit RevenueClaimed(msg.sender, cycle, amount);
+        // verify deadline
+        if (block.timestamp > deadline) revert SignatureExpired(block.timestamp, deadline);
+
+        // verify signer
+        if (messageSigner != signer) revert InvalidSigner(messageSigner);
+
+        // verify true lastClaimIndex == currentIndex
+        uint256 lastClaimed = lastClaimIndex[msg.sender];
+        if (lastClaimed != currentIndex) revert InvalidIndex(msg.sender, currentIndex, lastClaimed);
+
+        // update lastClaimIndex
+        lastClaimIndex[msg.sender] += indexes;
+
+        // update revenueClaimed
+        for (uint256 i; i < num;) {
+            revenueClaimed[cyclesClaimable[i]] += amountsClaimable[i];
+            unchecked {
+                ++i;
+            }
+        }
+
+        // transfer ETH to msg.sender
+        _sendETH(msg.sender, amount);
+        emit RevenueClaimed(msg.sender, amount, indexes);
     }
 
     /**
@@ -227,12 +320,32 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     }
 
     /**
+     * @notice This method allows a permissioned owner to update the `signer` address.
+     * @param newSigner New address being used to sign claims.
+     */
+    function setSigner(address newSigner) external onlyOwner {
+        if (newSigner == address(0) || newSigner == signer) revert InvalidAddress();
+        emit SignerSet(newSigner);
+        signer = newSigner;
+    }
+
+    /**
      * @notice View method that returns amount of revenue that is claimable, given a specific `account`.
      * @param account Address of shareholder.
      * @return amount Amount of revenue that is currently claimable.
+     * @return cyclesClaimable Array of cycles that have claimable revenue for the account.
+     * @return amountsClaimable Array of amounts of revenue that are claimable within the cycle. Indexes correspond with cyclesClaimable.
+     * @return num Number of cycles that contain claimable revenue.
+     * @return indexes Total indexes that have yet to be claimed or iterated over.
      */
-    function claimable(address account) external view returns (uint256 amount) {
-        (amount,,,,) = _claimable(account, MAX_INT);
+    function claimable(address account) external view returns (
+        uint256 amount,
+        uint256[] memory cyclesClaimable,
+        uint256[] memory amountsClaimable,
+        uint256 num,
+        uint256 indexes
+    ) {
+        (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(account, MAX_INT);
     }
     /**
      * @notice View method that returns amount of revenue that is claimable within a range of cycles, given a specific `account`
@@ -240,9 +353,19 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      * @param account Address of shareholder.
      * @param numIndexes Number of cycles to fetch claimable from.
      * @return amount Amount of revenue that is currently claimable.
+     * @return cyclesClaimable Array of cycles that have claimable revenue for the account.
+     * @return amountsClaimable Array of amounts of revenue that are claimable within the cycle. Indexes correspond with cyclesClaimable.
+     * @return num Number of cycles that contain claimable revenue.
+     * @return indexes Total indexes that have yet to be claimed or iterated over.
      */
-    function claimableIncrement(address account, uint256 numIndexes) external view returns (uint256 amount) {
-        (amount,,,,) = _claimable(account, numIndexes);
+    function claimableIncrement(address account, uint256 numIndexes) external view returns (
+        uint256 amount,
+        uint256[] memory cyclesClaimable,
+        uint256[] memory amountsClaimable,
+        uint256 num,
+        uint256 indexes
+    ) {
+        (amount, cyclesClaimable, amountsClaimable, num, indexes) = _claimable(account, numIndexes);
     }
 
     /**
@@ -316,8 +439,7 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         }
 
         // send money to revdist
-        (bool sent,) = payable(revenueDistributor).call{value: amount}("");
-        if (!sent) revert ETHTransferFailed(revenueDistributor, amount);
+        _sendETH(revenueDistributor, amount);
 
         emit ExpiredRevenueSkimmed(amount, num);
     }
@@ -329,7 +451,7 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      * @param account Address of account with voting power.
      * @return amount -> Amount of ETH that is currently claimable for `account`.
      */
-    function _claimable(
+    function _claimable( 
         address account,
         uint256 numIndexes
     ) internal view returns (
@@ -353,10 +475,11 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
             uint256 currentRevenue = revenue[cycle];
 
             uint256 votingPowerAtTime = Votes(votingEscrow).getPastVotes(account, cycle);
-            uint256 totalPowerAtTime = Votes(votingEscrow).getPastTotalSupply(cycle);
 
             if (votingPowerAtTime != 0 && !expiredRevClaimed[cycle]) {
+                uint256 totalPowerAtTime = Votes(votingEscrow).getPastTotalSupply(cycle);
                 uint256 claimableForCycle = (currentRevenue * votingPowerAtTime) / totalPowerAtTime;
+
                 amount += claimableForCycle;
 
                 cyclesClaimable[num] = cycle;
@@ -421,6 +544,16 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         }
 
         return (expired, expiredCycles, num, indexes);
+    }
+
+    /**
+     * @notice This internal method is used to transfer ETH from this contract to a specified target address.
+     * @param to Recipient address of ETH.
+     * @param amount Amount of ETH to transfer.
+     */
+    function _sendETH(address to, uint256 amount) internal {
+        (bool sent,) = payable(to).call{value: amount}("");
+        if (!sent) revert ETHTransferFailed(to, amount);
     }
 
     /**

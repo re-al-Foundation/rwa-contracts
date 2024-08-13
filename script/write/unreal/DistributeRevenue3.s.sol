@@ -20,8 +20,6 @@ import { MarketplaceMock } from "../../../test/utils/MarketplaceMock.sol";
 // v1
 import { PassiveIncomeNFT } from "../../../src/refs/PassiveIncomeNFT.sol";
 import { TangibleERC20Mock } from "../../../test/utils/TangibleERC20Mock.sol";
-// wrapper contract
-import { ExactInputWrapper } from "../../../src/helpers/ExactInputWrapper.sol";
 // uniswap
 import { IUniswapV2Router02 } from "../../../src/interfaces/IUniswapV2Router02.sol";
 
@@ -45,8 +43,6 @@ contract DistributeRevenue3 is Script {
     RWAToken public rwaToken = RWAToken(payable(UNREAL_RWA_TOKEN));
     RevenueDistributor public revDistributor = RevenueDistributor(payable(UNREAL_REV_DISTRIBUTOR));
     RevenueStreamETH public revStreamETH;
-
-    ExactInputWrapper public exactInputWrapper = ExactInputWrapper(payable(0xD86ee67328cDACa103b82774FF0b131D03dfdFB5));
 
     TangibleERC20Mock public DAI = TangibleERC20Mock(UNREAL_DAI);
     TangibleERC20Mock public USDC = TangibleERC20Mock(UNREAL_USDC);
@@ -184,7 +180,7 @@ contract DistributeRevenue3 is Script {
         address[] memory targets = new address[](3);
         targets[0] = UNREAL_UNIV2_ROUTER;
         targets[1] = UNREAL_SWAP_ROUTER;
-        targets[2] = address(exactInputWrapper);
+        targets[2] = UNREAL_SWAP_ROUTER;
 
         uint256[] memory amounts = new uint256[](3);
         amounts[0] = amountRWA;

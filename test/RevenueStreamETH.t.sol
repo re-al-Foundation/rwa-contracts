@@ -173,6 +173,21 @@ contract RWARevenueStreamETHTest is Utility {
     }
 
 
+    // -------
+    // Utility
+    // -------
+
+    /// @dev Returns the amount claimable from the RevenueStreamETH contract, given an account.
+    function _getClaimable(address account) internal view returns (uint256 claimable) {
+        (claimable,,,,) = revStream.claimable(account);
+    }
+
+    /// @dev Returns the amount claimable from the RevenueStreamETH contract, given an account and a number of indexes.
+    function _getClaimableIncrement(address account, uint256 numIndexes) internal view returns (uint256 claimable) {
+        (claimable,,,,) = revStream.claimableIncrement(account, numIndexes);
+    }
+
+
     // ------------------
     // Initial State Test
     // ------------------
@@ -347,7 +362,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Call claimable ~
 
-        uint256 claimable = revStream.claimable(JOE);
+        uint256 claimable = _getClaimable(JOE);
 
         // ~ Verify ~
 
@@ -389,9 +404,9 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Verify ~
 
-        assertEq(revStream.claimableIncrement(JOE, 1), amountRevenue);
-        assertEq(revStream.claimableIncrement(JOE, 2), amountRevenue*2);
-        assertEq(revStream.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
+        assertEq(_getClaimableIncrement(JOE, 2), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
     }
 
     /// @dev Verifies proper return variable when RevenueStreamETH::claimable() is called.
@@ -438,7 +453,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Call claimable ~
 
-        uint256 claimableJoe = revStream.claimable(JOE);
+        uint256 claimableJoe = _getClaimable(JOE);
 
         // ~ Verify ~
 
@@ -483,7 +498,7 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revStream).balance, amountRevenue * 2);
         assertEq(revStream.lastClaimIndex(JOE), 0);
 
-        uint256 claimable = revStream.claimable(JOE);
+        uint256 claimable = _getClaimable(JOE);
 
         // ~ Execute claim ~
 
@@ -508,7 +523,7 @@ contract RWARevenueStreamETHTest is Utility {
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
 
-        claimable = revStream.claimable(JOE);
+        claimable = _getClaimable(JOE);
 
         // ~ Execute claim ~
 
@@ -563,9 +578,9 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revStream).balance, amountRevenue * 2);
         assertEq(revStream.lastClaimIndex(JOE), 0);
 
-        assertEq(revStream.claimableIncrement(JOE, 1), amountRevenue);
-        assertEq(revStream.claimableIncrement(JOE, 2), amountRevenue*2);
-        assertEq(revStream.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
+        assertEq(_getClaimableIncrement(JOE, 2), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
 
         // ~ Execute claim increment 1 ~
 
@@ -586,8 +601,8 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(revStream.revenueClaimed(1), amountRevenue);
         assertEq(revStream.revenueClaimed(2), 0);
 
-        assertEq(revStream.claimableIncrement(JOE, 1), amountRevenue);
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
 
         // ~ Execute claim increment 2 ~
 
@@ -611,8 +626,8 @@ contract RWARevenueStreamETHTest is Utility {
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
 
-        assertEq(revStream.claimableIncrement(JOE, 1), amountRevenue);
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
 
         // ~ Execute claim ~
 
@@ -627,8 +642,8 @@ contract RWARevenueStreamETHTest is Utility {
 
         assertEq(revStream.revenueClaimed(3), amountRevenue);
 
-        assertEq(revStream.claimableIncrement(JOE, 1), 0);
-        assertEq(revStream.claimable(JOE), 0);
+        assertEq(_getClaimableIncrement(JOE, 1), 0);
+        assertEq(_getClaimable(JOE), 0);
     }
 
     /// @dev Verifies proper state changes when RevenueStreamETH::claim() is executed.
@@ -678,7 +693,7 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revStream).balance, amountRevenue);
         assertEq(revStream.lastClaimIndex(JOE), 0);
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
 
         // ~ Execute claim ~
 
@@ -691,7 +706,7 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revStream).balance, 0);
         assertEq(revStream.lastClaimIndex(JOE), 1);
 
-        assertEq(revStream.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
     }
 
     /// @dev Verifies delegatees can claim rent. 
@@ -743,7 +758,7 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(revStream.lastClaimIndex(ADMIN), 0);
         assertEq(revStream.lastClaimIndex(JOE), 0);
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
 
         assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
@@ -804,7 +819,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStream.expiredRevenue(), 0);
 
         // ~ Skip to expiration ~
@@ -813,7 +828,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStream.expiredRevenue(), amountRevenue);
 
         // ~ Joe claims ~
@@ -823,7 +838,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStream.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStream.expiredRevenue(), 0);
     }
 
@@ -862,7 +877,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
         assertEq(revStream.expiredRevenue(), 0);
 
         // ~ Skip to expiration ~
@@ -871,7 +886,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 1 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
         assertEq(revStream.expiredRevenueIncrement(1), amountRevenue);
         assertEq(revStream.expiredRevenueIncrement(2), amountRevenue*2);
         assertEq(revStream.expiredRevenue(), amountRevenue*2);
@@ -883,7 +898,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStream.expiredRevenueIncrement(1), 0);
         assertEq(revStream.expiredRevenueIncrement(2), amountRevenue);
         assertEq(revStream.expiredRevenue(), amountRevenue);
@@ -895,7 +910,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 3 ~
 
-        assertEq(revStream.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStream.expiredRevenueIncrement(1), 0);
         assertEq(revStream.expiredRevenue(), 0);
     }
@@ -945,7 +960,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStream.expiredRevenue(), 0);
 
         // ~ Skip to expiration 1 ~
@@ -954,7 +969,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 1 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStream.expiredRevenue(), amountRevenue);
 
         // ~ Skip to expiration 2 ~
@@ -963,7 +978,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStream.expiredRevenue(), amountRevenue * 2);
 
         // ~ Skip to expiration 3 ~
@@ -972,7 +987,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 3 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStream.expiredRevenue(), amountRevenue * 3);
 
         // ~ Joe claims ~
@@ -982,7 +997,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 4 ~
 
-        assertEq(revStream.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStream.expiredRevenue(), 0);
     }
 
@@ -1018,7 +1033,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStream.expiredRevenue(), 0);
 
         // ~ Attempt to skim -> Revert ~
@@ -1033,7 +1048,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStream.expiredRevenue(), amountRevenue);
 
         assertEq(address(revStream).balance, amountRevenue);
@@ -1046,7 +1061,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStream.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStream.expiredRevenue(), 0);
 
         assertEq(address(revStream).balance, 0);
@@ -1088,7 +1103,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
         assertEq(revStream.expiredRevenue(), 0);
 
         // ~ Attempt to skim -> Revert ~
@@ -1103,7 +1118,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
         assertEq(revStream.expiredRevenueIncrement(1), amountRevenue);
         assertEq(revStream.expiredRevenueIncrement(2), amountRevenue*2);
         assertEq(revStream.expiredRevenue(), amountRevenue*2);
@@ -1118,7 +1133,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 1 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStream.expiredRevenueIncrement(1), amountRevenue);
         assertEq(revStream.expiredRevenue(), amountRevenue);
 
@@ -1132,7 +1147,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStream.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStream.expiredRevenue(), 0);
 
         assertEq(address(revStream).balance, 0);
@@ -1185,7 +1200,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStream.expiredRevenue(), 0);
 
         assertEq(address(revStream).balance, amountRevenue * 3);
@@ -1197,7 +1212,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 1 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStream.expiredRevenue(), amountRevenue);
 
         assertEq(address(revStream).balance, amountRevenue * 3);
@@ -1212,7 +1227,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue * 2);
+        assertEq(_getClaimable(JOE), amountRevenue * 2);
         assertEq(revStream.expiredRevenue(), amountRevenue);
 
         assertEq(address(revStream).balance, amountRevenue * 2);
@@ -1227,7 +1242,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 3 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStream.expiredRevenue(), amountRevenue);
 
         assertEq(address(revStream).balance, amountRevenue);
@@ -1240,7 +1255,7 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 4 ~
 
-        assertEq(revStream.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStream.expiredRevenue(), 0);
 
         assertEq(address(revStream).balance, 0);
@@ -1308,9 +1323,9 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue*2/3);
-        assertEq(revStream.claimable(BOB), amountRevenue*2/3);
-        assertEq(revStream.claimable(ALICE), amountRevenue*2/3);
+        assertEq(_getClaimable(JOE), amountRevenue*2/3);
+        assertEq(_getClaimable(BOB), amountRevenue*2/3);
+        assertEq(_getClaimable(ALICE), amountRevenue*2/3);
         assertEq(revStream.expiredRevenue(), 0);
 
         // ~ Joe and Bob claim their revenue ~
@@ -1329,9 +1344,9 @@ contract RWARevenueStreamETHTest is Utility {
 
         uint256 unclaimed = amountRevenue*2/3;
 
-        assertEq(revStream.claimable(JOE), 0);
-        assertEq(revStream.claimable(BOB), 0);
-        assertEq(revStream.claimable(ALICE), unclaimed);
+        assertEq(_getClaimable(JOE), 0);
+        assertEq(_getClaimable(BOB), 0);
+        assertEq(_getClaimable(ALICE), unclaimed);
         assertEq(revStream.expiredRevenue(), unclaimed);
 
         // ~ Another deposit ~
@@ -1346,9 +1361,9 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue/3);
-        assertEq(revStream.claimable(BOB), amountRevenue/3);
-        assertEq(revStream.claimable(ALICE), amountRevenue/3 + unclaimed);
+        assertEq(_getClaimable(JOE), amountRevenue/3);
+        assertEq(_getClaimable(BOB), amountRevenue/3);
+        assertEq(_getClaimable(ALICE), amountRevenue/3 + unclaimed);
         assertEq(revStream.expiredRevenue(), unclaimed);
 
         // ~ Expired revenue is skimmed ~
@@ -1360,9 +1375,9 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Post-state check 3 ~
 
-        assertEq(revStream.claimable(JOE), amountRevenue/3);
-        assertEq(revStream.claimable(BOB), amountRevenue/3);
-        assertEq(revStream.claimable(ALICE), amountRevenue/3);
+        assertEq(_getClaimable(JOE), amountRevenue/3);
+        assertEq(_getClaimable(BOB), amountRevenue/3);
+        assertEq(_getClaimable(ALICE), amountRevenue/3);
         assertEq(revStream.expiredRevenue(), 0);
 
         // ~ All claim ~

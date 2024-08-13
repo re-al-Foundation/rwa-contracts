@@ -570,6 +570,16 @@ contract MainDeploymentTest is Utility {
         vm.store(address(UNREAL_USTB), slot, bytes32(amount));
     }
 
+    /// @dev Returns the amount claimable from the RevenueStreamETH contract, given an account.
+    function _getClaimable(address account) internal view returns (uint256 claimable) {
+        (claimable,,,,) = revStreamETH.claimable(account);
+    }
+
+    /// @dev Returns the amount claimable from the RevenueStreamETH contract, given an account and a number of indexes.
+    function _getClaimableIncrement(address account, uint256 numIndexes) internal view returns (uint256 claimable) {
+        (claimable,,,,) = revStreamETH.claimableIncrement(account, numIndexes);
+    }
+
 
     // ------------------
     // Initial State Test
@@ -867,20 +877,125 @@ contract MainDeploymentTest is Utility {
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
     }
 
+    /// @dev Verifies proper state changes when RoyaltyHandler::distributeRoyaltiesMinOut is called.
+    function test_mainDeployment_royaltyHandler_distributeRoyalties_noFuzz() public {
+
+        // ~ Config ~
+
+        uint256 amountTokens = 100 ether;
+        rwaToken.mintFor(address(royaltyHandler), amountTokens);
+
+        uint256 burnPortion = (amountTokens * royaltyHandler.burnPortion()) / rwaToken.fee(); // 2/5
+        uint256 revSharePortion = (amountTokens * royaltyHandler.revSharePortion()) / rwaToken.fee(); // 2/5
+
+        (uint256 burnQ, uint256 revShareQ,,) = royaltyHandler.getRoyaltyDistributions(amountTokens);
+        assertEq(burnPortion, burnQ);
+        assertEq(revSharePortion, revShareQ);
+        
+        uint256 preSupply = rwaToken.totalSupply();
+
+        // ~ Pre-state check ~
+    
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), amountTokens);
+        
+        assertEq(rwaToken.totalSupply(), preSupply);
+        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
+        
+        // check boxALM balance/state
+        assertEq(rwaToken.balanceOf(box), 0);
+        assertEq(IERC20(WETH).balanceOf(box), 0);
+
+        // check GaugeV2ALM balance/state
+        assertEq(IERC20(box).balanceOf(gALM), 0);
+
+        // ~ Execute transfer -> distribute ~
+
+        vm.startPrank(ADMIN);
+        royaltyHandler.distributeRoyaltiesMinOut(rwaToken.balanceOf(address(royaltyHandler)), 0);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+    
+        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
+        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
+
+        // check boxALM balance/state
+        assertGt(rwaToken.balanceOf(box), 0);
+        assertGt(IERC20(WETH).balanceOf(box), 0);
+
+        // check GaugeV2ALM balance/state
+        assertGt(IERC20(box).balanceOf(gALM), 0);
+    }
+
+    /// @dev Uses fuzing to verify proper state changes when RoyaltyHandler::distributeRoyaltiesMinOut is called.
+    function test_mainDeployment_royaltyHandler_distributeRoyalties_fuzzing(uint256 amountTokens) public {
+        amountTokens = bound(amountTokens, .0000001 ether, 100 ether);
+
+        // ~ Config ~
+
+        rwaToken.mintFor(address(royaltyHandler), amountTokens);
+
+        uint256 burnPortion = (amountTokens * royaltyHandler.burnPortion()) / rwaToken.fee(); // 2/5
+        uint256 revSharePortion = (amountTokens * royaltyHandler.revSharePortion()) / rwaToken.fee(); // 2/5
+
+        (uint256 burnQ, uint256 revShareQ,,) = royaltyHandler.getRoyaltyDistributions(amountTokens);
+        assertEq(burnPortion, burnQ);
+        assertEq(revSharePortion, revShareQ);
+        
+        uint256 preSupply = rwaToken.totalSupply();
+
+        // ~ Pre-state check ~
+    
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), amountTokens);
+        
+        assertEq(rwaToken.totalSupply(), preSupply);
+        assertEq(rwaToken.balanceOf(address(revDistributor)), 0);
+        
+        // check boxALM balance/state
+        assertEq(rwaToken.balanceOf(box), 0);
+        assertEq(IERC20(WETH).balanceOf(box), 0);
+
+        // check GaugeV2ALM balance/state
+        assertEq(IERC20(box).balanceOf(gALM), 0);
+
+        // ~ Execute transfer -> distribute ~
+
+        vm.startPrank(ADMIN);
+        royaltyHandler.distributeRoyaltiesMinOut(rwaToken.balanceOf(address(royaltyHandler)), 0);
+        vm.stopPrank();
+
+        // ~ Post-state check ~
+    
+        assertEq(rwaToken.totalSupply(), preSupply - burnPortion);
+        assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
+
+        // check boxALM balance/state
+        assertGt(rwaToken.balanceOf(box), 0);
+        assertGt(IERC20(WETH).balanceOf(box), 0);
+
+        // check GaugeV2ALM balance/state
+        assertGt(IERC20(box).balanceOf(gALM), 0);
+    }
+
     /// @dev Verifies proper taxation and distribution after fees have been modified.
-    function test_mainDeployment_royaltyHandler_distributeRoyalties() public {
+    function test_mainDeployment_royaltyHandler_distributeRoyalties_newTaxes() public {
 
         // ~ Config ~
 
         uint256 amountETH = 10 ether;
         vm.deal(JOE, amountETH);
 
+        vm.prank(ADMIN);
+        royaltyHandler.updateDistribution(0, 1, 0);
+        vm.prank(ADMIN);
+        rwaToken.updateFee(2);
+
         uint256 quote = _getQuoteBuy(amountETH);
         uint256 taxedAmount = quote * rwaToken.fee() / 100;
         assertGt(taxedAmount, 0);
 
-        uint256 burnPortion = (taxedAmount * royaltyHandler.burnPortion()) / rwaToken.fee(); // 2/5
-        uint256 revSharePortion = (taxedAmount * royaltyHandler.revSharePortion()) / rwaToken.fee(); // 2/5
+        uint256 burnPortion = (taxedAmount * royaltyHandler.burnPortion()) / 1; // 0/1
+        uint256 revSharePortion = (taxedAmount * royaltyHandler.revSharePortion()) / 1; // 1/1
 
         (uint256 burnQ, uint256 revShareQ, uint256 lp, uint256 tokensForEth) = royaltyHandler.getRoyaltyDistributions(taxedAmount);
         assertEq(burnPortion, burnQ);
@@ -919,11 +1034,60 @@ contract MainDeploymentTest is Utility {
         assertEq(rwaToken.balanceOf(address(revDistributor)), revSharePortion);
 
         // check boxALM balance/state
-        assertGt(rwaToken.balanceOf(box), 0);
-        assertGt(IERC20(WETH).balanceOf(box), 0);
+        if (royaltyHandler.lpPortion() != 0) {
+            assertGt(rwaToken.balanceOf(box), 0);
+            assertGt(IERC20(WETH).balanceOf(box), 0);
+            // check GaugeV2ALM balance/state
+            assertGt(IERC20(box).balanceOf(gALM), 0);
+        }
+    }
 
-        // check GaugeV2ALM balance/state
-        assertGt(IERC20(box).balanceOf(gALM), 0);
+    /// @dev Verifies proper state changes when withdrawETH is called.
+    function test_mainDeployment_royaltyHandler_withdrawETH() public {
+
+        // ~ Config ~
+
+        uint256 amountETH = 10 ether;
+        vm.deal(address(royaltyHandler), amountETH);
+
+        // ~ Pre-state check ~
+
+        assertEq(address(royaltyHandler).balance, amountETH);
+        uint256 preBalOwner = ADMIN.balance;
+
+        // ~ withdrawETH ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.withdrawETH(amountETH);
+
+        // ~ Post-state check ~
+
+        assertEq(address(royaltyHandler).balance, 0);
+        assertEq(ADMIN.balance, preBalOwner + amountETH);
+    }
+
+    /// @dev Verifies proper state changes when withdrawERC20 is called.
+    function test_mainDeployment_royaltyHandler_withdrawERC20() public {
+
+        // ~ Config ~
+
+        uint256 amountTokens = 10 ether;
+        rwaToken.mintFor(address(royaltyHandler), amountTokens);
+
+        // ~ Pre-state check ~
+
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), amountTokens);
+        uint256 preBalOwner = rwaToken.balanceOf(ADMIN);
+
+        // ~ withdrawERC20 ~
+
+        vm.prank(ADMIN);
+        royaltyHandler.withdrawERC20(address(rwaToken), amountTokens);
+
+        // ~ Post-state check ~
+
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+        assertEq(rwaToken.balanceOf(ADMIN), preBalOwner + amountTokens);
     }
 
 
@@ -3280,6 +3444,7 @@ contract MainDeploymentTest is Utility {
             address(swapRouter),
             data1
         );
+        revDistributor.distributeETH();
         vm.stopPrank();
 
         // ~ Post-state check ~
@@ -3425,6 +3590,7 @@ contract MainDeploymentTest is Utility {
             targets,
             data
         );
+        revDistributor.distributeETH();
         vm.stopPrank();
 
         // ~ Post-state check ~
@@ -3437,7 +3603,7 @@ contract MainDeploymentTest is Utility {
         // ~ Call claimable ~
 
         skip(1);
-        assertEq(revStreamETH.claimable(JOE), address(revStreamETH).balance);
+        assertEq(_getClaimable(JOE), address(revStreamETH).balance);
     }
 
     /// @dev This unit test verifies proper state changes when RevenueDistributor::distributeToken is executed.
@@ -3587,7 +3753,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Call claimable ~
 
-        uint256 claimable = revStreamETH.claimable(JOE);
+        uint256 claimable = _getClaimable(JOE);
 
         // ~ Verify ~
 
@@ -3632,9 +3798,9 @@ contract MainDeploymentTest is Utility {
 
         // ~ Verify ~
 
-        assertEq(revStreamETH.claimableIncrement(JOE, 1), amountRevenue);
-        assertEq(revStreamETH.claimableIncrement(JOE, 2), amountRevenue*2);
-        assertEq(revStreamETH.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
+        assertEq(_getClaimableIncrement(JOE, 2), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
     }
 
     /// @dev Verifies proper return variable when RevenueStreamETH::claimable() is called.
@@ -3687,7 +3853,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Call claimable ~
 
-        uint256 claimableJoe = revStreamETH.claimable(JOE);
+        uint256 claimableJoe = _getClaimable(JOE);
 
         // ~ Verify ~
 
@@ -3735,7 +3901,7 @@ contract MainDeploymentTest is Utility {
         assertEq(address(revStreamETH).balance, amountRevenue * 2);
         assertEq(revStreamETH.lastClaimIndex(JOE), 0);
 
-        uint256 claimable = revStreamETH.claimable(JOE);
+        uint256 claimable = _getClaimable(JOE);
 
         // ~ Execute claim ~
 
@@ -3757,7 +3923,7 @@ contract MainDeploymentTest is Utility {
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
 
-        claimable = revStreamETH.claimable(JOE);
+        claimable = _getClaimable(JOE);
 
         // ~ Execute claim ~
 
@@ -3812,9 +3978,9 @@ contract MainDeploymentTest is Utility {
         assertEq(address(revStreamETH).balance, amountRevenue * 2);
         assertEq(revStreamETH.lastClaimIndex(JOE), 0);
 
-        assertEq(revStreamETH.claimableIncrement(JOE, 1), amountRevenue);
-        assertEq(revStreamETH.claimableIncrement(JOE, 2), amountRevenue*2);
-        assertEq(revStreamETH.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
+        assertEq(_getClaimableIncrement(JOE, 2), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
 
         // ~ Execute claim increment 1 ~
 
@@ -3827,8 +3993,8 @@ contract MainDeploymentTest is Utility {
         assertEq(address(revStreamETH).balance, amountRevenue);
         assertEq(revStreamETH.lastClaimIndex(JOE), 1);
 
-        assertEq(revStreamETH.claimableIncrement(JOE, 1), amountRevenue);
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
 
         // ~ Execute claim increment 2 ~
 
@@ -3849,8 +4015,8 @@ contract MainDeploymentTest is Utility {
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
 
-        assertEq(revStreamETH.claimableIncrement(JOE, 1), amountRevenue);
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
 
         // ~ Execute claim ~
 
@@ -3863,8 +4029,8 @@ contract MainDeploymentTest is Utility {
         assertEq(address(revStreamETH).balance, 0);
         assertEq(revStreamETH.lastClaimIndex(JOE), 3);
 
-        assertEq(revStreamETH.claimableIncrement(JOE, 1), 0);
-        assertEq(revStreamETH.claimable(JOE), 0);
+        assertEq(_getClaimableIncrement(JOE, 1), 0);
+        assertEq(_getClaimable(JOE), 0);
     }
 
     /// @dev Verifies proper state changes when RevenueStreamETH::claim() is executed.
@@ -3914,7 +4080,7 @@ contract MainDeploymentTest is Utility {
         assertEq(address(revStreamETH).balance, amountRevenue);
         assertEq(revStreamETH.lastClaimIndex(JOE), 0);
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
 
         // ~ Execute claim ~
 
@@ -3927,7 +4093,7 @@ contract MainDeploymentTest is Utility {
         assertEq(address(revStreamETH).balance, 0);
         assertEq(revStreamETH.lastClaimIndex(JOE), 1);
 
-        assertEq(revStreamETH.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
     }
 
     /// @dev Verifies delegatees can claim rent. 
@@ -3979,7 +4145,7 @@ contract MainDeploymentTest is Utility {
         assertEq(revStreamETH.lastClaimIndex(ADMIN), 0);
         assertEq(revStreamETH.lastClaimIndex(JOE), 0);
         
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
 
         assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
@@ -4039,7 +4205,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         // ~ Skip to expiration ~
@@ -4048,7 +4214,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue);
 
         // ~ Joe claims ~
@@ -4058,7 +4224,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStreamETH.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStreamETH.expiredRevenue(), 0);
     }
 
@@ -4099,7 +4265,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         // ~ Skip to expiration ~
@@ -4108,7 +4274,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 1 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
         assertEq(revStreamETH.expiredRevenueIncrement(1), amountRevenue);
         assertEq(revStreamETH.expiredRevenueIncrement(2), amountRevenue*2);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue*2);
@@ -4120,7 +4286,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStreamETH.expiredRevenueIncrement(1), 0);
         assertEq(revStreamETH.expiredRevenueIncrement(2), amountRevenue);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue);
@@ -4132,7 +4298,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 3 ~
 
-        assertEq(revStreamETH.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStreamETH.expiredRevenueIncrement(1), 0);
         assertEq(revStreamETH.expiredRevenue(), 0);
     }
@@ -4187,7 +4353,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         // ~ Skip to expiration 1 ~
@@ -4196,7 +4362,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 1 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue);
 
         // ~ Skip to expiration 2 ~
@@ -4205,7 +4371,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue * 2);
 
         // ~ Skip to expiration 3 ~
@@ -4214,7 +4380,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 3 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue * 3);
 
         // ~ Joe claims ~
@@ -4224,7 +4390,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 4 ~
 
-        assertEq(revStreamETH.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStreamETH.expiredRevenue(), 0);
     }
 
@@ -4261,7 +4427,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         // ~ Attempt to skim -> Revert ~
@@ -4276,7 +4442,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue);
 
         assertEq(address(revStreamETH).balance, amountRevenue);
@@ -4289,7 +4455,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStreamETH.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         assertEq(address(revStreamETH).balance, 0);
@@ -4332,7 +4498,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         // ~ Attempt to skim -> Revert ~
@@ -4347,7 +4513,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue*2);
+        assertEq(_getClaimable(JOE), amountRevenue*2);
         assertEq(revStreamETH.expiredRevenueIncrement(1), amountRevenue);
         assertEq(revStreamETH.expiredRevenueIncrement(2), amountRevenue*2);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue*2);
@@ -4362,7 +4528,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 1 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStreamETH.expiredRevenueIncrement(1), amountRevenue);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue);
 
@@ -4376,7 +4542,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStreamETH.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         assertEq(address(revStreamETH).balance, 0);
@@ -4429,7 +4595,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         assertEq(address(revStreamETH).balance, amountRevenue * 3);
@@ -4441,7 +4607,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 1 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue * 3);
+        assertEq(_getClaimable(JOE), amountRevenue * 3);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue);
 
         assertEq(address(revStreamETH).balance, amountRevenue * 3);
@@ -4456,7 +4622,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue * 2);
+        assertEq(_getClaimable(JOE), amountRevenue * 2);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue);
 
         assertEq(address(revStreamETH).balance, amountRevenue * 2);
@@ -4471,7 +4637,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 3 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue);
+        assertEq(_getClaimable(JOE), amountRevenue);
         assertEq(revStreamETH.expiredRevenue(), amountRevenue);
 
         assertEq(address(revStreamETH).balance, amountRevenue);
@@ -4484,7 +4650,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 4 ~
 
-        assertEq(revStreamETH.claimable(JOE), 0);
+        assertEq(_getClaimable(JOE), 0);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         assertEq(address(revStreamETH).balance, 0);
@@ -4551,9 +4717,9 @@ contract MainDeploymentTest is Utility {
 
         // ~ Pre-state check ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue*2/3);
-        assertEq(revStreamETH.claimable(BOB), amountRevenue*2/3);
-        assertEq(revStreamETH.claimable(ALICE), amountRevenue*2/3);
+        assertEq(_getClaimable(JOE), amountRevenue*2/3);
+        assertEq(_getClaimable(BOB), amountRevenue*2/3);
+        assertEq(_getClaimable(ALICE), amountRevenue*2/3);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         // ~ Joe and Bob claim their revenue ~
@@ -4572,9 +4738,9 @@ contract MainDeploymentTest is Utility {
 
         uint256 unclaimed = amountRevenue*2/3;
 
-        assertEq(revStreamETH.claimable(JOE), 0);
-        assertEq(revStreamETH.claimable(BOB), 0);
-        assertEq(revStreamETH.claimable(ALICE), unclaimed);
+        assertEq(_getClaimable(JOE), 0);
+        assertEq(_getClaimable(BOB), 0);
+        assertEq(_getClaimable(ALICE), unclaimed);
         assertEq(revStreamETH.expiredRevenue(), unclaimed);
 
         // ~ Another deposit ~
@@ -4589,9 +4755,9 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 2 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue/3);
-        assertEq(revStreamETH.claimable(BOB), amountRevenue/3);
-        assertEq(revStreamETH.claimable(ALICE), amountRevenue/3 + unclaimed);
+        assertEq(_getClaimable(JOE), amountRevenue/3);
+        assertEq(_getClaimable(BOB), amountRevenue/3);
+        assertEq(_getClaimable(ALICE), amountRevenue/3 + unclaimed);
         assertEq(revStreamETH.expiredRevenue(), unclaimed);
 
         // ~ Expired revenue is skimmed ~
@@ -4603,9 +4769,9 @@ contract MainDeploymentTest is Utility {
 
         // ~ Post-state check 3 ~
 
-        assertEq(revStreamETH.claimable(JOE), amountRevenue/3);
-        assertEq(revStreamETH.claimable(BOB), amountRevenue/3);
-        assertEq(revStreamETH.claimable(ALICE), amountRevenue/3);
+        assertEq(_getClaimable(JOE), amountRevenue/3);
+        assertEq(_getClaimable(BOB), amountRevenue/3);
+        assertEq(_getClaimable(ALICE), amountRevenue/3);
         assertEq(revStreamETH.expiredRevenue(), 0);
 
         // ~ All claim ~
@@ -4678,6 +4844,7 @@ contract MainDeploymentTest is Utility {
             address(swapRouter),
             data
         );
+        revDistributor.distributeETH();
         vm.stopPrank();
 
         // ~ Post-state check ~

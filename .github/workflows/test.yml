@@ -38,4 +38,5 @@ jobs:
           MUMBAI_RPC_URL: ${{ secrets.MUMBAI_RPC_URL }}
           POLYGON_RPC_URL: ${{ secrets.POLYGON_RPC_URL }}
           UNREAL_RPC_URL: ${{ secrets.UNREAL_RPC_URL }}
+          REAL_RPC_URL: ${{ secrets.REAL_RPC_URL }}
         id: test

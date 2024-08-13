@@ -45,7 +45,7 @@ import "../../../test/utils/Constants.sol";
 
     @dev To verify manually: 
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch \ 
-    src/Contract.sol:Contract --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
+    src/Contract.sol:Contract --verifier blockscout --verifier-url https://explorer.re.al//api
 */
 
 /**

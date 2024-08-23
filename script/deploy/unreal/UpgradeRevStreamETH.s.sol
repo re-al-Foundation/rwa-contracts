@@ -12,7 +12,7 @@ import { RevenueStreamETH } from "../../../src/RevenueStreamETH.sol";
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
-/// @dev To run: forge script script/deploy/unreal/UpgradeRevStreamETH.s.sol:UpgradeRevStreamETH --broadcast --verify --legacy -vvvv
+/// @dev To run: forge script script/deploy/unreal/UpgradeRevStreamETH.s.sol:UpgradeRevStreamETH --broadcast --verify --legacy --gas-estimate-multiplier 200 --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
 /**
  * @title UpgradeRevStreamETH
@@ -22,8 +22,7 @@ import "../../../test/utils/Constants.sol";
 contract UpgradeRevStreamETH is Script {
 
     // ~ Contracts ~
-    RevenueStreamETH public oldRevStreamETH = RevenueStreamETH(payable(0x541c058d0D7Ab8474Ea10fb090677FaD992256d9));
-    RevenueStreamETH public newRevStreamETH;
+    RevenueStreamETH public revStreamETH = RevenueStreamETH(payable(0x08Cdd24856279641eb7A11D2AaB54e762198FdB7));
 
     // ~ Variables ~
 
@@ -37,10 +36,10 @@ contract UpgradeRevStreamETH is Script {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         
-        newRevStreamETH = new RevenueStreamETH();
-        console2.log("new RevStreamETH Implementation", address(newRevStreamETH));
+        RevenueStreamETH newImplementation = new RevenueStreamETH();
+        console2.log("new RevStreamETH Implementation", address(newImplementation));
 
-        oldRevStreamETH.upgradeToAndCall(address(newRevStreamETH), "");
+        revStreamETH.upgradeToAndCall(address(newImplementation), "");
 
         vm.stopBroadcast();
     }

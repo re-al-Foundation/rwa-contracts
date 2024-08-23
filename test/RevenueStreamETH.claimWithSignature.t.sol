@@ -84,6 +84,13 @@ contract RevenueStreamETHSignatureTest is Utility {
     // Utility
     // -------
 
+    function getEthSignedMessageHash(bytes32 _messageHash) internal pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
+            );
+    }
+
     /// @notice packs v, r, s into signature bytes
     function _packRsv(uint8 v, bytes32 r, bytes32 s) internal pure returns (bytes memory) {
         bytes memory sig = new bytes(65);
@@ -101,17 +108,19 @@ contract RevenueStreamETHSignatureTest is Utility {
         // signer signs data hash
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             privateKey,
-            keccak256(
-                // create data hash
-                abi.encodePacked(
-                    account,
-                    claimData.amount,
-                    claimData.currentIndex,
-                    claimData.indexes,
-                    claimData.cyclesClaimable,
-                    claimData.amountsClaimable,
-                    claimData.num,
-                    block.timestamp
+            getEthSignedMessageHash(
+                keccak256(
+                    // create data hash
+                    abi.encodePacked(
+                        account,
+                        claimData.amount,
+                        claimData.currentIndex,
+                        claimData.indexes,
+                        claimData.cyclesClaimable,
+                        claimData.amountsClaimable,
+                        claimData.num,
+                        block.timestamp
+                    )
                 )
             )
         );
@@ -236,17 +245,19 @@ contract RevenueStreamETHSignatureTest is Utility {
         // attacker signs data hash
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             attackerPK,
-            keccak256(
-                // create data hash
-                abi.encodePacked(
-                    JOE,
-                    claimData.amount,
-                    claimData.currentIndex,
-                    claimData.indexes,
-                    claimData.cyclesClaimable,
-                    claimData.amountsClaimable,
-                    claimData.num,
-                    block.timestamp
+            getEthSignedMessageHash(
+                keccak256(
+                    // create data hash
+                    abi.encodePacked(
+                        JOE,
+                        claimData.amount,
+                        claimData.currentIndex,
+                        claimData.indexes,
+                        claimData.cyclesClaimable,
+                        claimData.amountsClaimable,
+                        claimData.num,
+                        block.timestamp
+                    )
                 )
             )
         );
@@ -280,17 +291,19 @@ contract RevenueStreamETHSignatureTest is Utility {
         // signer signs data hash
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             privateKey,
-            keccak256(
-                // create data hash
-                abi.encodePacked(
-                    JOE,
-                    claimData.amount,
-                    currentIndex,
-                    claimData.indexes,
-                    claimData.cyclesClaimable,
-                    claimData.amountsClaimable,
-                    claimData.num,
-                    block.timestamp
+            getEthSignedMessageHash(
+                keccak256(
+                    // create data hash
+                    abi.encodePacked(
+                        JOE,
+                        claimData.amount,
+                        currentIndex,
+                        claimData.indexes,
+                        claimData.cyclesClaimable,
+                        claimData.amountsClaimable,
+                        claimData.num,
+                        block.timestamp
+                    )
                 )
             )
         );

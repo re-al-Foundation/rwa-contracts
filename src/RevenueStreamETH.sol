@@ -261,7 +261,7 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
                 deadline
             )
         );
-        address messageSigner = ECDSA.recover(data, signature);
+        address messageSigner = ECDSA.recover(getEthSignedMessageHash(data), signature);
 
         // verify deadline
         if (block.timestamp > deadline) revert SignatureExpired(block.timestamp, deadline);
@@ -410,6 +410,13 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      */
     function currentCycle() public view returns (uint256 cycle) {
         return cycles[cycles.length - 1];
+    }
+
+    /**
+     * @notice Appends an Eth header to the message hash and returns it as a new bytes array.
+     */
+    function getEthSignedMessageHash(bytes32 _messageHash) public pure returns (bytes32) {
+        return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash));
     }
 
 

@@ -31,7 +31,7 @@ import "./utils/Constants.sol";
 contract RevenueStreamETHSignatureTest is Utility {
 
     // contracts
-    RevenueStreamETH public REV_STREAM = RevenueStreamETH(0x08Cdd24856279641eb7A11D2AaB54e762198FdB7);
+    RevenueStreamETH public REV_STREAM = RevenueStreamETH(0xf4e03D77700D42e13Cd98314C518f988Fd6e287a);
 
     // Actors
     uint256 public privateKey = 1234;
@@ -47,7 +47,7 @@ contract RevenueStreamETHSignatureTest is Utility {
     }
 
     function setUp() public {
-        vm.createSelectFork(UNREAL_RPC_URL, 368272);
+        vm.createSelectFork(REAL_RPC_URL, 585506);
     }
 
 
@@ -55,22 +55,50 @@ contract RevenueStreamETHSignatureTest is Utility {
     // Unit Tests
     // ----------
 
+    function VerifyMessage(bytes32 _hashedMessage, uint8 _v, bytes32 _r, bytes32 _s) public pure returns (address) {
+        bytes memory prefix = "\x19Ethereum Signed Message:\n32";
+        bytes32 prefixedHashMessage = keccak256(abi.encodePacked(prefix, _hashedMessage));
+        address signer = ecrecover(prefixedHashMessage, _v, _r, _s);
+        return signer;
+    }
+
     function test_revStreamETH_simulation() public {
         // ~ Config ~
 
-        address actor = 0x54792B36bf490FC53aC56dB33fD3953B56DF6baF;
+        address actor = 0x7a58b76fFD3989dDbCe7BD632fdcF79B50530A69;
 
-        ClaimData memory claimData;
+            ClaimData memory claimData;
         
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(actor);
-        claimData.currentIndex = REV_STREAM.lastClaimIndex(actor);
+            (claimData.amount,
+            claimData.cyclesClaimable,
+            claimData.amountsClaimable,
+            claimData.num,
+            claimData.indexes) = REV_STREAM.claimable(actor);
+            claimData.currentIndex = REV_STREAM.lastClaimIndex(actor);
 
-        bytes memory signature = hex"42a35e8fe639255c0a399a785ddb34d5fc552dfa35b0a9e06adc32b1f24b16da3fdec01596c7ac913b0225e86e71a7dee841136ab0d2dbbe698c8a2adbf8ec4c1b";
-        uint256 deadline = 1724180898;
+        bytes memory signature = hex"5d637afaad02751151e17c207ad6902879bb65e08c2cd5e2ac97d9612208f4cc35d1347e6ec8ebc35ed9515e6b266046a1d3de846c51cb5606de2e9defa517891b";
+        uint256 deadline = 1724367568;
+
+        bytes memory header = "\x19Ethereum Signed Message:\n32";
+
+        bytes32 data = keccak256(
+            abi.encodePacked(
+                actor,
+                claimData.amount,
+                claimData.currentIndex,
+                claimData.indexes,
+                claimData.cyclesClaimable,
+                claimData.amountsClaimable,
+                claimData.num,
+                deadline
+            )
+        );
+        //bytes32 prefixedHashMessage = keccak256(abi.encodePacked(header, data));
+        //address messageSigner = ECDSA.recover(prefixedHashMessage, signature);
+
+        //emit log_named_address("signer", messageSigner);
+
+        // we need: 0x6Ef3d97A21F4550BF438F6e10C4Dd1b6489de576
 
         vm.prank(actor);
         REV_STREAM.claimWithSignature(
@@ -83,5 +111,9 @@ contract RevenueStreamETHSignatureTest is Utility {
             deadline,
             signature
         );
+
+        (claimData.amount,,,claimData.num,) = REV_STREAM.claimable(actor);
+        assertEq(claimData.amount, 0);
+        assertEq(claimData.num, 0);
     }
 }

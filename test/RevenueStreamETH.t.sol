@@ -179,12 +179,27 @@ contract RWARevenueStreamETHTest is Utility {
 
     /// @dev Returns the amount claimable from the RevenueStreamETH contract, given an account.
     function _getClaimable(address account) internal view returns (uint256 claimable) {
-        (claimable,,,,) = revStream.claimable(account);
+        (claimable,) = revStream.claimable(account);
     }
 
     /// @dev Returns the amount claimable from the RevenueStreamETH contract, given an account and a number of indexes.
     function _getClaimableIncrement(address account, uint256 numIndexes) internal view returns (uint256 claimable) {
-        (claimable,,,,) = revStream.claimableIncrement(account, numIndexes);
+        (claimable,) = revStream.claimableIncrement(account, numIndexes);
+    }
+
+    /// @dev Mints a veRWA token to `account` and returns the tokenId.
+    function _mint(address account, uint208 amount, uint256 duration) internal returns (uint256 tokenId) {
+        vm.startPrank(account);
+        rwaToken.approve(address(veRWA), amount);
+        tokenId = veRWA.mint(account, amount, duration);
+        vm.stopPrank();
+    }
+
+    /// @dev Acts as RevenueDistributor and deposits ETH into RevenueStreamETH contract.
+    function _depositETH(uint256 amount) internal {
+        skip(1);
+        vm.prank(address(revDistributor));
+        revStream.depositETH{value: amount}();
     }
 
 
@@ -304,8 +319,10 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Execute Deposit 2 ~
 
+        // same cycle
         vm.prank(address(revDistributor));
         revStream.depositETH{value: amount/2}();
+
 
         // ~ Post-state check 2 ~
 
@@ -340,21 +357,13 @@ contract RWARevenueStreamETHTest is Utility {
         uint256 duration = (1 * 30 days);
 
         // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
+        _mint(JOE, uint208(rwaToken.balanceOf(JOE)), duration);
 
         // deal ETH to revDistributor
         vm.deal(address(revDistributor), amountRevenue);
 
         // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
+        _depositETH(amountRevenue);
         
         // ~ Skip to avoid FutureLookup error ~
 
@@ -379,24 +388,14 @@ contract RWARevenueStreamETHTest is Utility {
         uint256 duration = (1 * 30 days);
 
         // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
+        _mint(JOE, uint208(rwaToken.balanceOf(JOE)), duration);
 
         // deal ETH to revDistributor
         vm.deal(address(revDistributor), amountRevenue * 2);
 
         // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        skip(1);
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
+        _depositETH(amountRevenue);
+        _depositETH(amountRevenue);
         
         // ~ Skip to avoid FutureLookup error ~
 
@@ -414,39 +413,24 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Config ~
 
-        uint256 amount1 = 1_000 ether;
+        uint256 amount = 1_000 ether;
         // Mint Joe more$RWA tokens
-        rwaToken.mintFor(JOE, amount1);
+        rwaToken.mintFor(JOE, amount);
 
         uint256 amountRevenue = 5_000 ether;
         uint256 duration = (1 * 30 days);
 
         // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount1);
-        veRWA.mint(
-            JOE,
-            uint208(amount1),
-            duration
-        );
+        _mint(JOE, uint208(amount), duration);
         // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount1);
-        veRWA.mint(
-            JOE,
-            uint208(amount1),
-            duration
-        );
-        vm.stopPrank();
+        _mint(JOE, uint208(amount), duration);
 
         // deal ETH to revDistributor
         vm.deal(address(revDistributor), amountRevenue);
 
         // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
+        _depositETH(amountRevenue);
         
-
         // ~ Skip to avoid FutureLookup error ~
 
         skip(1);
@@ -470,24 +454,14 @@ contract RWARevenueStreamETHTest is Utility {
         uint256 duration = (1 * 30 days);
 
         // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(amount),
-            duration
-        );
-        vm.stopPrank();
+        _mint(JOE, uint208(amount), duration);
 
         // deal ETH to revDistributor
         vm.deal(address(revDistributor), amountRevenue * 3);
 
         // deposit revenue into RevStream contract
-        vm.startPrank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        skip(1);
-        revStream.depositETH{value: amountRevenue}();
-        vm.stopPrank();
+        _depositETH(amountRevenue);
+        _depositETH(amountRevenue);
 
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
@@ -512,13 +486,9 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revStream).balance, 0);
         assertEq(revStream.lastClaimIndex(JOE), 2);
 
-        assertEq(revStream.revenueClaimed(1), amountRevenue);
-        assertEq(revStream.revenueClaimed(2), amountRevenue);
-
         // ~ Another deposit ~
 
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
+        _depositETH(amountRevenue);
 
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
@@ -536,8 +506,6 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(JOE.balance, amountRevenue * 3);
         assertEq(address(revStream).balance, 0);
         assertEq(revStream.lastClaimIndex(JOE), 3);
-
-        assertEq(revStream.revenueClaimed(3), amountRevenue);
     }
 
     /// @dev Verifies proper state changes when RevenueStreamETH::claimETHIncrement() is executed.
@@ -550,24 +518,14 @@ contract RWARevenueStreamETHTest is Utility {
         uint256 duration = (1 * 30 days);
 
         // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(amount),
-            duration
-        );
-        vm.stopPrank();
+        _mint(JOE, uint208(amount), duration);
 
         // deal ETH to revDistributor
         vm.deal(address(revDistributor), amountRevenue * 3);
 
         // deposit revenue into RevStream contract
-        vm.startPrank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        skip(1);
-        revStream.depositETH{value: amountRevenue}();
-        vm.stopPrank();
+        _depositETH(amountRevenue);
+        _depositETH(amountRevenue);
 
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
@@ -598,9 +556,6 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revStream).balance, amountRevenue);
         assertEq(revStream.lastClaimIndex(JOE), 1);
 
-        assertEq(revStream.revenueClaimed(1), amountRevenue);
-        assertEq(revStream.revenueClaimed(2), 0);
-
         assertEq(_getClaimableIncrement(JOE, 1), amountRevenue);
         assertEq(_getClaimable(JOE), amountRevenue);
 
@@ -615,13 +570,9 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revStream).balance, 0);
         assertEq(revStream.lastClaimIndex(JOE), 2);
 
-        assertEq(revStream.revenueClaimed(1), amountRevenue);
-        assertEq(revStream.revenueClaimed(2), amountRevenue);
-
         // ~ Another deposit ~
 
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
+        _depositETH(amountRevenue);
 
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
@@ -640,7 +591,6 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(address(revStream).balance, 0);
         assertEq(revStream.lastClaimIndex(JOE), 3);
 
-        assertEq(revStream.revenueClaimed(3), amountRevenue);
 
         assertEq(_getClaimableIncrement(JOE, 1), 0);
         assertEq(_getClaimable(JOE), 0);
@@ -651,37 +601,22 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Config ~
 
-        uint256 amount1 = 1_000 ether;
+        uint256 amount = 1_000 ether;
         // Mint Joe more$RWA tokens
-        rwaToken.mintFor(JOE, amount1);
+        rwaToken.mintFor(JOE, amount);
 
         uint256 amountRevenue = 5_000 ether;
         uint256 duration = (1 * 30 days);
 
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount1);
-        veRWA.mint(
-            JOE,
-            uint208(amount1),
-            duration
-        );
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount1);
-        veRWA.mint(
-            JOE,
-            uint208(amount1),
-            duration
-        );
-        vm.stopPrank();
+        // mint Joe 2 veRWA tokens
+        _mint(JOE, uint208(amount), duration);
+        _mint(JOE, uint208(amount), duration);
 
         // deal ETH to revDistributor
         vm.deal(address(revDistributor), amountRevenue);
 
         // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
+        _depositETH(amountRevenue);
 
         // ~ Skip to avoid FutureLookup error ~
 
@@ -744,8 +679,7 @@ contract RWARevenueStreamETHTest is Utility {
         vm.deal(address(revDistributor), amountRevenue);
 
         // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
+        _depositETH(amountRevenue);
 
         // Skip to avoid FutureLookup error (when querying voting power)
         skip(1);
@@ -787,611 +721,6 @@ contract RWARevenueStreamETHTest is Utility {
 
     // ~ expired revenue ~
 
-    /// @dev Verifies proper return variable when RevenueStreamETH::expiredRevenue() is called.
-    function test_revStreamETH_expiredRevenue_single() public {
-
-        // ~ Config ~
-
-        uint256 amount = 1_000 ether;
-        uint256 amountRevenue = 5_000 ether;
-        uint256 duration = (1 * 30 days);
-
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        
-        // ~ Skip to avoid FutureLookup error ~
-
-        skip(1);
-
-        // ~ Pre-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        // ~ Skip to expiration ~
-
-        skip(revStream.timeUntilExpired());
-
-        // ~ Post-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue);
-        assertEq(revStream.expiredRevenue(), amountRevenue);
-
-        // ~ Joe claims ~
-
-        vm.prank(JOE);
-        revStream.claimETH();
-
-        // ~ Post-state check 2 ~
-
-        assertEq(_getClaimable(JOE), 0);
-        assertEq(revStream.expiredRevenue(), 0);
-    }
-
-    /// @dev Verifies proper return variable when RevenueStreamETH::expiredRevenueIncrement() is called.
-    function test_revStreamETH_expiredRevenue_single_increment() public {
-
-        // ~ Config ~
-
-        uint256 amount = 1_000 ether;
-        uint256 amountRevenue = 5_000 ether;
-        uint256 duration = (1 * 30 days);
-
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue*2);
-
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        skip(1);
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        
-        // ~ Skip to avoid FutureLookup error ~
-
-        skip(1);
-
-        // ~ Pre-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue*2);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        // ~ Skip to expiration ~
-
-        skip(revStream.timeUntilExpired()+1);
-
-        // ~ Post-state check 1 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue*2);
-        assertEq(revStream.expiredRevenueIncrement(1), amountRevenue);
-        assertEq(revStream.expiredRevenueIncrement(2), amountRevenue*2);
-        assertEq(revStream.expiredRevenue(), amountRevenue*2);
-
-        // ~ Joe claims in increment 1/2 ~
-
-        vm.prank(JOE);
-        revStream.claimETHIncrement(1);
-
-        // ~ Post-state check 2 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue);
-        assertEq(revStream.expiredRevenueIncrement(1), 0);
-        assertEq(revStream.expiredRevenueIncrement(2), amountRevenue);
-        assertEq(revStream.expiredRevenue(), amountRevenue);
-
-        // ~ Joe claims in increment 2/2 ~
-
-        vm.prank(JOE);
-        revStream.claimETHIncrement(1);
-
-        // ~ Post-state check 3 ~
-
-        assertEq(_getClaimable(JOE), 0);
-        assertEq(revStream.expiredRevenueIncrement(1), 0);
-        assertEq(revStream.expiredRevenue(), 0);
-    }
-
-    /// @dev Verifies proper return variable when RevenueStreamETH::expiredRevenue() is called.
-    function test_revStreamETH_expiredRevenue_multiple() public {
-
-        // ~ Config ~
-
-        uint256 amount = 1_000 ether;
-        uint256 amountRevenue = 5_000 ether;
-        uint256 duration = (1 * 30 days);
-
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-
-        skip(1);
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-
-        skip(1);
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        
-        // ~ Skip to avoid FutureLookup error ~
-
-        skip(revStream.timeUntilExpired()-3);
-
-        // ~ Pre-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue * 3);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        // ~ Skip to expiration 1 ~
-
-        skip(1); // first deposit is now expired
-
-        // ~ Post-state check 1 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue * 3);
-        assertEq(revStream.expiredRevenue(), amountRevenue);
-
-        // ~ Skip to expiration 2 ~
-
-        skip(1); // second deposit + first is now expired
-
-        // ~ Post-state check 2 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue * 3);
-        assertEq(revStream.expiredRevenue(), amountRevenue * 2);
-
-        // ~ Skip to expiration 3 ~
-
-        skip(1); // third deposit + second + first is now expired
-
-        // ~ Post-state check 3 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue * 3);
-        assertEq(revStream.expiredRevenue(), amountRevenue * 3);
-
-        // ~ Joe claims ~
-
-        vm.prank(JOE);
-        revStream.claimETH();
-
-        // ~ Post-state check 4 ~
-
-        assertEq(_getClaimable(JOE), 0);
-        assertEq(revStream.expiredRevenue(), 0);
-    }
-
-    /// @dev Verifies proper state changes when RevenueStreamETH::skimExpiredRevenue() is called.
-    function test_revStreamETH_skimExpiredRevenue_single() public {
-
-        // ~ Config ~
-
-        uint256 amount = 1_000 ether;
-        uint256 amountRevenue = 5_000 ether;
-        uint256 duration = (1 * 30 days);
-
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        
-        // ~ Skip to avoid FutureLookup error ~
-
-        skip(1);
-
-        // ~ Pre-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        // ~ Attempt to skim -> Revert ~
-
-        vm.prank(ADMIN);
-        vm.expectRevert("No expired revenue claimable");
-        revStream.skimExpiredRevenue();
-
-        // ~ Skip to expiration ~
-
-        skip(revStream.timeUntilExpired());
-
-        // ~ Post-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue);
-        assertEq(revStream.expiredRevenue(), amountRevenue);
-
-        assertEq(address(revStream).balance, amountRevenue);
-        assertEq(address(revDistributor).balance, 0);
-
-        // ~ expired is skimmed ~
-
-        vm.prank(ADMIN);
-        revStream.skimExpiredRevenue();
-
-        // ~ Post-state check 2 ~
-
-        assertEq(_getClaimable(JOE), 0);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        assertEq(address(revStream).balance, 0);
-        assertEq(address(revDistributor).balance, amountRevenue);
-    }
-
-    /// @dev Verifies proper state changes when RevenueStreamETH::skimExpiredRevenue() is called.
-    function test_revStreamETH_skimExpiredRevenue_single_increment() public {
-
-        // ~ Config ~
-
-        uint256 amount = 1_000 ether;
-        uint256 amountRevenue = 5_000 ether;
-        uint256 duration = (1 * 30 days);
-
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue*2);
-
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        skip(1);
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        
-        // ~ Skip to avoid FutureLookup error ~
-
-        skip(1);
-
-        // ~ Pre-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue*2);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        // ~ Attempt to skim -> Revert ~
-
-        vm.prank(ADMIN);
-        vm.expectRevert("No expired revenue claimable");
-        revStream.skimExpiredRevenue();
-
-        // ~ Skip to expiration ~
-
-        skip(revStream.timeUntilExpired()+1);
-
-        // ~ Pre-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue*2);
-        assertEq(revStream.expiredRevenueIncrement(1), amountRevenue);
-        assertEq(revStream.expiredRevenueIncrement(2), amountRevenue*2);
-        assertEq(revStream.expiredRevenue(), amountRevenue*2);
-
-        assertEq(address(revStream).balance, amountRevenue*2);
-        assertEq(address(revDistributor).balance, 0);
-
-        // ~ expired is skimmed in 1st increment~
-
-        vm.prank(ADMIN);
-        revStream.skimExpiredRevenueIncrement(1);
-
-        // ~ Post-state check 1 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue);
-        assertEq(revStream.expiredRevenueIncrement(1), amountRevenue);
-        assertEq(revStream.expiredRevenue(), amountRevenue);
-
-        assertEq(address(revStream).balance, amountRevenue);
-        assertEq(address(revDistributor).balance, amountRevenue);
-
-        // ~ expired is skimmed in 2nd increment~
-
-        vm.prank(ADMIN);
-        revStream.skimExpiredRevenueIncrement(1);
-
-        // ~ Post-state check 2 ~
-
-        assertEq(_getClaimable(JOE), 0);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        assertEq(address(revStream).balance, 0);
-        assertEq(address(revDistributor).balance, amountRevenue*2);
-    }
-
-    /// @dev Verifies proper state changes when RevenueStreamETH::skimExpiredRevenue() is called
-    /// with multiple deposit cycles.
-    function test_revStreamETH_skimExpiredRevenue_multiple() public {
-
-        // ~ Config ~
-
-        uint256 amount = 1_000 ether;
-        uint256 amountRevenue = 5_000 ether;
-        uint256 duration = (1 * 30 days);
-
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-
-        skip(1);
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-
-        skip(1);
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-        
-        // ~ Skip to avoid FutureLookup error ~
-
-        skip(revStream.timeUntilExpired()-3);
-
-        // ~ Pre-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue * 3);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        assertEq(address(revStream).balance, amountRevenue * 3);
-        assertEq(address(revDistributor).balance, 0);
-
-        // ~ Skip to expiration 1 ~
-
-        skip(1); // first deposit is now expired
-
-        // ~ Post-state check 1 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue * 3);
-        assertEq(revStream.expiredRevenue(), amountRevenue);
-
-        assertEq(address(revStream).balance, amountRevenue * 3);
-        assertEq(address(revDistributor).balance, 0);
-
-        // ~ Skip to expiration 2 ~
-
-        vm.prank(ADMIN);
-        revStream.skimExpiredRevenue();
-
-        skip(1); // second deposit + first is now expired
-
-        // ~ Post-state check 2 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue * 2);
-        assertEq(revStream.expiredRevenue(), amountRevenue);
-
-        assertEq(address(revStream).balance, amountRevenue * 2);
-        assertEq(address(revDistributor).balance, amountRevenue);
-
-        // ~ Skip to expiration 3 ~
-
-        vm.prank(ADMIN);
-        revStream.skimExpiredRevenue();
-
-        skip(1); // third deposit + second + first is now expired
-
-        // ~ Post-state check 3 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue);
-        assertEq(revStream.expiredRevenue(), amountRevenue);
-
-        assertEq(address(revStream).balance, amountRevenue);
-        assertEq(address(revDistributor).balance, amountRevenue * 2);
-
-        // ~ Admin skims last bit of revenue ~
-
-        vm.prank(ADMIN);
-        revStream.skimExpiredRevenue();
-
-        // ~ Post-state check 4 ~
-
-        assertEq(_getClaimable(JOE), 0);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        assertEq(address(revStream).balance, 0);
-        assertEq(address(revDistributor).balance, amountRevenue * 3);
-    }
-
-    /// @dev Verifies proper state changes when RevenueStreamETH::skimExpiredRevenue() is called
-    /// with multiple holders.
-    function test_revStreamETH_skimExpiredRevenue_multipleHolders() public {
-
-        // ~ Config ~
-
-        uint256 amount = 1_000 ether;
-        uint256 amountRevenue = 3_000 ether;
-        uint256 duration = (1 * 30 days);
-
-        rwaToken.mintFor(BOB, amount);
-        rwaToken.mintFor(ALICE, amount);
-
-        // mint Joe veRWA token
-        vm.startPrank(JOE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            JOE,
-            uint208(rwaToken.balanceOf(JOE)),
-            duration
-        );
-        vm.stopPrank();
-
-        // mint Bob veRWA token
-        vm.startPrank(BOB);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            BOB,
-            uint208(rwaToken.balanceOf(BOB)),
-            duration
-        );
-        vm.stopPrank();
-
-        // mint Alice veRWA token
-        vm.startPrank(ALICE);
-        rwaToken.approve(address(veRWA), amount);
-        veRWA.mint(
-            ALICE,
-            uint208(rwaToken.balanceOf(ALICE)),
-            duration
-        );
-        vm.stopPrank();
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-
-        skip(1);
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-
-        skip(1); // skip to avoid future lookup error
-
-        // ~ Pre-state check ~
-
-        assertEq(_getClaimable(JOE), amountRevenue*2/3);
-        assertEq(_getClaimable(BOB), amountRevenue*2/3);
-        assertEq(_getClaimable(ALICE), amountRevenue*2/3);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        // ~ Joe and Bob claim their revenue ~
-
-        vm.prank(JOE);
-        revStream.claimETH();
-
-        vm.prank(BOB);
-        revStream.claimETH();
-        
-        // ~ Skip to expiration ~
-
-        skip(revStream.timeUntilExpired());
-
-        // ~ Post-state check 1 ~
-
-        uint256 unclaimed = amountRevenue*2/3;
-
-        assertEq(_getClaimable(JOE), 0);
-        assertEq(_getClaimable(BOB), 0);
-        assertEq(_getClaimable(ALICE), unclaimed);
-        assertEq(revStream.expiredRevenue(), unclaimed);
-
-        // ~ Another deposit ~
-
-        // deal ETH to revDistributor
-        vm.deal(address(revDistributor), amountRevenue);
-        // deposit revenue into RevStream contract
-        vm.prank(address(revDistributor));
-        revStream.depositETH{value: amountRevenue}();
-
-        skip(1); // skip to avoid future lookup error
-
-        // ~ Post-state check 2 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue/3);
-        assertEq(_getClaimable(BOB), amountRevenue/3);
-        assertEq(_getClaimable(ALICE), amountRevenue/3 + unclaimed);
-        assertEq(revStream.expiredRevenue(), unclaimed);
-
-        // ~ Expired revenue is skimmed ~
-
-        vm.prank(ADMIN);
-        revStream.skimExpiredRevenue();
-
-        skip(1);
-
-        // ~ Post-state check 3 ~
-
-        assertEq(_getClaimable(JOE), amountRevenue/3);
-        assertEq(_getClaimable(BOB), amountRevenue/3);
-        assertEq(_getClaimable(ALICE), amountRevenue/3);
-        assertEq(revStream.expiredRevenue(), 0);
-
-        // ~ All claim ~
-
-        vm.prank(JOE);
-        revStream.claimETH();
-
-        vm.prank(BOB);
-        revStream.claimETH();
-
-        vm.prank(ALICE);
-        revStream.claimETH();
-    }
-
     /// @dev Verifies proper state changes when RevenueStream::setExpirationForRevenue() is executed.
     function test_revStream_setExpirationForRevenue() public {
 
@@ -1407,5 +736,73 @@ contract RWARevenueStreamETHTest is Utility {
         // ~ Post-state check ~
 
         assertEq(revStream.timeUntilExpired(), 1 days);
+    }
+
+    /// @dev Verifies proper state changes when RevenueStream::withdrawExpiredETH() is executed.
+    function test_revStream_withdrawExpiredETH() public {
+
+        // ~ Config ~
+
+        uint256 amount = 1_000 ether;
+        uint256 amountRevenue = 5_000 ether;
+
+        // mint Joe veRWA token
+        _mint(JOE, uint208(amount), veRWA.MAX_VESTING_DURATION());
+
+        // deal ETH to revDistributor
+        vm.deal(address(revDistributor), amountRevenue * 2);
+
+        // deposit 2 cycles of revenue into RevStream contract
+        _depositETH(amountRevenue);
+        _depositETH(amountRevenue);
+
+        // Skip to avoid FutureLookup error (when querying voting power)
+        skip(1);
+
+        // ~ state check ~
+
+        assertEq(JOE.balance, 0);
+        assertEq(address(revDistributor).balance, 0);
+        assertEq(address(revStream).balance, amountRevenue * 2);
+        assertEq(revStream.lastClaimIndex(JOE), 0);
+        assertEq(revStream.expiredRevClaimedIndex(), 0);
+
+        assertEq(_getClaimable(JOE), amountRevenue * 2);
+
+        uint256[] memory cycles = revStream.getCyclesArray();
+        assertEq(cycles.length, 3);
+
+        // ~ Execute withdrawExpiredETH ~
+
+        // withdraw "expired" revenue from first deposit
+        vm.prank(ADMIN);
+        revStream.withdrawExpiredETH(amountRevenue, 1);
+
+        // ~ State check ~
+
+        assertEq(JOE.balance, 0);
+        assertEq(address(revDistributor).balance, amountRevenue);
+        assertEq(address(revStream).balance, amountRevenue);
+        assertEq(revStream.lastClaimIndex(JOE), 0);
+        assertEq(revStream.expiredRevClaimedIndex(), 1);
+
+        uint256 claimable = _getClaimable(JOE);
+        assertEq(claimable, amountRevenue);
+
+        // ~ Execute claimETH ~
+
+        // Joe claims remaining cycle
+        vm.prank(JOE);
+        uint256 claimed = revStream.claimETH();
+        
+        // ~ State check ~
+
+        assertEq(claimed, claimable);
+        assertEq(JOE.balance, amountRevenue);
+        assertEq(address(revStream).balance, 0);
+        assertEq(revStream.lastClaimIndex(JOE), 2);
+        assertEq(revStream.expiredRevClaimedIndex(), 1);
+
+        assertEq(_getClaimable(JOE), 0);
     }
 }

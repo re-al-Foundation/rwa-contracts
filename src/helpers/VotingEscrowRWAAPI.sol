@@ -352,7 +352,7 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
      * @param account Address with claimable revenue.
      */
     function getClaimable(address account) external view returns (uint256 claimable) {
-        (claimable,,,,) = revStream.claimable(account);
+        (claimable,) = revStream.claimable(account);
     }
     
     // ----------------

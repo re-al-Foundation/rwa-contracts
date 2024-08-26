@@ -45,7 +45,6 @@ contract DelegationTest is Utility {
     RWAToken public rwaToken;
     MarketplaceMock public marketplace;
     DelegateFactory public delegateFactory;
-    Delegator public delegator;
 
     // helper
     ERC20Mock public mockRevToken;
@@ -121,7 +120,7 @@ contract DelegationTest is Utility {
         veRWA = RWAVotingEscrow(address(veRWAProxy));
 
         // Deploy Delegator implementation
-        delegator = new Delegator();
+        Delegator delegator = new Delegator();
 
         // Deploy DelegateFactory
         delegateFactory = new DelegateFactory();
@@ -159,6 +158,40 @@ contract DelegationTest is Utility {
         rwaToken.mintFor(ADMIN, 1_000 ether);
     }
 
+    
+    // -------
+    // Utility
+    // -------
+
+    /// @dev Mints a veRWA token to `account` and returns the tokenId.
+    function _mint(address account, uint208 amount, uint256 duration) internal returns (uint256 tokenId) {
+        vm.startPrank(account);
+        rwaToken.approve(address(veRWA), amount);
+        tokenId = veRWA.mint(account, amount, duration);
+        vm.stopPrank();
+    }
+
+    function _deployDelegator(uint256 tokenId, address actor, uint256 duration) internal returns (address delegator) {
+        uint256 preLength = delegateFactory.getDelegatorsArray().length;
+
+        vm.startPrank(ADMIN);
+        veRWA.approve(address(delegateFactory), tokenId);
+        delegator = delegateFactory.deployDelegator(
+            tokenId,
+            actor,
+            duration
+        );
+        vm.stopPrank();
+
+        assertEq(delegateFactory.delegators(preLength), delegator);
+        assertEq(delegateFactory.getDelegatorsArray().length, preLength + 1);
+        assertEq(delegateFactory.indexInDelegators(delegator), preLength);
+        assertEq(delegateFactory.delegatorExpiration(delegator), block.timestamp + duration);
+        assertEq(delegateFactory.isDelegator(delegator), true);
+        assertEq(delegateFactory.isExpiredDelegator(delegator), false);
+        assertEq(veRWA.ownerOf(tokenId), delegator);
+    }
+
 
     // ------------------
     // Initial State Test
@@ -185,14 +218,7 @@ contract DelegationTest is Utility {
 
         Checkpoints.Trace208 memory delegateCheckpoints;
 
-        vm.startPrank(ADMIN);
-        rwaToken.approve(address(veRWA), amount);
-        uint256 tokenId = veRWA.mint(
-            ADMIN,
-            uint208(amount),
-            totalDuration
-        );
-        vm.stopPrank();
+        uint256 tokenId = _mint(ADMIN, uint208(amount), totalDuration);
 
         // ~ Pre-state check ~
 
@@ -291,13 +317,7 @@ contract DelegationTest is Utility {
 
         Checkpoints.Trace208 memory delegateCheckpoints;
 
-        vm.startPrank(ADMIN);
-        rwaToken.approve(address(veRWA), amount);
-        uint256 tokenId = veRWA.mint(
-            ADMIN,
-            uint208(amount),
-            totalDuration
-        );
+        uint256 tokenId = _mint(ADMIN, uint208(amount), totalDuration);
 
         // ~ Pre-state check ~
 
@@ -326,18 +346,10 @@ contract DelegationTest is Utility {
         skip(1);
 
         // Admin delegates voting power to Joe for 1 month.
-        vm.startPrank(ADMIN);
-        veRWA.approve(address(delegateFactory), tokenId);
-        address newDelegator = delegateFactory.deployDelegator(
-            tokenId,
-            JOE,
-            (30 days)
-        );
-        vm.stopPrank();
+        address newDelegator = _deployDelegator(tokenId, JOE, 30 days);
 
         // ~ Post-state check ~
 
-        assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
         assertEq(veRWA.getAccountVotingPower(address(newDelegator)), votingPower);
         assertEq(veRWA.getAccountVotingPower(JOE), 0);
@@ -375,33 +387,15 @@ contract DelegationTest is Utility {
         uint256 amount = 1_000 ether;
         uint256 totalDuration = (36 * 30 days); // lock for max
 
-        vm.startPrank(ADMIN);
-        rwaToken.approve(address(veRWA), amount);
-        uint256 tokenId = veRWA.mint(
-            ADMIN,
-            uint208(amount),
-            totalDuration
-        );
-
+        uint256 tokenId = _mint(ADMIN, uint208(amount), totalDuration);
         uint256 votingPower = amount.calculateVotingPower(totalDuration);
 
         // Admin delegates voting power to Joe for 1 month.
-        vm.startPrank(ADMIN);
-        veRWA.approve(address(delegateFactory), tokenId);
-        address newDelegator = delegateFactory.deployDelegator(
-            tokenId,
-            JOE,
-            (30 days)
-        );
-        vm.stopPrank();
+        address newDelegator = _deployDelegator(tokenId, JOE, 30 days);
 
         // ~ Pre-state check ~
 
-        assertEq(delegateFactory.getDelegatorsArray().length, 1);
-        assertEq(delegateFactory.delegatorExpiration(newDelegator), block.timestamp + (30 days));
-        assertEq(delegateFactory.isDelegator(newDelegator), true);
         assertEq(delegateFactory.expiredDelegatorExists(), false);
-        assertEq(delegateFactory.isExpiredDelegator(newDelegator), false);
 
         assertEq(veRWA.ownerOf(tokenId), address(newDelegator));
         assertEq(veRWA.getAccountVotingPower(ADMIN), 0);
@@ -481,12 +475,7 @@ contract DelegationTest is Utility {
         for (uint256 i; i < numDelegators; ++i) {
             vm.startPrank(ADMIN);
             veRWA.approve(address(delegateFactory), tokenIds[i]);
-            delegators[i] = delegateFactory.deployDelegator(
-                tokenIds[i],
-                JOE,
-                (30 days)
-            );
-            vm.stopPrank();
+            delegators[i] = _deployDelegator(tokenIds[i], JOE, 30 days);
         }
 
         // ~ Pre-state check ~
@@ -494,12 +483,6 @@ contract DelegationTest is Utility {
         assertEq(delegateFactory.getDelegatorsArray().length, numDelegators);
         
         for (uint256 i; i < numDelegators; ++i) {
-            assertEq(delegateFactory.delegatorExpiration(delegators[i]), block.timestamp + (30 days));
-            assertEq(delegateFactory.isDelegator(delegators[i]), true);
-            assertEq(delegateFactory.expiredDelegatorExists(), false);
-            assertEq(delegateFactory.isExpiredDelegator(delegators[i]), false);
-
-            assertEq(veRWA.ownerOf(tokenIds[i]), delegators[i]);
             assertEq(veRWA.getAccountVotingPower(delegators[i]), votingPower);
             assertEq(veRWA.getVotes(delegators[i]), 0);
             assertEq(veRWA.delegates(delegators[i]), JOE);
@@ -527,7 +510,6 @@ contract DelegationTest is Utility {
         // ~ Post-state check ~
 
         assertEq(veRWA.getVotes(ADMIN), votingPower * numDelegators);
-        assertEq(veRWA.getVotes(address(delegator)), 0);
         assertEq(veRWA.getVotes(JOE), 0);
 
         assertEq(veRWA.delegates(ADMIN), ADMIN);
@@ -537,6 +519,7 @@ contract DelegationTest is Utility {
         for (uint256 i; i < numDelegators; ++i) {
             assertEq(delegateFactory.delegatorExpiration(delegators[i]), 0);
             assertEq(delegateFactory.isDelegator(delegators[i]), false);
+            assertEq(delegateFactory.indexInDelegators(delegators[i]), 0);
             assertEq(delegateFactory.expiredDelegatorExists(), false);
 
             assertEq(veRWA.ownerOf(tokenIds[i]), ADMIN);
@@ -574,14 +557,7 @@ contract DelegationTest is Utility {
         uint256 amount = 1_000 ether;
         uint256 totalDuration = (36 * 30 days);
 
-        vm.startPrank(ADMIN);
-        rwaToken.approve(address(veRWA), amount);
-        uint256 tokenId = veRWA.mint(
-            ADMIN,
-            uint208(amount),
-            totalDuration
-        );
-        vm.stopPrank();
+        uint256 tokenId = _mint(ADMIN, uint208(amount), totalDuration);
         skip(1);
 
         // Admin places limit to 0
@@ -614,6 +590,7 @@ contract DelegationTest is Utility {
         vm.stopPrank();
     }
 
+    /// @notice Verifies proper state changes when DelegateFactory::transferOwnership is called.
     function test_delegation_transferOwnership() public {
         assertEq(delegateFactory.owner(), ADMIN);
         vm.prank(ADMIN);
@@ -623,4 +600,52 @@ contract DelegationTest is Utility {
         assertEq(delegateFactory.owner(), JOE);
     }
 
+    function test_delegation_revokeExpiredDelegators_single() public {
+        // config -> mint tokenId
+        // deploy delegator for tokenId via _deployDelegator
+        // state check
+        // call revokeExpiredDelegators on tokenId
+        // state check
+
+        // ~ Config ~
+
+        uint256 amount = 1_000 ether;
+        uint256 totalDuration = (36 * 30 days);
+
+        uint256 tokenId = _mint(ADMIN, uint208(amount), totalDuration);
+        address delegator = _deployDelegator(tokenId, JOE, 30 days);
+
+        uint256 preLength = delegateFactory.getDelegatorsArray().length;
+
+        // ~ call revokeExpiredDelegators ~
+
+        vm.prank(ADMIN);
+        delegateFactory.revokeExpiredDelegators(_asSingletonArrayAddress(delegator));
+
+        // ~ State check ~
+
+        assertEq(delegateFactory.getDelegatorsArray().length, preLength - 1);
+        assertEq(delegateFactory.isDelegator(delegator), false);
+        assertEq(delegateFactory.isExpiredDelegator(delegator), false);
+        assertEq(delegateFactory.indexInDelegators(delegator), 0);
+        assertEq(veRWA.ownerOf(tokenId), ADMIN);
+    }
+
+    function test_delegation_revokeExpiredDelegators_multiple_OneByOne() public {
+        // config -> mint multiple tokenIds
+        // deploy delegators for all tokenIds
+        // state check
+        // call revokeExpiredDelegators on half of tokenIds
+        // state check
+        // call revokeExpiredDelegators on other half of tokenIds
+    }
+
+    function test_delegation_revokeExpiredDelegators_multiple_AllAtOnce() public {
+        // config -> mint multiple tokenIds
+        // deploy delegators for all tokenIds
+        // state check
+        // call revokeExpiredDelegators on half of tokenIds
+        // state check
+        // call revokeExpiredDelegators on other half of tokenIds
+    }
 }

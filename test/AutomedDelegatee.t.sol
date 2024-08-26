@@ -124,9 +124,8 @@ contract AutomatedDelegateeTest is Utility {
         // ~ Pre-state check ~
 
         uint256 preBal = DELEGATEE.balance;
-        (uint256 claimable,,, uint256 num, uint256 preIndexes) = REV_STREAM.claimable(address(automatedDelegatee));
+        (uint256 claimable, uint256 preIndexes) = REV_STREAM.claimable(address(automatedDelegatee));
         emit log_named_uint("indexes", preIndexes); // 1475
-        emit log_named_uint("num", num); // 1 (last index)
 
         // ~ Execute claimRewardsIncrement ~
 
@@ -136,7 +135,7 @@ contract AutomatedDelegateeTest is Utility {
 
         assertEq(claimed, 0);
         
-        (,,,, uint256 postIndexes) = REV_STREAM.claimable(address(automatedDelegatee));
+        (, uint256 postIndexes) = REV_STREAM.claimable(address(automatedDelegatee));
         emit log_named_uint("indexes", postIndexes); // 475
 
         assertEq(preIndexes, postIndexes + numIndexes);
@@ -150,7 +149,7 @@ contract AutomatedDelegateeTest is Utility {
         assertEq(claimed, claimable);
         assertEq(DELEGATEE.balance, preBal + claimable);
         
-        (claimable,,,, postIndexes) = REV_STREAM.claimable(address(automatedDelegatee));
+        (claimable, postIndexes) = REV_STREAM.claimable(address(automatedDelegatee));
         assertEq(postIndexes, 0);
         assertEq(claimable, 0);
     }

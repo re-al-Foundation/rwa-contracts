@@ -40,6 +40,8 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     UpgradeableBeacon public beacon;
     /// @notice Stores the maximum amount of delegators we can have deployed at one time.
     uint256 public delegatorLimit;
+    /// @notice Stores a index value for each delegator in the `delegators` array.
+    mapping(address delegator => uint256 index) public indexInDelegators;
 
 
     // ------
@@ -136,6 +138,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         newDelegator = address(newDelegatorBeacon);
 
         delegators.push(newDelegator);
+        indexInDelegators[newDelegator] = delegators.length - 1;
         isDelegator[newDelegator] = true;
         delegatorExpiration[newDelegator] = block.timestamp + _duration;
 
@@ -149,18 +152,16 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     /**
      * @notice TODO
      */
-    function revokeExpiredDelegator(address _delegator) external nonReentrant { // TODO: Test
+    function revokeExpiredDelegators(address[] calldata _delegators) external nonReentrant { // TODO: Test
         // TODO: Check msg.sender is owner or wallet that delegated. Or should it be canDelegate?
-        require(isDelegator[_delegator], "Invalid delegator");
 
-        uint256 length = delegators.length;
+        uint256 length = _delegators.length;
         for (uint256 i; i < length;) {
-            if (delegators[i] == _delegator) {
-                _revokeDelegator(_delegator);
-                delegators[i] = delegators[length - 1];
-                delegators.pop();
-                return;
-            }
+            address _delegator = _delegators[i];
+            require(isDelegator[_delegator], "Invalid delegator");
+
+            _revokeDelegator(_delegator);
+
             unchecked {
                 ++i;
             }
@@ -177,8 +178,6 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
             address delegator = delegators[i];
             if (isExpiredDelegator(delegator)) {
                 _revokeDelegator(delegator);
-                delegators[i] = delegators[length - 1];
-                delegators.pop();
                 --length;
             }
             if (i < length) {
@@ -215,6 +214,20 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
      */
     function updateDelegatorLimit(uint256 _newLimit) external onlyOwner {
         delegatorLimit = _newLimit;
+    }
+
+    /**
+     * @notice This is an admin function that stores all addresses in the delegators array
+     * with it's proper index value in indexInDelegators mapping.
+     * @dev This is needed because the original implementation did not contain this storage mapping
+     * so any existing delegators that have been deployed will not have a correct key-value pair in
+     * the indexInDelegators mapping.
+     */
+    function initializeIndexInDelegators() external onlyOwner {
+        uint256 length = delegators.length;
+        for (uint256 i; i < length;) {
+            indexInDelegators[delegators[i]] = i;
+        }
     }
 
     /**
@@ -265,6 +278,16 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         // delete delegator from contract
         delete isDelegator[_delegator];
         delete delegatorExpiration[_delegator];
+
+        // delete from array
+        uint256 len = delegators.length;
+        uint256 index = indexInDelegators[_delegator];
+        delete indexInDelegators[_delegator];
+        if (index != (len - 1)) {
+            indexInDelegators[delegators[len - 1]] = index;
+            delegators[index] = delegators[len - 1];
+        }
+        delegators.pop();
     }
 
     /**

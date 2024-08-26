@@ -367,7 +367,7 @@ contract DelegationTest is Utility {
         assertEq(delegateCheckpoints._checkpoints[0]._value, votingPower);
     }
 
-    /// @notice Verifies state when DelegateFactory::revokeExpiredDelegators is called
+    /// @notice Verifies state when DelegateFactory::revokeAllExpiredDelegators is called
     function test_delegation_revokeAndDelete() public {
 
         // ~ Config ~
@@ -422,9 +422,9 @@ contract DelegationTest is Utility {
         assertEq(delegateFactory.expiredDelegatorExists(), true);
         assertEq(delegateFactory.isExpiredDelegator(newDelegator), true);
 
-        // ~ Execute revokeExpiredDelegators ~
+        // ~ Execute revokeAllExpiredDelegators ~
 
-        delegateFactory.revokeExpiredDelegators();
+        delegateFactory.revokeAllExpiredDelegators();
 
         // ~ Post-state check ~
 
@@ -449,7 +449,7 @@ contract DelegationTest is Utility {
         assertEq(delegateFactory.isExpiredDelegator(address(1)), false);
     }
 
-    /// @notice Verifies state when DelegateFactory::revokeExpiredDelegators is called to revoke multiple delegators
+    /// @notice Verifies state when DelegateFactory::revokeAllExpiredDelegators is called to revoke multiple delegators
     function test_delegation_revokeAndDelete_multiple() public {
 
         // ~ Config ~
@@ -520,9 +520,9 @@ contract DelegationTest is Utility {
             assertEq(delegateFactory.isExpiredDelegator(delegators[i]), true);
         }
 
-        // ~ Execute revokeExpiredDelegators ~
+        // ~ Execute revokeAllExpiredDelegators ~
 
-        delegateFactory.revokeExpiredDelegators();
+        delegateFactory.revokeAllExpiredDelegators();
 
         // ~ Post-state check ~
 

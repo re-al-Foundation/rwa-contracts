@@ -53,7 +53,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     event DelegatorCreated(address indexed _delegator);
 
     /**
-     * @notice This event is emitted when revokeExpiredDelegators is executed for each expired Delegator.
+     * @notice This event is emitted when revokeAllExpiredDelegators is executed for each expired Delegator.
      * @param _delegator Address of revoked delegator.
      */
     event DelegatorDeleted(address indexed _delegator);
@@ -147,25 +147,39 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     }
 
     /**
+     * @notice TODO
+     */
+    function revokeExpiredDelegator(address _delegator) external nonReentrant { // TODO: Test
+        // TODO: Check msg.sender is owner or wallet that delegated. Or should it be canDelegate?
+        require(isDelegator[_delegator], "Invalid delegator");
+
+        uint256 length = delegators.length;
+        for (uint256 i; i < length;) {
+            if (delegators[i] == _delegator) {
+                _revokeDelegator(_delegator);
+                delegators[i] = delegators[length - 1];
+                delegators.pop();
+                return;
+            }
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /**
      * @notice This method is used to fetch any expired Delegators, withdraw the delegated token from the Delegator,
      *         and delete it's instance from this contract.
      */
-    function revokeExpiredDelegators() external nonReentrant {
+    function revokeAllExpiredDelegators() external nonReentrant {
         uint256 length = delegators.length;
         for (uint256 i; i < length;) {
             address delegator = delegators[i];
             if (isExpiredDelegator(delegator)) {
-                // call withdrawDelegatedToken
-                IDelegator(delegator).withdrawDelegatedToken();
-
-                // delete delegator from contract
-                delete isDelegator[delegator];
-                delete delegatorExpiration[delegator];
+                _revokeDelegator(delegator);
                 delegators[i] = delegators[length - 1];
                 delegators.pop();
                 --length;
-
-                emit DelegatorDeleted(delegator);
             }
             if (i < length) {
                 if (!isExpiredDelegator(delegators[i])) {
@@ -240,6 +254,18 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     // ----------------
     // Internal Methods
     // ----------------
+
+    /**
+     * @notice Withdraws delegated token from delegator contract back to the creator and deletes existance.
+     */
+    function _revokeDelegator(address _delegator) internal {
+        emit DelegatorDeleted(_delegator);
+        // call withdrawDelegatedToken
+        IDelegator(_delegator).withdrawDelegatedToken();
+        // delete delegator from contract
+        delete isDelegator[_delegator];
+        delete delegatorExpiration[_delegator];
+    }
 
     /**
      * @notice Inherited from UUPSUpgradeable. Allows us to authorize the DEFAULT_ADMIN_ROLE role to upgrade this contract's implementation.

@@ -3720,8 +3720,8 @@ DA:140,16
 DA:140,16
 DA:142,16
 DA:142,16
-FN:149,DelegateFactory.revokeExpiredDelegators
-FNDA:4,DelegateFactory.revokeExpiredDelegators
+FN:149,DelegateFactory.revokeAllExpiredDelegators
+FNDA:4,DelegateFactory.revokeAllExpiredDelegators
 DA:150,4
 DA:150,4
 DA:151,4

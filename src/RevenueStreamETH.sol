@@ -83,11 +83,11 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
 
 
     /**
-     * @notice This event is emitted when withdrawExpiredETH is executed.
-     * @param amountETH Amount withdrawn.
+     * @notice This event is emitted when recycleExpiredETH is executed.
+     * @param amountETH Amount recycled.
      * @param upToIndex Expired revenue has been claimed up to this index in cycles.
      */
-    event ExpiredRevenueWithdrawn(uint256 amountETH, uint256 upToIndex);
+    event ExpiredRevenueRecycled(uint256 amountETH, uint256 upToIndex);
 
 
     // ------
@@ -264,15 +264,16 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     }
 
     /**
-     * @notice This permissioned method is used to withdraw expired ETH rewards from this contract.
-     * @param amount Amount of ETH being withdrawn.
+     * @notice This permissioned method is used to "recycle" expired ETH rewards from this contract.
+     * @dev The ETH beign recycled is sent back to the RevenueDistributor contract for re-distribution.
+     * @param amount Amount of ETH being recycled.
      * @param upToIndex Expired revenue has been expired up to this index in cycles.
      */
-    function withdrawExpiredETH(uint256 amount, uint256 upToIndex) external onlyOwner {
+    function recycleExpiredETH(uint256 amount, uint256 upToIndex) external onlyOwner {
         require(amount != 0, "RevenueStreamETH: amount cant be 0");
         require(cycles.length >= upToIndex && upToIndex > expiredRevClaimedIndex, "RevenueStreamETH: upToIndex invalid range");
 
-        emit ExpiredRevenueWithdrawn(amount, upToIndex);
+        emit ExpiredRevenueRecycled(amount, upToIndex);
 
         expiredRevClaimedIndex = upToIndex;
         _sendETH(revenueDistributor, amount);
@@ -365,8 +366,10 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
 
     /**
      * @notice Internal method for calculating the amount of revenue that is currently claimable for a specific `account`.
-     * @dev To avoid the potential of a memory allocation error, the initial size of cyclesClaimable and amountsClaimable is
-     * set to either numIndexes or cycles.length depending on which is lower.
+     * @dev We use a sliding window model to calculate amount claimable for an `account`. The beginning of the window is marked
+     * by lastClaimIndex. In the event part of that revenue has been recycled (could occur if you wait too long to claim), the
+     * beginning of the account's claimable window will be marked by expiredRevClaimedIndex (only in the event that 
+     * expiredRevClaimedIndex > lastClaimIndex[account]).
      * @param account Address of account with voting power.
      * @return amount -> Amount of ETH that is currently claimable for `account`.
      * @return indexes -> The number of indexes that are unclaimed.

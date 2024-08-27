@@ -352,7 +352,6 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Config ~
 
-        uint256 amount = 1_000 ether;
         uint256 amountRevenue = 5_000 ether;
         uint256 duration = (1 * 30 days);
 
@@ -383,7 +382,6 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Config ~
 
-        uint256 amount = 1_000 ether;
         uint256 amountRevenue = 5_000 ether;
         uint256 duration = (1 * 30 days);
 
@@ -738,8 +736,8 @@ contract RWARevenueStreamETHTest is Utility {
         assertEq(revStream.timeUntilExpired(), 1 days);
     }
 
-    /// @dev Verifies proper state changes when RevenueStream::withdrawExpiredETH() is executed.
-    function test_revStream_withdrawExpiredETH() public {
+    /// @dev Verifies proper state changes when RevenueStream::recycleExpiredETH() is executed.
+    function test_revStream_recycleExpiredETH() public {
 
         // ~ Config ~
 
@@ -772,11 +770,11 @@ contract RWARevenueStreamETHTest is Utility {
         uint256[] memory cycles = revStream.getCyclesArray();
         assertEq(cycles.length, 3);
 
-        // ~ Execute withdrawExpiredETH ~
+        // ~ Execute recycleExpiredETH ~
 
         // withdraw "expired" revenue from first deposit
         vm.prank(ADMIN);
-        revStream.withdrawExpiredETH(amountRevenue, 1);
+        revStream.recycleExpiredETH(amountRevenue, 1);
 
         // ~ State check ~
 

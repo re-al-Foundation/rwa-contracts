@@ -150,15 +150,15 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     }
 
     /**
-     * @notice TODO
+     * @notice This method is used to revoke delegation and performs the deletion of existing delegatorss.
+     * @param _delegators Array of delegators that need to be revoked and deleted.
      */
-    function revokeExpiredDelegators(address[] calldata _delegators) external nonReentrant { // TODO: Test
-        // TODO: Check msg.sender is owner or wallet that delegated. Or should it be canDelegate?
-
+    function revokeExpiredDelegators(address[] calldata _delegators) external nonReentrant {
         uint256 length = _delegators.length;
         for (uint256 i; i < length;) {
             address _delegator = _delegators[i];
             require(isDelegator[_delegator], "Invalid delegator");
+            require(Delegator(_delegator).creator() == msg.sender || owner() == msg.sender, "Not authorized");
 
             _revokeDelegator(_delegator);
 
@@ -279,13 +279,13 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         delete isDelegator[_delegator];
         delete delegatorExpiration[_delegator];
 
-        // delete from array
-        uint256 len = delegators.length;
+        // delete from array and update indexes
+        uint256 len = delegators.length - 1;
         uint256 index = indexInDelegators[_delegator];
         delete indexInDelegators[_delegator];
-        if (index != (len - 1)) {
-            indexInDelegators[delegators[len - 1]] = index;
-            delegators[index] = delegators[len - 1];
+        if (index != len) {
+            delegators[index] = delegators[len];
+            indexInDelegators[delegators[len]] = index;
         }
         delegators.pop();
     }

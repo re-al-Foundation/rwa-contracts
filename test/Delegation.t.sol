@@ -171,6 +171,7 @@ contract DelegationTest is Utility {
         vm.stopPrank();
     }
 
+    /// @dev Utility method that deploys a new delegator and performs necessary state checks post deployment.
     function _deployDelegator(uint256 tokenId, address actor, uint256 duration) internal returns (address delegator) {
         uint256 preLength = delegateFactory.getDelegatorsArray().length;
 
@@ -190,6 +191,13 @@ contract DelegationTest is Utility {
         assertEq(delegateFactory.isDelegator(delegator), true);
         assertEq(delegateFactory.isExpiredDelegator(delegator), false);
         assertEq(veRWA.ownerOf(tokenId), delegator);
+    }
+
+    /// @dev Verifies all elements in the delegators array has a proper index stored in indexInDelegators.
+    function _checkIndexes() internal {
+        for (uint256 i; i < delegateFactory.getDelegatorsArray().length; ++i) {
+            assertEq(delegateFactory.indexInDelegators(delegateFactory.delegators(i)), i);
+        }
     }
 
 
@@ -473,8 +481,6 @@ contract DelegationTest is Utility {
 
         // Admin delegates voting power to Joe for 1 month.
         for (uint256 i; i < numDelegators; ++i) {
-            vm.startPrank(ADMIN);
-            veRWA.approve(address(delegateFactory), tokenIds[i]);
             delegators[i] = _deployDelegator(tokenIds[i], JOE, 30 days);
         }
 
@@ -600,12 +606,9 @@ contract DelegationTest is Utility {
         assertEq(delegateFactory.owner(), JOE);
     }
 
+    /// @notice Verifies proper state changes when DelegateFactory::revokeExpiredDelegators is called
+    /// to remove a single delegator address.
     function test_delegation_revokeExpiredDelegators_single() public {
-        // config -> mint tokenId
-        // deploy delegator for tokenId via _deployDelegator
-        // state check
-        // call revokeExpiredDelegators on tokenId
-        // state check
 
         // ~ Config ~
 
@@ -631,21 +634,133 @@ contract DelegationTest is Utility {
         assertEq(veRWA.ownerOf(tokenId), ADMIN);
     }
 
+    /// @notice Verifies proper state changes when DelegateFactory::revokeExpiredDelegators is called
+    /// to remove a single delegator address from an array of existing delegators, performing state
+    /// checks in between every revoke.
     function test_delegation_revokeExpiredDelegators_multiple_OneByOne() public {
-        // config -> mint multiple tokenIds
-        // deploy delegators for all tokenIds
-        // state check
-        // call revokeExpiredDelegators on half of tokenIds
-        // state check
-        // call revokeExpiredDelegators on other half of tokenIds
+        // ~ Config ~
+
+        uint256 amount = 1_000 ether;
+        uint256 numDelegators = 4;
+        uint256 totalDuration = (36 * 30 days); // lock for max
+
+        uint256[] memory tokenIds = new uint256[](numDelegators);
+        address[] memory delegators = new address[](numDelegators);
+
+        // Mint Admin $RWA tokens
+        rwaToken.mintFor(ADMIN, amount * numDelegators);
+
+        for (uint256 i; i < numDelegators; ++i) {
+            tokenIds[i] = _mint(ADMIN, uint208(amount), totalDuration);
+        }
+
+        uint256 votingPower = amount.calculateVotingPower(totalDuration);
+
+        // Admin delegates voting power to Joe for 1 month.
+        for (uint256 i; i < numDelegators; ++i) {
+            delegators[i] = _deployDelegator(tokenIds[i], JOE, 30 days);
+        }
+
+        // ~ Execute revokeExpiredDelegators one by one ~
+
+        for (uint256 i; i < numDelegators; ++i) {
+
+            // check array and indexInDelegators state
+            assertEq(delegateFactory.isDelegator(delegators[i]), true);
+            uint256 length = delegateFactory.getDelegatorsArray().length;
+            uint256 index = delegateFactory.indexInDelegators(delegators[i]);
+            address last = delegateFactory.delegators(length-1);
+
+            vm.prank(ADMIN);
+            delegateFactory.revokeExpiredDelegators(_asSingletonArrayAddress(delegators[i]));
+
+            // check array and indexInDelegators state
+            assertEq(delegateFactory.isDelegator(delegators[i]), false);
+
+            if (last != delegators[i]) {
+                assertEq(delegateFactory.indexInDelegators(last), index);
+            }
+            assertEq(delegateFactory.indexInDelegators(delegators[i]), 0);
+            assertEq(delegateFactory.getDelegatorsArray().length, length-1);
+
+            assertEq(veRWA.ownerOf(tokenIds[i]), ADMIN);
+            assertEq(veRWA.getAccountVotingPower(delegators[i]), 0);
+            assertEq(veRWA.getVotes(delegators[i]), 0);
+            assertEq(veRWA.delegates(delegators[i]), delegators[i]);
+
+            _checkIndexes();
+        }
+
+        // ~ Post-state check ~
+
+        assertEq(veRWA.getVotes(ADMIN), votingPower * numDelegators);
+        assertEq(veRWA.getVotes(JOE), 0);
+
+        assertEq(veRWA.delegates(ADMIN), ADMIN);
+        assertEq(delegateFactory.getDelegatorsArray().length, 0);
+
+        assertEq(veRWA.getAccountVotingPower(ADMIN), votingPower * numDelegators);
+        assertEq(veRWA.getAccountVotingPower(JOE), 0);
+
+        assertEq(veRWA.getVotes(ADMIN), votingPower * numDelegators);
+        assertEq(veRWA.getVotes(JOE), 0);
     }
 
+    /// @notice Verifies proper state changes when DelegateFactory::revokeExpiredDelegators is called
+    /// to remove all existing delegators performing one large state check at the end.
     function test_delegation_revokeExpiredDelegators_multiple_AllAtOnce() public {
-        // config -> mint multiple tokenIds
-        // deploy delegators for all tokenIds
-        // state check
-        // call revokeExpiredDelegators on half of tokenIds
-        // state check
-        // call revokeExpiredDelegators on other half of tokenIds
+        // ~ Config ~
+
+        uint256 amount = 1_000 ether;
+        uint256 numDelegators = 4;
+        uint256 totalDuration = (36 * 30 days); // lock for max
+
+        uint256[] memory tokenIds = new uint256[](numDelegators);
+        address[] memory delegators = new address[](numDelegators);
+
+        // Mint Admin $RWA tokens
+        rwaToken.mintFor(ADMIN, amount * numDelegators);
+
+        for (uint256 i; i < numDelegators; ++i) {
+            tokenIds[i] = _mint(ADMIN, uint208(amount), totalDuration);
+        }
+
+        uint256 votingPower = amount.calculateVotingPower(totalDuration);
+
+        // Admin delegates voting power to Joe for 1 month.
+        for (uint256 i; i < numDelegators; ++i) {
+            delegators[i] = _deployDelegator(tokenIds[i], JOE, 30 days);
+        }
+
+        // ~ Execute revokeExpiredDelegators for all delegators  ~
+
+        vm.prank(ADMIN);
+        delegateFactory.revokeExpiredDelegators(delegators);
+
+        // ~ Post-state check ~
+
+        for (uint256 i; i < numDelegators; ++i) {
+            assertEq(delegateFactory.delegatorExpiration(delegators[i]), 0);
+            assertEq(delegateFactory.isDelegator(delegators[i]), false);
+            assertEq(delegateFactory.indexInDelegators(delegators[i]), 0);
+            assertEq(delegateFactory.expiredDelegatorExists(), false);
+
+            assertEq(veRWA.ownerOf(tokenIds[i]), ADMIN);
+            assertEq(veRWA.getAccountVotingPower(delegators[i]), 0);
+            assertEq(veRWA.getVotes(delegators[i]), 0);
+            assertEq(veRWA.delegates(delegators[i]), delegators[i]);
+        }
+
+        assertEq(veRWA.getVotes(ADMIN), votingPower * numDelegators);
+        assertEq(veRWA.getVotes(JOE), 0);
+
+        assertEq(veRWA.delegates(ADMIN), ADMIN);
+        assertEq(delegateFactory.getDelegatorsArray().length, 0);
+
+        assertEq(veRWA.getAccountVotingPower(ADMIN), votingPower * numDelegators);
+        assertEq(veRWA.getAccountVotingPower(JOE), 0);
+
+        assertEq(veRWA.getVotes(ADMIN), votingPower * numDelegators);
+        assertEq(veRWA.getVotes(JOE), 0);
     }
 }

@@ -772,6 +772,14 @@ contract RWARevenueStreamETHTest is Utility {
 
         // ~ Execute recycleExpiredETH ~
 
+        // force revert -> index not expired
+        vm.prank(ADMIN);
+        vm.expectRevert("RevenueStreamETH: upToIndex not expired");
+        revStream.recycleExpiredETH(amountRevenue, 1);
+
+        // warp to expiration of cycle
+        skip(revStream.timeUntilExpired() + 1);
+
         // withdraw "expired" revenue from first deposit
         vm.prank(ADMIN);
         revStream.recycleExpiredETH(amountRevenue, 1);

@@ -272,6 +272,7 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     function recycleExpiredETH(uint256 amount, uint256 upToIndex) external onlyOwner {
         require(amount != 0, "RevenueStreamETH: amount cant be 0");
         require(cycles.length >= upToIndex && upToIndex > expiredRevClaimedIndex, "RevenueStreamETH: upToIndex invalid range");
+        require(block.timestamp > cycles[upToIndex] + timeUntilExpired, "RevenueStreamETH: upToIndex not expired");
 
         emit ExpiredRevenueRecycled(amount, upToIndex);
 
@@ -383,9 +384,6 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     ) {
         uint256 numCycles = cycles.length;
         uint256 lastClaim = lastClaimIndex[account];
-
-        uint256 arrSize;
-        numIndexes == MAX_INT ? arrSize = numCycles : arrSize = numIndexes;
 
         uint256 i = 1;
         if (expiredRevClaimedIndex > lastClaim) {

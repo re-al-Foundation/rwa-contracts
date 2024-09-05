@@ -47,8 +47,10 @@ contract UpgradeRevStreamETH is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         
-        RevenueStreamETH newRevStreamETH = new RevenueStreamETH();
-        //TODO: upgradeToAndCall(address(newRevStreamETH), "");
+        address newRevStreamETH = address(new RevenueStreamETH());
+        //TODO: upgrade
+
+        console2.log("Address", newRevStreamETH);
 
         vm.stopBroadcast();
     }

@@ -692,6 +692,40 @@ contract MainDeploymentTest is Utility {
         assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
     }
 
+    /// @dev Verifies proper state changes when a user buys $RWA tokens from a pool and tax == 0.
+    function test_mainDeployment_rwaToken_buy_zeroTax() public {
+
+        // ~ Config ~
+
+        vm.prank(ADMIN);
+        rwaToken.updateFee(0);
+
+        uint256 amountETH = 1 ether;
+        vm.deal(JOE, amountETH);
+
+        // get quote for buy
+        uint256 quote = _getQuoteBuy(amountETH);
+        uint256 taxedAmount = quote * rwaToken.fee() / 100;
+        assertEq(taxedAmount, 0);
+
+        // ~ Pre-state check ~
+
+        assertEq(JOE.balance, amountETH);
+        assertEq(rwaToken.balanceOf(JOE), 0);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+
+        // ~ Execute buy ~
+
+        _buy(JOE, amountETH);
+
+        // ~ Post-state check ~
+
+        assertEq(JOE.balance, 0);
+        assertEq(rwaToken.balanceOf(JOE), quote - taxedAmount);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
+    }
+
     /// @dev Verifies proper state changes when a user sells $RWA tokens into a UniV2Pool.
     function test_mainDeployment_rwaToken_sell() public {
 
@@ -787,6 +821,41 @@ contract MainDeploymentTest is Utility {
 
         assertGt(JOE.balance, 0);
         assertLt(JOE.balance, quote);
+        assertEq(rwaToken.balanceOf(JOE), 0);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);
+    }
+
+    /// @dev Verifies proper state changes when a user sells $RWA tokens into a pool when tax == 0.
+    function test_mainDeployment_rwaToken_sell_zeroTax() public {
+
+        // ~ Config ~
+
+        vm.prank(ADMIN);
+        rwaToken.updateFee(0);
+
+        uint256 amountTokens = 5 ether;
+        rwaToken.mintFor(JOE, amountTokens);
+
+        // get quote for buy
+        uint256 quote = _getQuoteSell(amountTokens);
+        uint256 taxedAmount = amountTokens * rwaToken.fee() / 100;
+        assertEq(taxedAmount, 0);
+
+        // ~ Pre-state check ~
+
+        assertEq(JOE.balance, 0);
+        assertEq(rwaToken.balanceOf(JOE), amountTokens);
+        assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
+        assertEq(rwaToken.balanceOf(address(royaltyHandler)), 0);
+
+        // ~ Execute sell ~
+
+        _sell(JOE, amountTokens);
+
+        // ~ Post-state check
+
+        assertEq(JOE.balance, quote);
         assertEq(rwaToken.balanceOf(JOE), 0);
         assertEq(rwaToken.balanceOf(address(rwaToken)), 0);
         assertEq(rwaToken.balanceOf(address(royaltyHandler)), taxedAmount);

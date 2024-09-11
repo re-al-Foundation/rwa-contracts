@@ -19,7 +19,6 @@ import { AutomatedDelegatee } from "../../../src/helpers/AutomatedDelegatee.sol"
     @dev To verify manually: 
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \ 
     src/helpers/AutomatedDelegatee.sol:AutomatedDelegatee --verifier blockscout --verifier-url https://explorer.re.al//api
-
 */
 
 /**

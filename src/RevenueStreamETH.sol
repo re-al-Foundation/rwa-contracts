@@ -81,7 +81,6 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
      */
     event SignerSet(address indexed newSigner);
 
-
     /**
      * @notice This event is emitted when recycleExpiredETH is executed.
      * @param amountETH Amount recycled.
@@ -213,7 +212,7 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
         (amount, indexes) = _claimable(msg.sender, numIndexes);
 
         lastClaimIndex[msg.sender] += indexes;
-
+        
         _sendETH(msg.sender, amount);
         emit RevenueClaimed(msg.sender, amount, indexes);
     }
@@ -359,7 +358,7 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     function getEthSignedMessageHash(bytes32 _messageHash) public pure returns (bytes32) {
         return keccak256(abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash));
     }
-
+    
 
     // ----------------
     // Internal Methods
@@ -412,6 +411,16 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
                 if (indexes >= numIndexes) break;
             }
         }
+    }
+
+    /**
+     * @notice This internal method is used to transfer ETH from this contract to a specified target address.
+     * @param to Recipient address of ETH.
+     * @param amount Amount of ETH to transfer.
+     */
+    function _sendETH(address to, uint256 amount) internal {
+        (bool sent,) = payable(to).call{value: amount}("");
+        if (!sent) revert ETHTransferFailed(to, amount);
     }
 
     /**

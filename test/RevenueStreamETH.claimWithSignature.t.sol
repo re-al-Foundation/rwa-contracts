@@ -87,7 +87,7 @@ contract RevenueStreamETHSignatureTest is Utility {
                 abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
             );
     }
-
+    
     /// @notice packs v, r, s into signature bytes
     function _packRsv(uint8 v, bytes32 r, bytes32 s) internal pure returns (bytes memory) {
         bytes memory sig = new bytes(65);

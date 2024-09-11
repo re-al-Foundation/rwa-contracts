@@ -424,16 +424,6 @@ contract RevenueStreamETH is IRevenueStreamETH, Ownable2StepUpgradeable, UUPSUpg
     }
 
     /**
-     * @notice This internal method is used to transfer ETH from this contract to a specified target address.
-     * @param to Recipient address of ETH.
-     * @param amount Amount of ETH to transfer.
-     */
-    function _sendETH(address to, uint256 amount) internal {
-        (bool sent,) = payable(to).call{value: amount}("");
-        if (!sent) revert ETHTransferFailed(to, amount);
-    }
-
-    /**
      * @notice Overriden from UUPSUpgradeable
      * @dev Restricts ability to upgrade contract to owner
      */

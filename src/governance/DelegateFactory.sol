@@ -40,6 +40,8 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     UpgradeableBeacon public beacon;
     /// @notice Stores the maximum amount of delegators we can have deployed at one time.
     uint256 public delegatorLimit;
+    /// @notice Stores a index value for each delegator in the `delegators` array.
+    mapping(address delegator => uint256 index) public indexInDelegators;
 
 
     // ------
@@ -53,7 +55,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     event DelegatorCreated(address indexed _delegator);
 
     /**
-     * @notice This event is emitted when revokeExpiredDelegators is executed for each expired Delegator.
+     * @notice This event is emitted when revokeAllExpiredDelegators is executed for each expired Delegator.
      * @param _delegator Address of revoked delegator.
      */
     event DelegatorDeleted(address indexed _delegator);
@@ -136,6 +138,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         newDelegator = address(newDelegatorBeacon);
 
         delegators.push(newDelegator);
+        indexInDelegators[newDelegator] = delegators.length - 1;
         isDelegator[newDelegator] = true;
         delegatorExpiration[newDelegator] = block.timestamp + _duration;
 
@@ -147,25 +150,35 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     }
 
     /**
+     * @notice This method is used to revoke delegation and performs the deletion of existing delegatorss.
+     * @param _delegators Array of delegators that need to be revoked and deleted.
+     */
+    function revokeExpiredDelegators(address[] calldata _delegators) external nonReentrant {
+        uint256 length = _delegators.length;
+        for (uint256 i; i < length;) {
+            address _delegator = _delegators[i];
+            require(isDelegator[_delegator], "Invalid delegator");
+            require(Delegator(_delegator).creator() == msg.sender || owner() == msg.sender, "Not authorized");
+
+            _revokeDelegator(_delegator);
+
+            unchecked {
+                ++i;
+            }
+        }
+    }
+
+    /**
      * @notice This method is used to fetch any expired Delegators, withdraw the delegated token from the Delegator,
      *         and delete it's instance from this contract.
      */
-    function revokeExpiredDelegators() external nonReentrant {
+    function revokeAllExpiredDelegators() external nonReentrant {
         uint256 length = delegators.length;
         for (uint256 i; i < length;) {
             address delegator = delegators[i];
             if (isExpiredDelegator(delegator)) {
-                // call withdrawDelegatedToken
-                IDelegator(delegator).withdrawDelegatedToken();
-
-                // delete delegator from contract
-                delete isDelegator[delegator];
-                delete delegatorExpiration[delegator];
-                delegators[i] = delegators[length - 1];
-                delegators.pop();
+                _revokeDelegator(delegator);
                 --length;
-
-                emit DelegatorDeleted(delegator);
             }
             if (i < length) {
                 if (!isExpiredDelegator(delegators[i])) {
@@ -201,6 +214,20 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
      */
     function updateDelegatorLimit(uint256 _newLimit) external onlyOwner {
         delegatorLimit = _newLimit;
+    }
+
+    /**
+     * @notice This is an admin function that stores all addresses in the delegators array
+     * with it's proper index value in indexInDelegators mapping.
+     * @dev This is needed because the original implementation did not contain this storage mapping
+     * so any existing delegators that have been deployed will not have a correct key-value pair in
+     * the indexInDelegators mapping.
+     */
+    function initializeIndexInDelegators() external onlyOwner {
+        uint256 length = delegators.length;
+        for (uint256 i; i < length;) {
+            indexInDelegators[delegators[i]] = i;
+        }
     }
 
     /**
@@ -240,6 +267,28 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     // ----------------
     // Internal Methods
     // ----------------
+
+    /**
+     * @notice Withdraws delegated token from delegator contract back to the creator and deletes existance.
+     */
+    function _revokeDelegator(address _delegator) internal {
+        emit DelegatorDeleted(_delegator);
+        // call withdrawDelegatedToken
+        IDelegator(_delegator).withdrawDelegatedToken();
+        // delete delegator from contract
+        delete isDelegator[_delegator];
+        delete delegatorExpiration[_delegator];
+
+        // delete from array and update indexes
+        uint256 len = delegators.length - 1;
+        uint256 index = indexInDelegators[_delegator];
+        delete indexInDelegators[_delegator];
+        if (index != len) {
+            delegators[index] = delegators[len];
+            indexInDelegators[delegators[len]] = index;
+        }
+        delegators.pop();
+    }
 
     /**
      * @notice Inherited from UUPSUpgradeable. Allows us to authorize the DEFAULT_ADMIN_ROLE role to upgrade this contract's implementation.

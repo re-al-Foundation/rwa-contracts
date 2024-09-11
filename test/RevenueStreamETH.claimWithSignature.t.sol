@@ -45,9 +45,6 @@ contract RevenueStreamETHSignatureTest is Utility {
     struct ClaimData {
         uint256 amount;
         uint256 currentIndex;
-        uint256[] cyclesClaimable;
-        uint256[] amountsClaimable;
-        uint256 num;
         uint256 indexes;
     }
 
@@ -84,6 +81,13 @@ contract RevenueStreamETHSignatureTest is Utility {
     // Utility
     // -------
 
+    function getEthSignedMessageHash(bytes32 _messageHash) internal pure returns (bytes32) {
+        return
+            keccak256(
+                abi.encodePacked("\x19Ethereum Signed Message:\n32", _messageHash)
+            );
+    }
+    
     /// @notice packs v, r, s into signature bytes
     function _packRsv(uint8 v, bytes32 r, bytes32 s) internal pure returns (bytes memory) {
         bytes memory sig = new bytes(65);
@@ -101,17 +105,16 @@ contract RevenueStreamETHSignatureTest is Utility {
         // signer signs data hash
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             privateKey,
-            keccak256(
-                // create data hash
-                abi.encodePacked(
-                    account,
-                    claimData.amount,
-                    claimData.currentIndex,
-                    claimData.indexes,
-                    claimData.cyclesClaimable,
-                    claimData.amountsClaimable,
-                    claimData.num,
-                    block.timestamp
+            getEthSignedMessageHash(
+                keccak256(
+                    // create data hash
+                    abi.encodePacked(
+                        account,
+                        claimData.amount,
+                        claimData.currentIndex,
+                        claimData.indexes,
+                        block.timestamp
+                    )
                 )
             )
         );
@@ -128,9 +131,6 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.amount,
             claimData.currentIndex,
             claimData.indexes,
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable,
-            claimData.num,
             block.timestamp,
             _sign(account, claimData)
         );
@@ -151,9 +151,6 @@ contract RevenueStreamETHSignatureTest is Utility {
         ClaimData memory claimData;
 
         (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
         claimData.indexes) = REV_STREAM.claimable(JOE);
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
@@ -177,11 +174,8 @@ contract RevenueStreamETHSignatureTest is Utility {
 
         ClaimData memory claimData;
 
-        (uint256 fullAmount,,,, uint256 totalIndexes) = REV_STREAM.claimable(JOE);
+        (uint256 fullAmount, uint256 totalIndexes) = REV_STREAM.claimable(JOE);
         (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
         claimData.indexes) = REV_STREAM.claimableIncrement(JOE, totalIndexes-1);
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
@@ -197,14 +191,9 @@ contract RevenueStreamETHSignatureTest is Utility {
 
         assertEq(claimData.amount, 0);
         assertEq(REV_STREAM.lastClaimIndex(JOE), claimData.currentIndex + claimData.indexes);
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes
-        ) = REV_STREAM.claimable(JOE);
+
+        (claimData.amount, claimData.indexes) = REV_STREAM.claimable(JOE);
         assertEq(claimData.indexes, 1);
-        assertEq(claimData.amountsClaimable[0], fullAmount);
         
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
@@ -226,27 +215,22 @@ contract RevenueStreamETHSignatureTest is Utility {
         address attacker = vm.addr(attackerPK);
         ClaimData memory claimData;
 
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
+        (claimData.amount, claimData.indexes) = REV_STREAM.claimable(JOE);
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
         // attacker signs data hash
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             attackerPK,
-            keccak256(
-                // create data hash
-                abi.encodePacked(
-                    JOE,
-                    claimData.amount,
-                    claimData.currentIndex,
-                    claimData.indexes,
-                    claimData.cyclesClaimable,
-                    claimData.amountsClaimable,
-                    claimData.num,
-                    block.timestamp
+            getEthSignedMessageHash(
+                keccak256(
+                    // create data hash
+                    abi.encodePacked(
+                        JOE,
+                        claimData.amount,
+                        claimData.currentIndex,
+                        claimData.indexes,
+                        block.timestamp
+                    )
                 )
             )
         );
@@ -258,9 +242,6 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.amount,
             claimData.currentIndex,
             claimData.indexes,
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable,
-            claimData.num,
             block.timestamp,
             _packRsv(v, r, s)
         );
@@ -271,26 +252,21 @@ contract RevenueStreamETHSignatureTest is Utility {
         currentIndex = bound(currentIndex, 1, 1_000 * 1e18);
         ClaimData memory claimData;
 
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
+        (claimData.amount, claimData.indexes) = REV_STREAM.claimable(JOE);
 
         // signer signs data hash
         (uint8 v, bytes32 r, bytes32 s) = vm.sign(
             privateKey,
-            keccak256(
-                // create data hash
-                abi.encodePacked(
-                    JOE,
-                    claimData.amount,
-                    currentIndex,
-                    claimData.indexes,
-                    claimData.cyclesClaimable,
-                    claimData.amountsClaimable,
-                    claimData.num,
-                    block.timestamp
+            getEthSignedMessageHash(
+                keccak256(
+                    // create data hash
+                    abi.encodePacked(
+                        JOE,
+                        claimData.amount,
+                        currentIndex,
+                        claimData.indexes,
+                        block.timestamp
+                    )
                 )
             )
         );
@@ -302,9 +278,6 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.amount,
             currentIndex,
             claimData.indexes,
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable,
-            claimData.num,
             block.timestamp,
             _packRsv(v, r, s)
         );
@@ -314,11 +287,7 @@ contract RevenueStreamETHSignatureTest is Utility {
     function test_revStreamETH_claimWithSignature_discrepancy_amount() public {
         ClaimData memory claimData;
 
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
+        (claimData.amount, claimData.indexes) = REV_STREAM.claimable(JOE);
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
         bytes memory signature = _sign(JOE, claimData);
@@ -330,9 +299,6 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.amount + 1, // discrepancy
             claimData.currentIndex,
             claimData.indexes,
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable,
-            claimData.num,
             block.timestamp,
             signature
         );
@@ -342,11 +308,7 @@ contract RevenueStreamETHSignatureTest is Utility {
     function test_revStreamETH_claimWithSignature_discrepancy_currentIndex() public {
         ClaimData memory claimData;
 
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
+        (claimData.amount, claimData.indexes) = REV_STREAM.claimable(JOE);
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
         bytes memory signature = _sign(JOE, claimData);
@@ -358,9 +320,6 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.amount,
             claimData.currentIndex + 1, // discrepancy
             claimData.indexes,
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable,
-            claimData.num,
             block.timestamp,
             signature
         );
@@ -370,11 +329,7 @@ contract RevenueStreamETHSignatureTest is Utility {
     function test_revStreamETH_claimWithSignature_discrepancy_indexes() public {
         ClaimData memory claimData;
 
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
+        (claimData.amount, claimData.indexes) = REV_STREAM.claimable(JOE);
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
         bytes memory signature = _sign(JOE, claimData);
@@ -386,97 +341,6 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.amount,
             claimData.currentIndex,
             claimData.indexes + 1, // discrepancy
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable,
-            claimData.num,
-            block.timestamp,
-            signature
-        );
-    }
-
-    /// @dev Verifies a data discrepancy from the data that is signed will cause a revert.
-    function test_revStreamETH_claimWithSignature_discrepancy_cyclesClaimable() public {
-        ClaimData memory claimData;
-
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
-        claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
-
-        bytes memory signature = _sign(JOE, claimData);
-
-        claimData.cyclesClaimable[0] += 1;
-
-        // claimWithSignature with discrepancy -> revert
-        vm.prank(JOE);
-        vm.expectRevert();
-        REV_STREAM.claimWithSignature(
-            claimData.amount,
-            claimData.currentIndex,
-            claimData.indexes,
-            claimData.cyclesClaimable, // discrepancy
-            claimData.amountsClaimable,
-            claimData.num,
-            block.timestamp,
-            signature
-        );
-    }
-
-    /// @dev Verifies a data discrepancy from the data that is signed will cause a revert.
-    function test_revStreamETH_claimWithSignature_discrepancy_amountsClaimable() public {
-        ClaimData memory claimData;
-
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
-        claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
-
-        bytes memory signature = _sign(JOE, claimData);
-
-        claimData.amountsClaimable[0] += 1;
-
-        // claimWithSignature with discrepancy -> revert
-        vm.prank(JOE);
-        vm.expectRevert();
-        REV_STREAM.claimWithSignature(
-            claimData.amount,
-            claimData.currentIndex,
-            claimData.indexes,
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable, // discrepancy
-            claimData.num,
-            block.timestamp,
-            signature
-        );
-    }
-
-    /// @dev Verifies a data discrepancy from the data that is signed will cause a revert.
-    function test_revStreamETH_claimWithSignature_discrepancy_num() public {
-        ClaimData memory claimData;
-
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
-        claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
-
-        bytes memory signature = _sign(JOE, claimData);
-
-        // claimWithSignature with discrepancy -> revert
-        vm.prank(JOE);
-        vm.expectRevert();
-        REV_STREAM.claimWithSignature(
-            claimData.amount,
-            claimData.currentIndex,
-            claimData.indexes,
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable,
-            claimData.num + 1, // discrepancy
             block.timestamp,
             signature
         );
@@ -486,11 +350,7 @@ contract RevenueStreamETHSignatureTest is Utility {
     function test_revStreamETH_claimWithSignature_expiredSignature() public {
         ClaimData memory claimData;
 
-        (claimData.amount,
-        claimData.cyclesClaimable,
-        claimData.amountsClaimable,
-        claimData.num,
-        claimData.indexes) = REV_STREAM.claimable(JOE);
+        (claimData.amount, claimData.indexes) = REV_STREAM.claimable(JOE);
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
         bytes memory signature = _sign(JOE, claimData);
@@ -505,9 +365,6 @@ contract RevenueStreamETHSignatureTest is Utility {
             claimData.amount,
             claimData.currentIndex,
             claimData.indexes,
-            claimData.cyclesClaimable,
-            claimData.amountsClaimable,
-            claimData.num,
             deadline, // expired
             signature
         );

@@ -3,19 +3,9 @@ pragma solidity ^0.8.19;
 
 /// @dev Interface for RevenueStream contract.
 interface IRevenueStreamETH {
-    
-    function claimable(address account) external view returns (
-        uint256 amount,
-        uint256[] memory cyclesClaimable,
-        uint256[] memory amountsClaimable,
-        uint256 num,
-        uint256 indexes);
-
+    function claimable(address account) external view returns (uint256 amount, uint256 indexes);
     function claimETH() external returns (uint256 amount);
-
     function depositETH() payable external;
-
     function getCyclesArray() external view returns (uint256[] memory);
-
     function currentCycle() external view returns (uint256 cycle);
 }

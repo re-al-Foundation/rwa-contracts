@@ -15,6 +15,10 @@ import { AutomatedDelegatee } from "../../../src/helpers/AutomatedDelegatee.sol"
     forge script script/deploy/mainnet/DeployAutomatedDelegatee.s.sol:DeployAutomatedDelegatee --broadcast --legacy \
     --gas-estimate-multiplier 600 \
     --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
+
+    @dev To verify manually: 
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \ 
+    src/helpers/AutomatedDelegatee.sol:AutomatedDelegatee --verifier blockscout --verifier-url https://explorer.re.al//api
 */
 
 /**
@@ -30,7 +34,7 @@ contract DeployAutomatedDelegatee is DeployUtility {
     string public REAL_RPC_URL = vm.envString("REAL_RPC_URL");
 
     address public ADMIN = 0x946C569791De3283f33372731d77555083c329da; // TODO: Verify
-    address public DELEGATEE = 0x0E140Adb0a70569f0A8b3d48ab8c8c580939a120; // TODO: Verify
+    address public DELEGATEE = 0xA88FDfbdcD728903C2f85F973F7deFEdcD517530; // TODO: Verify
 
     function setUp() public {
         vm.createSelectFork(REAL_RPC_URL);
@@ -42,14 +46,14 @@ contract DeployAutomatedDelegatee is DeployUtility {
         // deploy AutomatedDelegatee
         AutomatedDelegatee automatedDelegatee = new AutomatedDelegatee();
         // deploy proxy
-        // ERC1967Proxy automatedDelegateeProxy = new ERC1967Proxy(
-        //     address(automatedDelegatee),
-        //     abi.encodeWithSelector(AutomatedDelegatee.initialize.selector,
-        //         ADMIN,
-        //         DELEGATEE
-        //     )
-        // );
-        // automatedDelegatee = AutomatedDelegatee(payable(address(automatedDelegateeProxy)));
+        ERC1967Proxy automatedDelegateeProxy = new ERC1967Proxy(
+            address(automatedDelegatee),
+            abi.encodeWithSelector(AutomatedDelegatee.initialize.selector,
+                ADMIN,
+                DELEGATEE
+            )
+        );
+        automatedDelegatee = AutomatedDelegatee(payable(address(automatedDelegateeProxy)));
 
         vm.stopBroadcast();
     }

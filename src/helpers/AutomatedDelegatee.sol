@@ -168,7 +168,7 @@ contract AutomatedDelegatee is UUPSUpgradeable, OwnableUpgradeable {
      * @notice Returns amount of ETH that is claimable.
      */
     function claimable() public view returns (uint256 amount) {
-        (amount,,,,) = REV_STREAM.claimable(address(this));
+        (amount,) = REV_STREAM.claimable(address(this));
     }
     
 

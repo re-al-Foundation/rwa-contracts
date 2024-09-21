@@ -1,0 +1,6 @@
+{
+    "solidity.packageDefaultDependenciesContractsDirectory": "src",
+    "solidity.packageDefaultDependenciesDirectory": "lib",
+    "solidity.defaultCompiler": "remote",
+    "solidity.monoRepoSupport": false
+  }

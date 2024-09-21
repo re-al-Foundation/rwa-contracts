@@ -36,7 +36,6 @@ contract RevenueStreamETHSignatureTest is Utility {
     RWAVotingEscrow public VE_RWA = RWAVotingEscrow(0xa7B4E29BdFf073641991b44B283FD77be9D7c0F4);
 
     // Actors
-    address public constant MULTISIG = 0x946C569791De3283f33372731d77555083c329da;
     uint256 public constant delegatedTokenId = 1555;
     
     uint256 public privateKey = 12345;

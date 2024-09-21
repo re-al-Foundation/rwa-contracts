@@ -7,17 +7,7 @@ optimizer = true
 optimizer_runs = 2_000
 solc = "0.8.20"
 evm_version = "shanghai"
-
-# See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
-
-remappings = [
-    "@openzeppelin/contracts/=lib/openzeppelin-contracts/contracts/",
-    "@openzeppelin/contracts-upgradeable/=lib/tangible-foundation-contracts/lib/openzeppelin-contracts-upgradeable/contracts/",
-    "@tangible/=lib/tnftv2-audit/contracts/",
-    "@layerZero/=lib/LayerZero/",
-    "@tangible-foundation-contracts/=lib/tangible-foundation-contracts/src/",
-    "@uniswap/v3-periphery=lib/v3-periphery"
-]
+bytecode_hash = "none"
 
 [rpc_endpoints]
 mumbai = "${MUMBAI_RPC_URL}"

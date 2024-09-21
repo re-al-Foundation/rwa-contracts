@@ -17,6 +17,7 @@ contract Utility is Test{
     // ~ Actors ~
 
     // permissioned
+    address public constant MULTISIG = 0x946C569791De3283f33372731d77555083c329da;
     address public constant DEFAULT_ADMIN_TNGBL = 0x100fCC635acf0c22dCdceF49DD93cA94E55F0c71;
     address public constant DEFAULT_ADMIN_PI = 0x3d41487A3c5662eDE90D0eE8854f3cC59E8D66AD;
     address public constant ADMIN = address(bytes20(bytes("Admin")));

@@ -51,7 +51,7 @@ contract StakedRWATestUtility is Utility {
 
         // Deploy stRWA & proxy
         ERC1967Proxy stRWAProxy = new ERC1967Proxy(
-            address(new StakedRWA(REAL_LZ_ENDPOINT_V1, address(rwaToken))),
+            address(new StakedRWA(111188, REAL_LZ_ENDPOINT_V1, address(rwaToken))),
             abi.encodeWithSelector(StakedRWA.initialize.selector,
                 MULTISIG,
                 "Liquid Staked RWA",
@@ -95,11 +95,17 @@ contract StakedRWATestUtility is Utility {
         );
 
         _createLabels();
+        _initStateCheck();
     }
 
     // -------
     // Utility
     // -------
+
+    function _initStateCheck() internal {
+        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0);
+        assertEq(tokenSilo.masterTokenId(), 0);
+    }
 
     function _upgradeRWAToken() internal {
         vm.startPrank(MULTISIG);

@@ -6,16 +6,45 @@ import { Test } from "../../lib/forge-std/src/Test.sol";
 
 // local helper imports
 import "./utils/stRWA.setUp.sol";
+import "../../src/interfaces/CommonErrors.sol";
 
 /**
- * @title StakedRWATest
+ * @title StakedRWARedeemTest
  * @author @chasebrownn
- * @notice TODO
+ * @notice This test file contains unit tests for stRWA::redeem.
  */
-contract StakedRWATest is Test, StakedRWATestUtility {
-
+contract StakedRWARedeemTest is Test, StakedRWATestUtility {
     function setUp() public override {
         super.setUp();
+    }
+
+
+    // -------
+    // Utility
+    // -------
+
+    /// @dev Utility function for calling stRWA::redeem. Contains state checks.
+    function _redeem(uint256 amount) internal {
+        uint256 preBal1 = stRWA.balanceOf(JOE);
+        uint256 preBal2 = rwaVotingEscrow.balanceOf(JOE);
+        uint256 vp1 = rwaVotingEscrow.getAccountVotingPower(JOE);
+        uint256 vp2 = rwaVotingEscrow.getAccountVotingPower(address(tokenSilo));
+        uint256 locked = tokenSilo.getLockedAmount();
+        uint256 preview = stRWA.previewRedeem(amount);
+
+        vm.prank(JOE);
+        stRWA.redeem(amount, JOE, JOE);
+
+        assertEq(stRWA.balanceOf(JOE), preBal1 - amount);
+        if (locked == amount) {
+            assertEq(tokenSilo.masterTokenId(), 0);
+            assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 0);
+            assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0);
+        }
+        assertEq(rwaVotingEscrow.balanceOf(JOE), preBal2 + 1);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), vp1 + preview);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), vp2 - preview);
+        assertEq(tokenSilo.getLockedAmount(), locked - amount);
     }
 
 
@@ -35,30 +64,9 @@ contract StakedRWATest is Test, StakedRWATestUtility {
         stRWA.deposit(amountTokens, JOE);
         vm.stopPrank();
 
-        // ~ Pre-state check ~
-
-        assertEq(stRWA.balanceOf(JOE), amountTokens);
-        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 1);
-        assertEq(rwaVotingEscrow.balanceOf(JOE), 0);
-        assertNotEq(tokenSilo.masterTokenId(), 0);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), amountTokens);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), 0);
-
         // ~ Execute redeem ~
 
-        uint256 preview = stRWA.previewRedeem(amountTokens);
-
-        vm.prank(JOE);
-        stRWA.redeem(amountTokens, JOE, JOE);
-
-        // ~ Post-state check ~
-
-        assertEq(stRWA.balanceOf(JOE), 0);
-        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 0);
-        assertEq(rwaVotingEscrow.balanceOf(JOE), 1);
-        assertEq(tokenSilo.masterTokenId(), 0);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), preview);
+        _redeem(amountTokens);
     }
 
     /// @dev Verifies proper state changes when stRWA::redeem is called when rebaseIndex != 1.
@@ -81,29 +89,16 @@ contract StakedRWATest is Test, StakedRWATestUtility {
 
         // ~ Pre-state check ~
 
-        //assertEq(preview, amountTokens * newRebaseIndex / 1e18);
         assertEq(preview, amountTokens);
-
-        assertApproxEqAbs(stRWA.balanceOf(JOE), preview, 1);
-        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 1);
-        assertEq(rwaVotingEscrow.balanceOf(JOE), 0);
-        assertNotEq(tokenSilo.masterTokenId(), 0);
         assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), amountTokens);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), 0);
 
         // ~ Execute redeem ~
 
         uint256 bal = stRWA.balanceOf(JOE);
-
-        vm.prank(JOE);
-        stRWA.redeem(bal, JOE, JOE);
+        _redeem(bal);
 
         // ~ Post-state check ~
-
-        assertEq(stRWA.balanceOf(JOE), 0);
-        assertApproxEqAbs(rwaVotingEscrow.balanceOf(address(tokenSilo)), 0, 1);
-        assertApproxEqAbs(rwaVotingEscrow.balanceOf(JOE), 1, 1);
-        assertApproxEqAbs(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0, 1);
+        
         assertApproxEqAbs(rwaVotingEscrow.getAccountVotingPower(JOE), amountTokens, 1);
     }
 
@@ -163,30 +158,9 @@ contract StakedRWATest is Test, StakedRWATestUtility {
         stRWA.deposit(amountTokens, JOE);
         vm.stopPrank();
 
-        // ~ Pre-state check ~
-
-        assertEq(stRWA.balanceOf(JOE), amountTokens);
-        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 1);
-        assertEq(rwaVotingEscrow.balanceOf(JOE), 0);
-        assertNotEq(tokenSilo.masterTokenId(), 0);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), amountTokens);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), 0);
-
         // ~ Execute redeem ~
 
-        uint256 preview = stRWA.previewRedeem(amountTokens);
-
-        vm.prank(JOE);
-        stRWA.redeem(amountTokens, JOE, JOE);
-
-        // ~ Post-state check ~
-
-        assertEq(stRWA.balanceOf(JOE), 0);
-        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 0);
-        assertEq(rwaVotingEscrow.balanceOf(JOE), 1);
-        assertEq(tokenSilo.masterTokenId(), 0);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), preview);
+        _redeem(amountTokens);
     }
 
     /// @dev Verifies proper state changes when stRWA::redeem is called when rebaseIndex != 1 with fuzzing.
@@ -207,41 +181,13 @@ contract StakedRWATest is Test, StakedRWATestUtility {
         stRWA.deposit(amountTokens, JOE);
         vm.stopPrank();
 
-        // ~ Pre-state check ~
-
-        //assertEq(preview, amountTokens * newRebaseIndex / 1e18);
-        assertEq(preview, amountTokens);
-
-        assertApproxEqAbs(stRWA.balanceOf(JOE), preview, 1);
-        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 1);
-        assertEq(rwaVotingEscrow.balanceOf(JOE), 0);
-        assertNotEq(tokenSilo.masterTokenId(), 0);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), amountTokens);
-        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), 0);
-
-        // ~ Execute redeem ~
-
         uint256 balance = stRWA.balanceOf(JOE);
         preview = stRWA.previewRedeem(balance);
         assertApproxEqAbs(preview, amountTokens, 3);
 
-        vm.prank(JOE);
-        stRWA.redeem(balance, JOE, JOE);
+        // ~ Execute redeem ~
 
-        // ~ Post-state check ~
-
-        assertApproxEqAbs(stRWA.balanceOf(JOE), 0, 1);
-        assertApproxEqAbs(rwaVotingEscrow.balanceOf(JOE), 1, 1);
-
-        if (preview >= amountTokens) {
-            assertEq(tokenSilo.masterTokenId(), 0);
-            assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 0);
-        } else {
-            assertNotEq(tokenSilo.masterTokenId(), 0);
-        }
-
-        assertApproxEqAbs(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0, 3);
-        assertApproxEqAbs(rwaVotingEscrow.getAccountVotingPower(JOE), amountTokens, 3);
+        _redeem(balance);
     }
 
     /// @dev Verifies proper state changes when stRWA::redeem is called when rebaseIndex != 1 with fuzzing.

@@ -27,7 +27,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
 
     // ---------------
     // State Variables
-    // ---------------
+    // --------------- 
 
     struct DistributionRatios {
         /// @dev Ratio of rewards that will be burned.
@@ -87,11 +87,17 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     // Modifiers
     // ---------
 
+    /**
+     * TODO
+     */
     modifier onlyStakedRWA() {
         if (msg.sender != stRWA) revert NotAuthorized(msg.sender);
         _;
     }
 
+    /**
+     * TODO
+     */
     modifier onlyFundsManager() {
         if (msg.sender != owner() && !isFundsManager[msg.sender]) revert NotAuthorized(msg.sender);
         _;
@@ -142,6 +148,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         emit ETHReceived(msg.sender, msg.value);
     }
 
+    /**
+     * TODO
+     */
     function depositAndLock(uint256 amount) external onlyStakedRWA {
         _pullAssets(msg.sender, amount);
         if (masterTokenId != 0) {
@@ -153,6 +162,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         }
     }
 
+    /**
+     * TODO
+     */
     function redeemLock(uint256 amount, address recipient) external onlyStakedRWA returns (uint256 tokenId) {
         if (amount < getLockedAmount()) {
             tokenId = _split(amount);
@@ -163,6 +175,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         _transferToken(tokenId, recipient);
     }
 
+    /**
+     * TODO
+     */
     function claim() external onlyFundsManager returns (uint256 claimed) {
         claimed = revStream.claimETH();
         claimed.requireDifferentUint256(0);
@@ -202,12 +217,14 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         emit ETHConverted(amount, amountOut);
     }
 
+    /**
+     * TODO
+     */
     function rebaseHelper() external onlyStakedRWA returns (uint256) {
         uint256 bal = rwaToken.balanceOf(address(this));
         bal.requireDifferentUint256(0);
 
         (uint256 amountToBurn, uint256 amountToRetain, uint256 amountForRebase) = getAmounts(bal);
-
         if (amountToBurn != 0) _burn(amountToBurn);
 
         uint256 toLock = amountToRetain + amountForRebase;
@@ -218,6 +235,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         return amountForRebase;
     }
 
+    /**
+     * TODO
+     */
     function updateRatios(uint256 _burn, uint256 _retain, uint256 _rebase) external onlyOwner {
         emit DistributionUpdated(_burn, _retain, _rebase);
 
@@ -269,14 +289,23 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     // Public
     // ------
 
+    /**
+     * TODO
+     */
     function claimable() public view returns (uint256 claimable) {
         (claimable,) = revStream.claimable(address(this));
     }
 
+    /**
+     * TODO
+     */
     function getLockedAmount() public view  returns (uint256) {
         return votingEscrowRWA.getLockedAmount(masterTokenId);
     }
 
+    /**
+     * TODO
+     */
     function getAmounts(uint256 claimAmount) public view returns (
         uint256 amountToBurn,
         uint256 amountToRetain,
@@ -310,6 +339,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         rwaToken.safeTransfer(to, amount);
     }
 
+    /**
+     * TODO
+     */
     function _mint(uint256 amount) internal returns (uint256) {
         rwaToken.forceApprove(address(votingEscrowRWA), amount);
         return votingEscrowRWA.mint({
@@ -319,6 +351,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         });
     }
 
+    /**
+     * TODO
+     */
     function _merge(uint256 tokenToMerge) internal {
         votingEscrowRWA.merge({
             tokenId: tokenToMerge,
@@ -326,6 +361,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         });
     } 
 
+    /**
+     * TODO
+     */
     function _split(uint256 amountToSplit) internal returns (uint256) {
         uint256[] memory split = new uint256[](2);
         split[0] = getLockedAmount() - amountToSplit;
@@ -338,10 +376,16 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         return tokenIds[1];
     }
 
+    /**
+     * TODO
+     */
     function _burn(uint256 amount) internal {
         rwaToken.burn(amount);
     }
 
+    /**
+     * TODO
+     */
     function _transferToken(uint256 tokenId, address recipient) internal {
         votingEscrowRWA.transferFrom(address(this), recipient, tokenId);
     }

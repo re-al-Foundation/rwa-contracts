@@ -54,9 +54,9 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
      * @param lzEndpoint Local layer zero v1 endpoint address.
      * @param _asset Will be assigned to `asset`.
      */
-    constructor(address lzEndpoint, address _asset) 
+    constructor(uint256 mainChainId, address lzEndpoint, address _asset) 
         LayerZeroRebaseTokenUpgradeable(lzEndpoint)
-        CrossChainToken(111188)
+        CrossChainToken(mainChainId)
     {
         _asset.requireNonZeroAddress();
         asset = _asset;
@@ -85,11 +85,13 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
 
     // ~ Methods ~
 
+    /**
+     * TODO
+     */
     function rebase() external {
         if (msg.sender != rebaseIndexManager && msg.sender != owner()) revert NotAuthorized(msg.sender);
-        uint256 amountToRebase = tokenSilo.rebaseHelper();
 
-        // TODO: Verify logic
+        uint256 amountToRebase = tokenSilo.rebaseHelper();
         uint256 rebaseIndexDelta = amountToRebase * 1e18 / tokenSilo.getLockedAmount();
         uint256 rebaseIndex = rebaseIndex();
         rebaseIndex += rebaseIndexDelta;
@@ -113,12 +115,11 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
      * if the amount assets was deposited via `deposit`.
      */
     function previewDeposit(uint256 assets) external pure returns (uint256) {
-        //return _convertToShares(assets);
         return assets;
     }
 
     /**
-     * @notice Allows a user to deposit assets amount of `asset` into this contract to receive
+     * @notice Allows a user to deposit amount of `asset` into this contract to receive
      * shares amount of wrapped basket token.
      * @dev I.e. Deposit X RWA to get Y stRWA: X is provided
      * @param assets Amount of asset.
@@ -130,13 +131,9 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
 
         uint256 amountReceived = _pullAssets(msg.sender, assets);
         _depositIntoTokenSilo(amountReceived);
-        //shares = _convertToShares(amountReceived);
         shares = assets;
 
-        if (shares != 0) {
-            _mint(receiver, shares);
-        }
-
+        _mint(receiver, shares);
         emit Deposit(msg.sender, receiver, amountReceived, shares);
     }
 
@@ -145,7 +142,6 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
      * were used to redeem.
      */
     function previewRedeem(uint256 shares) external pure returns (uint256) {
-        //return _convertToAssets(shares);
         return shares;
     }
 
@@ -166,14 +162,9 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
         }
 
         _burn(owner, shares);
-
-        //assets = _convertToAssets(shares);
         assets = shares;
-
-        if (assets != 0) {
-            _redeemFromTokenSilo(assets, receiver);
-        }
-
+        
+        _redeemFromTokenSilo(assets, receiver);
         emit Redeem(msg.sender, receiver, owner, assets, shares);
     }
 
@@ -192,10 +183,16 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
 
     // ~ Internal Methods ~
 
+    /**
+     * TODO
+     */
     function _convertToShares(uint256 assets) internal view returns (uint256) {
         return Math.mulDiv(assets, rebaseIndex(), WAD);
     }
 
+    /**
+     * TODO
+     */
     function _convertToAssets(uint256 shares) internal view returns (uint256) {
         return Math.mulDiv(shares, WAD, rebaseIndex());
     }
@@ -211,17 +208,16 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     }
 
     /**
-     * @dev Transfers an `amount` of `asset` to the `to` address.
+     * TODO
      */
-    // function _pushAssets(address to, uint256 amount) private {
-    //     IERC20(asset).safeTransfer(to, amount);
-    // }
-
     function _depositIntoTokenSilo(uint256 amount) internal {
         IERC20(asset).forceApprove(address(tokenSilo), amount);
         tokenSilo.depositAndLock(amount);
     }
 
+    /**
+     * TODO
+     */
     function _redeemFromTokenSilo(uint256 assets, address receiver) internal {
         tokenSilo.redeemLock(assets, receiver);
     }
@@ -230,48 +226,4 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
      * @notice Inherited from UUPSUpgradeable.
      */
     function _authorizeUpgrade(address) internal override onlyOwner {}
-
-
-    // ~ LayerZero overrides ~
-
-    // function sendFrom(
-    //     address _from,
-    //     uint16 _dstChainId,
-    //     bytes calldata _toAddress,
-    //     uint256 _amount,
-    //     address payable _refundAddress,
-    //     address _zroPaymentAddress,
-    //     bytes calldata _adapterParams
-    // ) public payable override(IOFTCore, OFTCoreUpgradeable) {
-    //     _send(
-    //         _from,
-    //         _dstChainId,
-    //         _toAddress,
-    //         _amount,
-    //         _refundAddress,
-    //         _zroPaymentAddress,
-    //         _adapterParams
-    //     );
-    // }
-
-    // function _debitFrom(
-    //     address _from,
-    //     uint16,
-    //     bytes memory,
-    //     uint256 _amount
-    // ) internal override returns (uint256) {
-    //     address spender = _msgSender();
-    //     if (_from != spender) _spendAllowance(_from, spender, _amount);
-    //     _transfer(_from, address(this), _amount);
-    //     return _amount;
-    // }
-
-    // function _creditTo(
-    //     uint16,
-    //     address _toAddress,
-    //     uint256 _amount
-    // ) internal override returns (uint256) {
-    //     _transfer(address(this), _toAddress, _amount);
-    //     return _amount;
-    // }
 }

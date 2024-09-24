@@ -8,11 +8,11 @@ import { Test } from "../../lib/forge-std/src/Test.sol";
 import "./utils/stRWA.setUp.sol";
 
 /**
- * @title StakedRWATest
+ * @title StakedRWARebaseTest
  * @author @chasebrownn
- * @notice TODO
+ * @notice This test file contains unit tests for stRWA::rebase.
  */
-contract StakedRWATest is Test, StakedRWATestUtility {
+contract StakedRWARebaseTest is Test, StakedRWATestUtility {
     function setUp() public override {
         super.setUp();
     }
@@ -31,11 +31,11 @@ contract StakedRWATest is Test, StakedRWATestUtility {
             fee: 3000,
             sqrtPriceLimitX96: 0
         });
-
         (uint256 amountOut,,,) = quoter.quoteExactInputSingle(params);
         return amountOut;
     }
 
+    /// @dev Builds swap data and calls tokenSilo::convertRewardToken to perform the ETH->RWA swap.
     function _convertRewardToken(uint256 amount) internal returns (uint256) {
         ISwapRouter.ExactInputSingleParams memory params = ISwapRouter.ExactInputSingleParams({
             tokenIn: address(WETH),
@@ -47,7 +47,6 @@ contract StakedRWATest is Test, StakedRWATestUtility {
             amountOutMinimum: 0,
             sqrtPriceLimitX96: 0
         });
-
         bytes memory data = 
             abi.encodeWithSignature(
                 "exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))",
@@ -60,7 +59,6 @@ contract StakedRWATest is Test, StakedRWATestUtility {
                 params.amountOutMinimum,
                 params.sqrtPriceLimitX96
             );
-
         vm.prank(MULTISIG);
         return tokenSilo.convertRewardToken(
             address(0),
@@ -68,6 +66,32 @@ contract StakedRWATest is Test, StakedRWATestUtility {
             address(router),
             data
         );
+    }
+
+    function _rebase() internal {
+        uint256 balance = rwaToken.balanceOf(account);
+
+        uint256 preLocked = tokenSilo.getLockedAmount();
+        uint256 preSupply = rwaToken.totalSupply();
+
+        (uint256 burnAmount,,uint256 rebaseAmount) = tokenSilo.getAmounts(amountTokens);
+        emit log_named_uint("burn amount", burnAmount);
+        emit log_named_uint("rebase amount", rebaseAmount);
+
+        assertEq(burnAmount, amountTokens * 2 / 10);
+        assertEq(rebaseAmount, amountTokens * 8 / 10);
+
+        // ~ rebase ~
+
+        vm.prank(MULTISIG);
+        stRWA.rebase();
+
+        // ~ Post-state check ~
+
+        assertGt(stRWA.previewRedeem(stRWA.balanceOf(JOE)), amountTokens);
+
+        assertEq(rwaToken.totalSupply(), preSupply - burnAmount);
+        assertEq(tokenSilo.getLockedAmount(), preLocked + rebaseAmount);
     }
 
 
@@ -169,12 +193,149 @@ contract StakedRWATest is Test, StakedRWATestUtility {
         assertEq(tokenSilo.getLockedAmount(), preLocked + rebaseAmount);
     }
 
-    function test_stakedRWA_claim_convert_rebase() public {
+    function test_stakedRWA_rebase_fuzzing(uint256 amountRewards) public {
+        // ~ Config ~
 
+        uint256 amountTokens = 10_000 ether;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.startPrank(JOE);
+        rwaToken.approve(address(stRWA), amountTokens);
+        stRWA.deposit(amountTokens, JOE);
+        vm.stopPrank();
+
+        amountRewards = bound(amountRewards, .001 * 1e18, 100_000 * 1e18);
+        deal(address(rwaToken), address(tokenSilo), amountRewards);
+
+        // ~ Pre-state check ~
+
+        uint256 preLocked = tokenSilo.getLockedAmount();
+        uint256 preSupply = rwaToken.totalSupply();
+
+        (uint256 burnAmount,,uint256 rebaseAmount) = tokenSilo.getAmounts(amountRewards);
+        emit log_named_uint("burn amount", burnAmount);
+        emit log_named_uint("rebase amount", rebaseAmount);
+
+        assertEq(burnAmount, amountRewards * 2 / 10);
+        assertEq(rebaseAmount, amountRewards * 8 / 10);
+
+        // ~ rebase ~
+
+        vm.prank(MULTISIG);
+        stRWA.rebase();
+
+        // ~ Post-state check ~
+
+        assertGt(stRWA.previewRedeem(stRWA.balanceOf(JOE)), amountTokens);
+
+        assertEq(rwaToken.totalSupply(), preSupply - burnAmount);
+        assertEq(tokenSilo.getLockedAmount(), preLocked + rebaseAmount);
+    }
+
+    function test_stakedRWA_claim_convert_rebase() public {
+        // ~ Config ~
+
+        uint256 amountTokens = 10_000 ether;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.startPrank(JOE);
+        rwaToken.approve(address(stRWA), amountTokens);
+        stRWA.deposit(amountTokens, JOE);
+        vm.stopPrank();
+
+        // emulate rewards
+        vm.deal(address(revDist), 10 ether);
+        vm.prank(MULTISIG);
+        revDist.distributeETH();
+        skip(1);
+
+        // ~ State check 1 ~
+
+        uint256 claimable = tokenSilo.claimable();
+        emit log_named_uint("claimable ETH", claimable);
+        assertGt(claimable, 0);
+
+        uint256 preBalWETH = WETH.balanceOf(address(tokenSilo));
+
+        // claim
+        vm.prank(MULTISIG);
+        uint256 claimed = tokenSilo.claim();
+
+        // ~ State check 2
+
+        assertEq(tokenSilo.claimable(), 0);
+        assertEq(claimed, claimable);
+        assertEq(WETH.balanceOf(address(tokenSilo)), preBalWETH + claimed);
+
+        preBalWETH = WETH.balanceOf(address(tokenSilo));
+        uint256 preBalRWA = rwaToken.balanceOf(address(tokenSilo));
+        uint256 quote = _getQuote(claimed);
+
+        // convert
+        uint256 amountOut = _convertRewardToken(claimed);
+
+        // ~ State check 3 ~
+
+        assertEq(WETH.balanceOf(address(tokenSilo)), preBalWETH - claimed);
+        assertEq(rwaToken.balanceOf(address(tokenSilo)), preBalRWA + quote);
+
+        uint256 preLocked = tokenSilo.getLockedAmount();
+        uint256 preSupply = rwaToken.totalSupply();
+
+        (uint256 burnAmount,,uint256 rebaseAmount) = tokenSilo.getAmounts(amountOut);
+        emit log_named_uint("burn amount", burnAmount);
+        emit log_named_uint("rebase amount", rebaseAmount);
+
+        assertEq(burnAmount, amountOut * 2 / 10);
+        assertEq(rebaseAmount, amountOut * 8 / 10);
+
+        // rebase
+        vm.prank(MULTISIG);
+        stRWA.rebase();
+
+        // ~ State check 4 ~
+
+        assertGt(stRWA.previewRedeem(stRWA.balanceOf(JOE)), amountTokens);
+        assertEq(rwaToken.totalSupply(), preSupply - burnAmount);
+        assertEq(tokenSilo.getLockedAmount(), preLocked + rebaseAmount);
     }
 
     function test_stakedRWA_rebase_sequential() public {
+        // ~ Config ~
 
+        uint256 amountTokens = 10_000 ether;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.startPrank(JOE);
+        rwaToken.approve(address(stRWA), amountTokens);
+        stRWA.deposit(amountTokens, JOE);
+        vm.stopPrank();
+
+        deal(address(rwaToken), address(tokenSilo), amountTokens);
+
+        // ~ Pre-state check ~
+
+        uint256 preLocked = tokenSilo.getLockedAmount();
+        uint256 preSupply = rwaToken.totalSupply();
+
+        (uint256 burnAmount,,uint256 rebaseAmount) = tokenSilo.getAmounts(amountTokens);
+        emit log_named_uint("burn amount", burnAmount);
+        emit log_named_uint("rebase amount", rebaseAmount);
+
+        assertEq(burnAmount, amountTokens * 2 / 10);
+        assertEq(rebaseAmount, amountTokens * 8 / 10);
+
+        // ~ rebase ~
+
+        vm.prank(MULTISIG);
+        stRWA.rebase();
+
+        // ~ Post-state check ~
+
+        assertGt(stRWA.previewRedeem(stRWA.balanceOf(JOE)), amountTokens);
+
+        assertEq(rwaToken.totalSupply(), preSupply - burnAmount);
+        assertEq(tokenSilo.getLockedAmount(), preLocked + rebaseAmount);
     }
 
     function test_stakedRWA_rebase_redeem() public {

@@ -161,4 +161,8 @@ contract StakedRWATest is Test, StakedRWATestUtility {
         assertNotEq(tokenSilo.masterTokenId(), 0);
         assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), amountTokens);
     }
+
+    function test_stakedRWA_deposit_sequential() public {
+        // TODO Tests sequential deposits, merging into master token
+    }
 }

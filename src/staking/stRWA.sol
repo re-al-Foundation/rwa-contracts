@@ -34,6 +34,8 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     address public immutable asset;
     /// @dev Stores contract reference to the TokenSilo.
     TokenSilo public tokenSilo;
+    /// @dev Stores address of rebaseIndexManager. Only this address can call `rebase()`.
+    address public rebaseIndexManager;
 
 
     // ~ Events & Errors ~
@@ -41,6 +43,8 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     event Deposit(address msgSender, address receiver, uint256 amountReceived, uint256 minted);
     event Redeem(address msgSender, address receiver, address owner, uint256 assets, uint256 burned);
     event TokenSiloUpdated(address);
+
+    error NotAuthorized(address);
 
 
     // ~ Constructor ~
@@ -54,6 +58,7 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
         LayerZeroRebaseTokenUpgradeable(lzEndpoint)
         CrossChainToken(111188)
     {
+        _asset.requireNonZeroAddress();
         asset = _asset;
         _disableInitializers();
     }
@@ -81,15 +86,21 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     // ~ Methods ~
 
     function rebase() external {
-        // TODO
-        // - calls claim and distribute on tokenSilo
-        uint256 amountToRebase = tokenSilo.claim();
+        if (msg.sender != rebaseIndexManager && msg.sender != owner()) revert NotAuthorized(msg.sender);
+        uint256 amountToRebase = tokenSilo.rebaseHelper();
+
+        // TODO: Verify logic
+        uint256 rebaseIndexDelta = amountToRebase * 1e18 / tokenSilo.getLockedAmount();
+        uint256 rebaseIndex = rebaseIndex();
+        rebaseIndex += rebaseIndexDelta;
+
+        _setRebaseIndex(rebaseIndex, 1);
     }
 
     /**
      * TODO
      */
-    function setTokenSilo(address silo) external onlyOwner {
+    function setTokenSilo(address payable silo) external onlyOwner {
         silo.requireNonZeroAddress();
         silo.requireDifferentAddress(address(tokenSilo));
 
@@ -101,8 +112,9 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
      * @notice Takes assets and returns a preview of the amount of shares that would be received
      * if the amount assets was deposited via `deposit`.
      */
-    function previewDeposit(uint256 assets) external view returns (uint256) {
-        return _convertToShares(assets);
+    function previewDeposit(uint256 assets) external pure returns (uint256) {
+        //return _convertToShares(assets);
+        return assets;
     }
 
     /**
@@ -118,7 +130,8 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
 
         uint256 amountReceived = _pullAssets(msg.sender, assets);
         _depositIntoTokenSilo(amountReceived);
-        shares = _convertToShares(amountReceived);
+        //shares = _convertToShares(amountReceived);
+        shares = assets;
 
         if (shares != 0) {
             _mint(receiver, shares);
@@ -131,8 +144,9 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
      * @notice Returns an amount of basket tokens that would be redeemed if `shares` amount of wrapped tokens
      * were used to redeem.
      */
-    function previewRedeem(uint256 shares) external view returns (uint256) {
-        return _convertToAssets(shares);
+    function previewRedeem(uint256 shares) external pure returns (uint256) {
+        //return _convertToAssets(shares);
+        return shares;
     }
 
     /**
@@ -153,13 +167,26 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
 
         _burn(owner, shares);
 
-        assets = _convertToAssets(shares);
+        //assets = _convertToAssets(shares);
+        assets = shares;
 
         if (assets != 0) {
             _redeemFromTokenSilo(assets, receiver);
         }
 
         emit Redeem(msg.sender, receiver, owner, assets, shares);
+    }
+
+    /**
+     * @notice This setter allows the factory owner to update the `rebaseIndexManager` state variable.
+     * @param _rebaseIndexManager Address of rebase manager.
+     */
+    function updateRebaseIndexManager(address _rebaseIndexManager) external {
+        if (
+            msg.sender != owner() && 
+            msg.sender != tokenSilo.rebaseController()
+        ) revert NotAuthorized(msg.sender);
+        rebaseIndexManager = _rebaseIndexManager;
     }
 
 

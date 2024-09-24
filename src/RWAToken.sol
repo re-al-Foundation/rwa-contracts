@@ -37,6 +37,8 @@ contract RWAToken is UUPSUpgradeable, Ownable2StepUpgradeable, ERC20Upgradeable 
     address public lzReceiver;
     /// @notice Total fee taken on buys and sells.
     uint16 public fee;
+    /// @notice Contract address for TokenSilo contract.
+    address public tokenSilo;
 
 
     // ------
@@ -88,6 +90,12 @@ contract RWAToken is UUPSUpgradeable, Ownable2StepUpgradeable, ERC20Upgradeable 
      * @param newRWAVotingEscrow New address stored in `votingEscrowRWA`.
      */
     event RWAVotingEscrowSet(address indexed newRWAVotingEscrow);
+
+    /**
+     * @notice This event is emitted when a new `tokenSilo` is set.
+     * @param newTokenSilo New address stored in `tokenSilo`.
+     */
+    event TokenSiloSet(address indexed newTokenSilo);
 
 
     // ------
@@ -226,6 +234,25 @@ contract RWAToken is UUPSUpgradeable, Ownable2StepUpgradeable, ERC20Upgradeable 
 
         emit RWAVotingEscrowSet(_veRWA);
         votingEscrowRWA = _veRWA;
+    }
+
+    /**
+     * @notice This method updates the `tokenSilo` state variable.
+     * @param _tokenSilo New contract address of TokenSilo.
+     */
+    function setTokenSilo(address _tokenSilo) external onlyOwner {
+        if (_tokenSilo == address(0)) revert ZeroAddress();
+
+        if (tokenSilo != address(0)) {
+            isExcludedFromFees[tokenSilo] = false;
+            canBurn[tokenSilo] = false;
+        }
+
+        isExcludedFromFees[_tokenSilo] = true;
+        canBurn[_tokenSilo] = true;
+
+        emit TokenSiloSet(_tokenSilo);
+        tokenSilo = _tokenSilo;
     }
 
     /**

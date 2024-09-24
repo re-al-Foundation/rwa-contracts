@@ -10,6 +10,10 @@ import { TokenSilo } from "../../../src/staking/TokenSilo.sol";
 import { RWAToken } from "../../../src/RWAToken.sol";
 import { RWAVotingEscrow } from "../../../src/governance/RWAVotingEscrow.sol";
 import { RevenueStreamETH } from "../../../src/RevenueStreamETH.sol";
+import { RevenueDistributor } from "../../../src/RevenueDistributor.sol";
+import { ISwapRouter } from "../../../src/interfaces/ISwapRouter.sol";
+import { IQuoterV2 } from "../../../src/interfaces/IQuoterV2.sol";
+import { IWETH } from "../../../src/interfaces/IWETH.sol";
 
 // local helper imports
 import "../../utils/Utility.sol";
@@ -27,9 +31,18 @@ contract StakedRWATestUtility is Utility {
     StakedRWA public stRWA;
     TokenSilo public tokenSilo;
 
-    RWAToken public rwaToken = RWAToken(0x4644066f535Ead0cde82D209dF78d94572fCbf14);
-    RWAVotingEscrow public rwaVotingEscrow = RWAVotingEscrow(0xa7B4E29BdFf073641991b44B283FD77be9D7c0F4);
-    RevenueStreamETH public revStream = RevenueStreamETH(0xf4e03D77700D42e13Cd98314C518f988Fd6e287a);
+    // rwa contracts
+    RWAToken public constant rwaToken = RWAToken(0x4644066f535Ead0cde82D209dF78d94572fCbf14);
+    RWAVotingEscrow public constant rwaVotingEscrow = RWAVotingEscrow(0xa7B4E29BdFf073641991b44B283FD77be9D7c0F4);
+    RevenueStreamETH public constant revStream = RevenueStreamETH(0xf4e03D77700D42e13Cd98314C518f988Fd6e287a);
+    RevenueDistributor public constant revDist = RevenueDistributor(payable(0x7a2E4F574C0c28D6641fE78197f1b460ce5E4f6C));
+
+    // pearl contracts
+    ISwapRouter public constant router = ISwapRouter(0xa1F56f72b0320179b01A947A5F78678E8F96F8EC);
+    IQuoterV2 public constant quoter = IQuoterV2(0xDe43aBe37aB3b5202c22422795A527151d65Eb18);
+
+    // variables
+    IWETH public constant WETH = IWETH(0x90c6E93849E06EC7478ba24522329d14A5954Df4);
 
     function setUp() public virtual {
         vm.createSelectFork(REAL_RPC_URL, 716890);
@@ -49,22 +62,37 @@ contract StakedRWATestUtility is Utility {
 
         // Deploy tokenSilo & proxy
         ERC1967Proxy siloProxy = new ERC1967Proxy(
-            address(new TokenSilo(address(stRWA), address(rwaVotingEscrow), address(revStream))),
+            address(new TokenSilo(address(stRWA), address(rwaVotingEscrow), address(revStream), address(router))),
             abi.encodeWithSelector(TokenSilo.initialize.selector,
                 MULTISIG
             )
         );
-        tokenSilo = TokenSilo(address(siloProxy));
+        tokenSilo = TokenSilo(payable(address(siloProxy)));
 
         // ~ Config ~
 
         // set tokenSilo on stRWA
         vm.prank(MULTISIG);
-        stRWA.setTokenSilo(address(tokenSilo));
+        stRWA.setTokenSilo(payable(address(tokenSilo)));
 
-        // exclude tokenSilo from fees
+        // upgrade RWAToken
+        _upgradeRWAToken();
+
+        // exclude tokenSilo from fees & set to burn
         vm.prank(MULTISIG);
-        rwaToken.excludeFromFees(address(tokenSilo), true);
+        rwaToken.setTokenSilo(address(tokenSilo));
+
+        // owner sets ratios on tokenSilo
+        vm.prank(MULTISIG);
+        tokenSilo.updateRatios(2, 0, 8);
+
+        // owner sets selector on tokenSilo for approved swaps
+        vm.prank(MULTISIG);
+        tokenSilo.setSelectorForTarget(
+            address(router),
+            bytes4(keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))")),
+            true
+        );
 
         _createLabels();
     }
@@ -72,6 +100,12 @@ contract StakedRWATestUtility is Utility {
     // -------
     // Utility
     // -------
+
+    function _upgradeRWAToken() internal {
+        vm.startPrank(MULTISIG);
+        rwaToken.upgradeToAndCall(address(new RWAToken()), "");
+        vm.stopPrank();
+    }
 
     /// @dev Utility method to store a new variable within stRWA::rebaseIndex via vm.store.
     /// Writes directly to the storage location since `rebaseIndex` is at slot 0.

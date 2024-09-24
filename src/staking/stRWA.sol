@@ -86,21 +86,29 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     // ~ Methods ~
 
     /**
-     * TODO
+     * @notice This method will update the `rebaseIndex` based on the rewards collected in the TokenSilo.
+     * @dev The rebase logic will calculate the % increase in the amount of RWA locked. Based on the % increase,
+     * we then increase the rebaseIndex by the same percentage.
      */
     function rebase() external {
         if (msg.sender != rebaseIndexManager && msg.sender != owner()) revert NotAuthorized(msg.sender);
 
+        uint256 locked = tokenSilo.getLockedAmount();
         uint256 amountToRebase = tokenSilo.rebaseHelper();
-        uint256 rebaseIndexDelta = amountToRebase * 1e18 / tokenSilo.getLockedAmount();
-        uint256 rebaseIndex = rebaseIndex();
-        rebaseIndex += rebaseIndexDelta;
+        amountToRebase.requireDifferentUint256(0);
 
+        uint256 percentageIncrease = amountToRebase * 1e18 / locked;
+
+        uint256 rebaseIndex = rebaseIndex();
+        uint256 delta = rebaseIndex * percentageIncrease / 1e18;
+
+        rebaseIndex += delta;
         _setRebaseIndex(rebaseIndex, 1);
     }
 
     /**
-     * TODO
+     * @notice This method allows the owner to set a new address in `tokenSilo`.
+     * @param silo New address for `tokenSilo`.
      */
     function setTokenSilo(address payable silo) external onlyOwner {
         silo.requireNonZeroAddress();
@@ -184,20 +192,6 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     // ~ Internal Methods ~
 
     /**
-     * TODO
-     */
-    function _convertToShares(uint256 assets) internal view returns (uint256) {
-        return Math.mulDiv(assets, rebaseIndex(), WAD);
-    }
-
-    /**
-     * TODO
-     */
-    function _convertToAssets(uint256 shares) internal view returns (uint256) {
-        return Math.mulDiv(shares, WAD, rebaseIndex());
-    }
-
-    /**
      * @dev Pulls assets from `from` address of `amount`. Performs a pre and post balance check to 
      * confirm the amount received, and returns that amount.
      */
@@ -208,7 +202,8 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     }
 
     /**
-     * TODO
+     * @notice Internal method for depositing $RWA tokens into the tokenSilo.
+     * @param amount Amount of $RWA to deposit.
      */
     function _depositIntoTokenSilo(uint256 amount) internal {
         IERC20(asset).forceApprove(address(tokenSilo), amount);
@@ -216,7 +211,8 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     }
 
     /**
-     * TODO
+     * @notice Internal method for redeeming a veRWA position for a user based on
+     * their $stRWA balance.
      */
     function _redeemFromTokenSilo(uint256 assets, address receiver) internal {
         tokenSilo.redeemLock(assets, receiver);

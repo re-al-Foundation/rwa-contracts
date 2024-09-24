@@ -22,7 +22,7 @@ import "../../utils/Constants.sol";
 /**
  * @title StakedRWATestUtility
  * @author @chasebrownn
- * @notice This acts as a Utility 
+ * @notice This acts as a Utility file for StakedRWA Tests.
  */
 contract StakedRWATestUtility is Utility {
 
@@ -102,11 +102,13 @@ contract StakedRWATestUtility is Utility {
     // Utility
     // -------
 
+    /// @dev Verifies initial state.
     function _initStateCheck() internal {
         assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0);
         assertEq(tokenSilo.masterTokenId(), 0);
     }
 
+    /// @dev Upgrades the current RWAToken contract on re.al.
     function _upgradeRWAToken() internal {
         vm.startPrank(MULTISIG);
         rwaToken.upgradeToAndCall(address(new RWAToken()), "");

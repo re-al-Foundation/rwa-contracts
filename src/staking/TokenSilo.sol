@@ -18,7 +18,9 @@ import { IWETH } from "../interfaces/IWETH.sol";
 
 /**
  * @title TokenSilo
- * @notice TODO
+ * @notice This is a periphery contract for stRWA and serves as the token silo for the veRWA token being used as
+ * collateral for stRWA holders. This contract contains mechanics for managing the `masterTokenId`, allowing stRWA
+ * holders to deposit more collateral or redeem from the governance position.
  */
 contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     using SafeERC20 for RWAToken;
@@ -88,7 +90,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     // ---------
 
     /**
-     * TODO
+     * @dev Modifier used to verify msg.sender is the stRWA contract.
      */
     modifier onlyStakedRWA() {
         if (msg.sender != stRWA) revert NotAuthorized(msg.sender);
@@ -96,7 +98,8 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @dev Modifier used to verify the msg.sender is either the contract owner or
+     * an approved funds manager.
      */
     modifier onlyFundsManager() {
         if (msg.sender != owner() && !isFundsManager[msg.sender]) revert NotAuthorized(msg.sender);
@@ -109,7 +112,11 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     // -----------
 
     /**
-     * @notice Initializes TokenSilo.
+     * @notice Initializes TokenSilo immutables.
+     * @param _stRWA Contract address for stRWA.
+     * @param _veRWA Contract address for votingEscrowRWA.
+     * @param _revStream Contract address for RevenueStreamETH.
+     * @param _router Contract address for SwapRouter.
      */
     constructor(address _stRWA, address _veRWA, address _revStream, address _router) {
         _stRWA.requireNonZeroAddress();
@@ -128,7 +135,8 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice TODO
+     * @notice Initializes TokenSilo non-immutables.
+     * @param owner Initial owner of contract.
      */
     function initialize(address owner) external initializer {
         owner.requireNonZeroAddress();
@@ -149,7 +157,10 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @notice This method allows $RWA tokens to be added to the masterTokenId position.
+     * @dev If there currently is not a token assigned to masterTokenId, a new token is minted with
+     * the $RWA tokens provided.
+     * @param amount Amount of $RWA being added to the master lock.
      */
     function depositAndLock(uint256 amount) external onlyStakedRWA {
         _pullAssets(msg.sender, amount);
@@ -163,7 +174,11 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @notice This method allows a portion of the masterTokenId lock position to be split off and sent
+     * to a specified recipient.
+     * @param amount Amount of $RWA to split into a secondary token.
+     * @param recipient Recipient of new lock position.
+     * @return tokenId Token identifier of newly minted (split) token.
      */
     function redeemLock(uint256 amount, address recipient) external onlyStakedRWA returns (uint256 tokenId) {
         if (amount < getLockedAmount()) {
@@ -176,7 +191,8 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @notice Allows the funds manager to claim any claimable rewards.
+     * @param claimed Amount ETH claimed
      */
     function claim() external onlyFundsManager returns (uint256 claimed) {
         claimed = revStream.claimETH();
@@ -218,7 +234,10 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @notice This method is called by stRWA when a rebase occurs. 
+     * @dev This method will take all RWA in the contract and distribute it. Distribution will perform a burn
+     * of raw $RWA tokens and will lock the rest into the master position. The amount locked and designated for
+     * rebase will be returned and used to update the stRWA rebaseIndex.
      */
     function rebaseHelper() external onlyStakedRWA returns (uint256) {
         uint256 bal = rwaToken.balanceOf(address(this));
@@ -236,7 +255,13 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @notice This method allows the owner to update the distribution ratios which specify what percentages of $RWA
+     * are burned, locked, and designated for rebase in rebaseHelper().
+     * @dev Amount burned will burn amount*burn/total. Retained amount and rebase amount are both locked. The only
+     * difference is the amount retained is not counted towards rebase. This results in stRWA being "overcollateralized".
+     * @param _burn Ratio to burn.
+     * @param _retain Ratio to retain.
+     * @param _rebase Ratio for rebase.
      */
     function updateRatios(uint256 _burn, uint256 _retain, uint256 _rebase) external onlyOwner {
         emit DistributionUpdated(_burn, _retain, _rebase);
@@ -290,21 +315,22 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     // ------
 
     /**
-     * TODO
+     * @notice Returns the amount of claimable ETH rewards this contract has.
      */
     function claimable() public view returns (uint256 claimable) {
         (claimable,) = revStream.claimable(address(this));
     }
 
     /**
-     * TODO
+     * @notice Returns the total amount of $RWA locked in the `masterTokenId` position.
      */
     function getLockedAmount() public view  returns (uint256) {
         return votingEscrowRWA.getLockedAmount(masterTokenId);
     }
 
     /**
-     * TODO
+     * @notice Returns the amounts of specified $RWA will be burned or used for rebase depending
+     * on the most current distribution ratios.
      */
     function getAmounts(uint256 claimAmount) public view returns (
         uint256 amountToBurn,
@@ -340,7 +366,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @dev Mints a new veRWA token.
+     * @param amount Amount $RWA to lock.
+     * Returns the tokenId of the newly minted token.
      */
     function _mint(uint256 amount) internal returns (uint256) {
         rwaToken.forceApprove(address(votingEscrowRWA), amount);
@@ -352,7 +380,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @dev Merges `tokenToMerge` into the `masterTokenId`.
      */
     function _merge(uint256 tokenToMerge) internal {
         votingEscrowRWA.merge({
@@ -362,7 +390,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     } 
 
     /**
-     * TODO
+     * @dev Splits the master token into a new token with a lock containing `amountToSplit`.
      */
     function _split(uint256 amountToSplit) internal returns (uint256) {
         uint256[] memory split = new uint256[](2);
@@ -377,14 +405,14 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * TODO
+     * @dev Burns $RWA tokens.
      */
     function _burn(uint256 amount) internal {
         rwaToken.burn(amount);
     }
 
     /**
-     * TODO
+     * @dev Transfers a veRWA token to a specified recipient.
      */
     function _transferToken(uint256 tokenId, address recipient) internal {
         votingEscrowRWA.transferFrom(address(this), recipient, tokenId);

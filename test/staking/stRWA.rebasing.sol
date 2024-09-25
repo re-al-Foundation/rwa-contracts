@@ -382,8 +382,6 @@ contract StakedRWARebaseTest is Test, StakedRWATestUtility {
 
         deal(address(rwaToken), address(tokenSilo), amountTokens);
 
-        uint256 preSupply = stRWA.totalSupply();
-
         // ~ Execute rebase ~
 
         _rebase();
@@ -423,8 +421,6 @@ contract StakedRWARebaseTest is Test, StakedRWATestUtility {
         vm.stopPrank();
 
         deal(address(rwaToken), address(tokenSilo), amountTokens);
-
-        uint256 preSupply = stRWA.totalSupply();
 
         // ~ Execute rebase ~
 

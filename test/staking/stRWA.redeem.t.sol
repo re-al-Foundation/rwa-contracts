@@ -278,7 +278,6 @@ contract StakedRWARedeemTest is Test, StakedRWATestUtility {
         uint256 preBal2 = rwaVotingEscrow.balanceOf(JOE);
         uint256 vp1 = rwaVotingEscrow.getAccountVotingPower(JOE);
         uint256 vp2 = rwaVotingEscrow.getAccountVotingPower(address(tokenSilo));
-        uint256 locked = tokenSilo.getLockedAmount();
         uint256 preview = stRWA.previewRedeem(amountTokens);
 
         // ~ Execute redeem ~
@@ -321,7 +320,6 @@ contract StakedRWARedeemTest is Test, StakedRWATestUtility {
         uint256 preBal2 = rwaVotingEscrow.balanceOf(JOE);
         uint256 vp1 = rwaVotingEscrow.getAccountVotingPower(JOE);
         uint256 vp2 = rwaVotingEscrow.getAccountVotingPower(address(tokenSilo));
-        uint256 locked = tokenSilo.getLockedAmount();
         uint256 preview = stRWA.previewRedeem(amountTokens);
 
         // ~ Execute redeem ~

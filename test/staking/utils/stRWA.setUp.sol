@@ -103,7 +103,7 @@ contract StakedRWATestUtility is Utility {
     // -------
 
     /// @dev Verifies initial state.
-    function _initStateCheck() internal {
+    function _initStateCheck() internal view {
         assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0);
         assertEq(tokenSilo.masterTokenId(), 0);
     }

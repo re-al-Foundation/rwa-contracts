@@ -212,11 +212,11 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Converts a specific amount of ETH to RWA.
+     * @notice Converts a specific amount of WETH to RWA.
      * @dev Contains a check to verify that the target address and selector are correct
      * to avoid exploits. Follows the same interface as RevenueDistributor::convertRewardToken
      * to allow for the w3f to be used without revision.
-     * @param amount Amount ETH to convert.
+     * @param amount Amount WETH to convert.
      * @param target Target address for conversion.
      * @param data Call data for conversion.
      * @return amountOut Amount RWA received.
@@ -255,7 +255,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         bal.requireDifferentUint256(0);
 
         (uint256 amountToBurn, uint256 amountToRetain, uint256 amountForRebase) = getAmounts(bal);
-        if (amountToBurn != 0) _burn(amountToBurn);
+        if (amountToBurn != 0) _burnTokens(amountToBurn);
 
         uint256 toLock = amountToRetain + amountForRebase;
         if (toLock != 0) {
@@ -381,13 +381,6 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * @dev Transfers an `amount` of `rwaToken` to the `to` address.
-     */
-    function _pushAssets(address to, uint256 amount) private {
-        rwaToken.safeTransfer(to, amount);
-    }
-
-    /**
      * @dev Mints a new veRWA token.
      * @param amount Amount $RWA to lock.
      * Returns the tokenId of the newly minted token.
@@ -429,7 +422,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     /**
      * @dev Burns $RWA tokens.
      */
-    function _burn(uint256 amount) internal {
+    function _burnTokens(uint256 amount) internal {
         rwaToken.burn(amount);
     }
 

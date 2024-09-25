@@ -19,12 +19,12 @@ import "../../../test/utils/Constants.sol";
 
 /** 
     @dev To run: 
-    forge script script/deploy/unreal/DeployStRWACrossChain.s.sol:DeployStRWACrossChain --broadcast --legacy \
+    forge script script/deploy/mainnet/DeployStRWACrossChain.s.sol:DeployStRWACrossChain --broadcast --legacy \
     --gas-estimate-multiplier 400 \
-    --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+    --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
 
     @dev To verify manually main chain: 
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch src/staking/stRWA.sol:stRWA --verifier blockscout --verifier-url https://unreal.blockscout.com/api
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id 18233 --watch src/staking/stRWA.sol:stRWA --verifier blockscout --verifier-url https://explorer.re.al//api
 
     @dev To verify manually satellite token:
     export ETHERSCAN_API_KEY="<API_KEY>"
@@ -35,7 +35,7 @@ import "../../../test/utils/Constants.sol";
 /**
  * @title DeployStRWACrossChain
  * @author Chase Brown
- * @notice This script deploys a new instance of a wrapped baskets vault token to the Unreal Testnet.
+ * @notice This script deploys a new instance of a wrapped baskets vault token to the mainnet.
  */
 contract DeployStRWACrossChain is DeployUtility {
 
@@ -64,17 +64,17 @@ contract DeployStRWACrossChain is DeployUtility {
     function setUp() public {
         _setup("stRWA.testnet.deployment");
 
-        rwaToken = _loadDeploymentAddress("unreal", "RWAToken");
-        rwaVotingEscrow = _loadDeploymentAddress("unreal", "RWAVotingEscrow");
-        revStream = _loadDeploymentAddress("unreal", "RevenueStreamETH");
-        revDist = _loadDeploymentAddress("unreal", "RevenueDistributor");
+        rwaToken = _loadDeploymentAddress("re.al", "RWAToken");
+        rwaVotingEscrow = _loadDeploymentAddress("re.al", "RWAVotingEscrow");
+        revStream = _loadDeploymentAddress("re.al", "RevenueStreamETH");
+        revDist = _loadDeploymentAddress("re.al", "RevenueDistributor");
 
         allChains.push(NetworkData(
             {
-                chainName: "unreal", 
-                rpc_url: vm.envString("UNREAL_RPC_URL"), 
-                lz_endpoint: UNREAL_LZ_ENDPOINT_V1, 
-                chainId: UNREAL_LZ_CHAIN_ID_V1,
+                chainName: "re.al", 
+                rpc_url: vm.envString("REAL_RPC_URL"), 
+                lz_endpoint: REAL_LZ_ENDPOINT_V1, 
+                chainId: REAL_LZ_CHAIN_ID_V1,
                 mainChain: true,
                 name: "Liquid Staked RWA",
                 symbol: "stRWA"
@@ -82,10 +82,10 @@ contract DeployStRWACrossChain is DeployUtility {
         ));
         allChains.push(NetworkData(
             {
-                chainName: "sepolia", 
-                rpc_url: vm.envString("SEPOLIA_RPC_URL"), 
-                lz_endpoint: SEPOLIA_LZ_ENDPOINT_V1, 
-                chainId: SEPOLIA_LZ_CHAIN_ID_V1,
+                chainName: "scroll", 
+                rpc_url: vm.envString("SCROLL_RPC_URL"), 
+                lz_endpoint: SCROLL_LZ_ENDPOINT_V1, 
+                chainId: SCROLL_LZ_CHAIN_ID_V1,
                 mainChain: false,
                 name: "Wrapped Staked RWA",
                 symbol: "wstRWA"
@@ -136,10 +136,10 @@ contract DeployStRWACrossChain is DeployUtility {
                 _saveDeploymentAddress(allChains[i].chainName, "TokenSilo", tokenSilo);
 
                 if (address(stRWAToken.tokenSilo()) != tokenSilo) stRWAToken.setTokenSilo(payable(tokenSilo));
-                if (RWAToken(rwaToken).tokenSilo() != tokenSilo) RWAToken(rwaToken).setTokenSilo(tokenSilo);
+                // TODO: rwaToken.setTokenSilo(tokenSilo);
                 TokenSilo(payable(tokenSilo)).updateRatios(2, 0, 8);
                 TokenSilo(payable(tokenSilo)).setSelectorForTarget(
-                    UNREAL_SWAP_ROUTER,
+                    REAL_SWAP_ROUTER,
                     bytes4(keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))")),
                     true
                 );
@@ -195,7 +195,7 @@ contract DeployStRWACrossChain is DeployUtility {
      */
     function _deployTokenSilo(address wrappedToken) internal returns (address proxyAddress) {
         ERC1967Proxy siloProxy = new ERC1967Proxy(
-            address(new TokenSilo(wrappedToken, rwaVotingEscrow, revStream, UNREAL_WETH)),
+            address(new TokenSilo(wrappedToken, rwaVotingEscrow, revStream, REAL_WETH)),
             abi.encodeWithSelector(TokenSilo.initialize.selector,
                 DEPLOYER_ADDRESS
             )

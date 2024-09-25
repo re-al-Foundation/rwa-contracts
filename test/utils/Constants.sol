@@ -53,6 +53,9 @@ uint16 constant UNREAL_LZ_CHAIN_ID_V1 = 10262;
 address constant REAL_LZ_ENDPOINT_V1 = 0xb6319cC6c8c27A8F5dAF0dD3DF91EA35C4720dd7;
 uint16 constant REAL_LZ_CHAIN_ID_V1 = 237;
 
+address constant SCROLL_LZ_ENDPOINT_V1 = 0xb6319cC6c8c27A8F5dAF0dD3DF91EA35C4720dd7;
+uint16 constant SCROLL_LZ_CHAIN_ID_V1 = 214;
+
 
 // ~ Unreal Addresses ~
 

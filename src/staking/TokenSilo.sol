@@ -18,9 +18,11 @@ import { IWETH } from "../interfaces/IWETH.sol";
 
 /**
  * @title TokenSilo
+ * @author chasebrownn
  * @notice This is a periphery contract for stRWA and serves as the token silo for the veRWA token being used as
  * collateral for stRWA holders. This contract contains mechanics for managing the `masterTokenId`, allowing stRWA
- * holders to deposit more collateral or redeem from the governance position.
+ * holders to deposit more collateral or redeem from the master governance position.
+ * This contract also contains a rebaseHelper function to distribute rewards and return an amount used to rebase stRWA.
  */
 contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     using SafeERC20 for RWAToken;
@@ -46,8 +48,6 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     uint256 public constant MAX_VESTING_DURATION = VotingMath.MAX_VESTING_DURATION;
     /// @dev Stores contract reference to WETH.
     IWETH public immutable WETH;
-    /// @dev Stores contract reference to SwapRouter.
-    ISwapRouter public immutable router;
     /// @dev Stores contact address for stRWA.
     address public immutable stRWA;
     /// @dev Stores contact reference for $RWA token.
@@ -66,6 +66,8 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     DistributionRatios public distribution;
     /// @dev Stores contract address of rebase controller.
     address public rebaseController;
+    /// @dev Redemption fee
+    uint16 public fee;
 
 
     // ---------------
@@ -116,20 +118,19 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
      * @param _stRWA Contract address for stRWA.
      * @param _veRWA Contract address for votingEscrowRWA.
      * @param _revStream Contract address for RevenueStreamETH.
-     * @param _router Contract address for SwapRouter.
+     * @param _WETH Contract address for WETH.
      */
-    constructor(address _stRWA, address _veRWA, address _revStream, address _router) {
+    constructor(address _stRWA, address _veRWA, address _revStream, address _WETH) {
         _stRWA.requireNonZeroAddress();
         _veRWA.requireNonZeroAddress();
         _revStream.requireNonZeroAddress();
-        _router.requireNonZeroAddress();
+        _WETH.requireNonZeroAddress();
 
         stRWA = _stRWA;
         votingEscrowRWA = RWAVotingEscrow(_veRWA);
         rwaToken = RWAToken(address(votingEscrowRWA.getLockedToken()));
         revStream = RevenueStreamETH(_revStream);
-        router = ISwapRouter(_router);
-        WETH = IWETH(router.WETH9());
+        WETH = IWETH(_WETH);
 
         _disableInitializers();
     }
@@ -157,7 +158,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice This method allows $RWA tokens to be added to the masterTokenId position.
+     * @notice This method allows $RWA tokens to be added to the masterTokenId lock position.
      * @dev If there currently is not a token assigned to masterTokenId, a new token is minted with
      * the $RWA tokens provided.
      * @param amount Amount of $RWA being added to the master lock.
@@ -179,10 +180,19 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
      * @param amount Amount of $RWA to split into a secondary token.
      * @param recipient Recipient of new lock position.
      * @return tokenId Token identifier of newly minted (split) token.
+     * @return amountLocked Amount of RWA in `tokenId` locked position.
      */
-    function redeemLock(uint256 amount, address recipient) external onlyStakedRWA returns (uint256 tokenId) {
-        if (amount < getLockedAmount()) {
-            tokenId = _split(amount);
+    function redeemLock(
+        uint256 amount,
+        address recipient
+    ) external onlyStakedRWA returns (
+        uint256 tokenId,
+        uint256 amountLocked
+    ) {
+        amountLocked = amount - (amount * fee / 100_00);
+
+        if (amountLocked < getLockedAmount()) {
+            tokenId = _split(amountLocked);
         } else {
             tokenId = masterTokenId;
             masterTokenId = 0;
@@ -192,11 +202,12 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
 
     /**
      * @notice Allows the funds manager to claim any claimable rewards.
+     * @dev The ETH rewards claimed will remain in this contract and is unwrapped immediately.
      * @param claimed Amount ETH claimed
      */
     function claim() external onlyFundsManager returns (uint256 claimed) {
+        claimable().requireDifferentUint256(0);
         claimed = revStream.claimETH();
-        claimed.requireDifferentUint256(0);
         WETH.deposit{value:claimed}();
     }
 
@@ -256,9 +267,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
 
     /**
      * @notice This method allows the owner to update the distribution ratios which specify what percentages of $RWA
-     * are burned, locked, and designated for rebase in rebaseHelper().
+     * is burned, locked, and designated for rebase in rebaseHelper().
      * @dev Amount burned will burn amount*burn/total. Retained amount and rebase amount are both locked. The only
-     * difference is the amount retained is not counted towards rebase. This results in stRWA being "overcollateralized".
+     * difference is the amount retained is not counted towards rebase. This results in stRWA being overcollateralized.
      * @param _burn Ratio to burn.
      * @param _retain Ratio to retain.
      * @param _rebase Ratio for rebase.
@@ -270,6 +281,17 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         distribution.retain = _retain;
         distribution.rebase = _rebase;
         distribution.total = _burn + _retain + _rebase;
+    }
+
+    /**
+     * @notice This method allows the owner to set the redemption fee.
+     * @dev `fee` uses a basis point system (i.e. 5% fee == 500);
+     * @param _fee Redemption fee. Cannot exceed 10000
+     */
+    function setFee(uint16 _fee) external onlyOwner {
+        _fee.requireDifferentUint256(fee);
+        uint48(_fee).requireLessThanUint48(100_00);
+        fee = _fee;
     }
 
     /**
@@ -317,8 +339,8 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     /**
      * @notice Returns the amount of claimable ETH rewards this contract has.
      */
-    function claimable() public view returns (uint256 claimable) {
-        (claimable,) = revStream.claimable(address(this));
+    function claimable() public view returns (uint256 claimableETH) {
+        (claimableETH,) = revStream.claimable(address(this));
     }
 
     /**

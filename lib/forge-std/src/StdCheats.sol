@@ -322,8 +322,8 @@ abstract contract StdCheatsSafe {
         // Note: For some chains like Optimism these are technically predeploys (i.e. bytecode placed at a specific
         // address), but the same rationale for excluding them applies so we include those too.
 
-        // These should be present on all EVM-compatible chains.
-        vm.assume(addr < address(0x1) || addr > address(0x9));
+        // These are reserved by Ethereum and may be on all EVM-compatible chains.
+        vm.assume(addr < address(0x1) || addr > address(0xff));
 
         // forgefmt: disable-start
         if (chainId == 10 || chainId == 420) {
@@ -697,7 +697,7 @@ abstract contract StdCheats is StdCheatsSafe {
     }
 
     function changePrank(address msgSender) internal virtual {
-        console2_log("changePrank is deprecated. Please use vm.startPrank instead.");
+        console2_log_StdCheats("changePrank is deprecated. Please use vm.startPrank instead.");
         vm.stopPrank();
         vm.startPrank(msgSender);
     }
@@ -810,7 +810,7 @@ abstract contract StdCheats is StdCheatsSafe {
     }
 
     // Used to prevent the compilation of console, which shortens the compilation time when console is not used elsewhere.
-    function console2_log(string memory p0) private view {
+    function console2_log_StdCheats(string memory p0) private view {
         (bool status,) = address(CONSOLE2_ADDRESS).staticcall(abi.encodeWithSignature("log(string)", p0));
         status;
     }

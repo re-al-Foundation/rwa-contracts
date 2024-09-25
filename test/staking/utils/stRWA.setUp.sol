@@ -62,7 +62,7 @@ contract StakedRWATestUtility is Utility {
 
         // Deploy tokenSilo & proxy
         ERC1967Proxy siloProxy = new ERC1967Proxy(
-            address(new TokenSilo(address(stRWA), address(rwaVotingEscrow), address(revStream), address(router))),
+            address(new TokenSilo(address(stRWA), address(rwaVotingEscrow), address(revStream), address(WETH))),
             abi.encodeWithSelector(TokenSilo.initialize.selector,
                 MULTISIG
             )

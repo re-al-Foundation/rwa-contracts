@@ -8,8 +8,8 @@ contract VmTest is Test {
     // This test ensures that functions are never accidentally removed from a Vm interface, or
     // inadvertently moved between Vm and VmSafe. This test must be updated each time a function is
     // added to or removed from Vm or VmSafe.
-    function test_interfaceId() public {
-        assertEq(type(VmSafe).interfaceId, bytes4(0x329f5e71), "VmSafe");
-        assertEq(type(Vm).interfaceId, bytes4(0x82ccbb14), "Vm");
+    function test_interfaceId() public pure {
+        assertEq(type(VmSafe).interfaceId, bytes4(0x74d42398), "VmSafe");
+        assertEq(type(Vm).interfaceId, bytes4(0xaf15a283), "Vm");
     }
 }

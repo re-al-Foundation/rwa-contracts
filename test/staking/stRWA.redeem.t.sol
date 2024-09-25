@@ -239,4 +239,111 @@ contract StakedRWARedeemTest is Test, StakedRWATestUtility {
             assertNotEq(tokenSilo.masterTokenId(), 0);
         }
     }
+
+    /// @dev Verifies stRWA::previewRedeem returns the right value when the redemption fee is > 0.
+    function test_stakedRWA_previewRedeem_fee() public {
+        // ~ Config ~
+
+        vm.prank(MULTISIG);
+        tokenSilo.setFee(350);
+
+        uint256 amountTokens = 10_000 ether;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.startPrank(JOE);
+        rwaToken.approve(address(stRWA), amountTokens);
+        stRWA.deposit(amountTokens, JOE);
+        vm.stopPrank();
+
+        uint256 preview = stRWA.previewRedeem(amountTokens);
+        assertEq(preview, amountTokens - (amountTokens * 3_50 / 100_00));
+    }
+
+    /// @dev Verifies stRWA::redeem when the redemption fee is > 0.
+    function test_stakedRWA_redeem_fee_static() public {
+        // ~ Config ~
+
+        vm.prank(MULTISIG);
+        tokenSilo.setFee(350);
+
+        uint256 amountTokens = 10_000 ether;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.startPrank(JOE);
+        rwaToken.approve(address(stRWA), amountTokens);
+        stRWA.deposit(amountTokens, JOE);
+        vm.stopPrank();
+
+        uint256 preBal1 = stRWA.balanceOf(JOE);
+        uint256 preBal2 = rwaVotingEscrow.balanceOf(JOE);
+        uint256 vp1 = rwaVotingEscrow.getAccountVotingPower(JOE);
+        uint256 vp2 = rwaVotingEscrow.getAccountVotingPower(address(tokenSilo));
+        uint256 locked = tokenSilo.getLockedAmount();
+        uint256 preview = stRWA.previewRedeem(amountTokens);
+
+        // ~ Execute redeem ~
+
+        vm.prank(JOE);
+        (uint256 tokenId, uint256 amountInLock) = stRWA.redeem(amountTokens, JOE, JOE);
+
+        // ~ State check ~
+
+        assertEq(preview, amountTokens - (350 * 1e18));
+        assertEq(preview, amountInLock);
+        assertEq(stRWA.balanceOf(JOE), preBal1 - amountTokens);
+
+        assertNotEq(tokenSilo.masterTokenId(), 0);
+        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 1);
+        assertEq(rwaVotingEscrow.ownerOf(tokenId), JOE);
+
+        assertEq(rwaVotingEscrow.balanceOf(JOE), preBal2 + 1);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), vp1 + preview);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), vp2 - preview);
+        assertEq(tokenSilo.getLockedAmount(), 350 * 1e18);
+    }
+
+    /// @dev Uses fuzzing to verify stRWA::redeem when the redemption fee is > 0.
+    function test_stakedRWA_redeem_fee_fuzzing(uint256 amountTokens) public {
+        // ~ Config ~
+
+        vm.prank(MULTISIG);
+        tokenSilo.setFee(350);
+
+        amountTokens = bound(amountTokens, 0.0001 * 1e18, 1_000_000 * 1e18);
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.startPrank(JOE);
+        rwaToken.approve(address(stRWA), amountTokens);
+        stRWA.deposit(amountTokens, JOE);
+        vm.stopPrank();
+
+        uint256 preBal1 = stRWA.balanceOf(JOE);
+        uint256 preBal2 = rwaVotingEscrow.balanceOf(JOE);
+        uint256 vp1 = rwaVotingEscrow.getAccountVotingPower(JOE);
+        uint256 vp2 = rwaVotingEscrow.getAccountVotingPower(address(tokenSilo));
+        uint256 locked = tokenSilo.getLockedAmount();
+        uint256 preview = stRWA.previewRedeem(amountTokens);
+
+        // ~ Execute redeem ~
+
+        vm.prank(JOE);
+        (uint256 tokenId, uint256 amountInLock) = stRWA.redeem(amountTokens, JOE, JOE);
+
+        // ~ State check ~
+
+        uint256 fee = amountTokens * tokenSilo.fee() / 100_00;
+
+        assertEq(preview, amountTokens - fee);
+        assertEq(preview, amountInLock);
+        assertEq(stRWA.balanceOf(JOE), preBal1 - amountTokens);
+        assertEq(rwaVotingEscrow.ownerOf(tokenId), JOE);
+
+        assertNotEq(tokenSilo.masterTokenId(), 0);
+        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 1);
+
+        assertEq(rwaVotingEscrow.balanceOf(JOE), preBal2 + 1);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), vp1 + preview);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), vp2 - preview);
+        assertEq(tokenSilo.getLockedAmount(), fee);
+    }
 }

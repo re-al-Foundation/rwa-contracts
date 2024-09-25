@@ -13,7 +13,8 @@ import { RWAToken } from "../../../src/RWAToken.sol";
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
-/// @dev To run: forge script script/deploy/unreal/UpgradeRWAToken.s.sol:UpgradeRWAToken --broadcast --legacy --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+/// @dev To run: 
+/// forge script script/deploy/unreal/UpgradeRWAToken.s.sol:UpgradeRWAToken --broadcast --gas-estimate-multiplier 300 --legacy --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
 /**
  * @title UpgradeRWAToken

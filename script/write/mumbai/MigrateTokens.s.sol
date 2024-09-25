@@ -32,7 +32,7 @@ contract MigrateTokens is Script {
 
     TangibleERC20Mock public tngblToken = TangibleERC20Mock(MUMBAI_TNGBL_TOKEN);
 
-    uint16 public remoteEndpointId = UNREAL_CHAINID;
+    uint16 public remoteEndpointId = UNREAL_LZ_CHAIN_ID_V1;
 
     uint256 public amountTokens = 1 ether;
 

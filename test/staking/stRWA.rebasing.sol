@@ -406,4 +406,47 @@ contract StakedRWARebaseTest is Test, StakedRWATestUtility {
         assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), 0);
         assertEq(tokenSilo.getLockedAmount(), 0);
     }
+
+    /// @dev Verifies proper state changes when a redemption occurs following a rebase.
+    function test_stakedRWA_rebase_redeem_fee() public {
+        // ~ Config ~
+
+        vm.prank(MULTISIG);
+        tokenSilo.setFee(350);
+
+        uint256 amountTokens = 10_000 ether;
+        deal(address(rwaToken), JOE, amountTokens);
+
+        vm.startPrank(JOE);
+        rwaToken.approve(address(stRWA), amountTokens);
+        stRWA.deposit(amountTokens, JOE);
+        vm.stopPrank();
+
+        deal(address(rwaToken), address(tokenSilo), amountTokens);
+
+        uint256 preSupply = stRWA.totalSupply();
+
+        // ~ Execute rebase ~
+
+        _rebase();
+
+        // ~ Execute redemption ~
+
+        uint256 bal = stRWA.balanceOf(JOE);
+        uint256 fee = bal * tokenSilo.fee() / 100_00;
+        vm.prank(JOE);
+        stRWA.redeem(bal, JOE, JOE);
+
+        // ~ State check ~
+
+        assertEq(stRWA.balanceOf(JOE), 0);
+        assertNotEq(tokenSilo.masterTokenId(), 0);
+        assertEq(rwaVotingEscrow.balanceOf(address(tokenSilo)), 1);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), fee);
+        
+        assertEq(rwaVotingEscrow.balanceOf(JOE), 1);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(JOE), bal - fee);
+        assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), fee);
+        assertEq(tokenSilo.getLockedAmount(), fee);
+    }
 }

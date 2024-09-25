@@ -28,7 +28,7 @@ contract SetTrustedRemote is DeployUtility {
     // core contracts
     CrossChainMigrator public migrator;
 
-    uint16 public remoteEndpointId = UNREAL_CHAINID;
+    uint16 public remoteEndpointId = UNREAL_LZ_CHAIN_ID_V1;
     address public receiver;
 
     // ~ Variables ~

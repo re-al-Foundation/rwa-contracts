@@ -39,7 +39,7 @@ contract MigrateNFTBatch is Script {
     TangibleERC20Mock public tngblToken = TangibleERC20Mock(MUMBAI_TNGBL_TOKEN);
     PassiveIncomeNFT public piNFT = PassiveIncomeNFT(MUMBAI_PI_NFT);
 
-    uint16 public remoteEndpointId = SEPOLIA_CHAINID;
+    uint16 public remoteEndpointId = SEPOLIA_LZ_CHAIN_ID_V1;
 
     uint256 public numTokens = 2;
 

@@ -32,7 +32,7 @@ contract DeployMigrator is Script {
     // ~ Variables ~
 
     address public localEndpoint = MUMBAI_LZ_ENDPOINT_V1;
-    uint16 public remoteEndpointId = UNREAL_CHAINID;
+    uint16 public remoteEndpointId = UNREAL_LZ_CHAIN_ID_V1;
 
     address public receiver = 0x12c211824d3413fE0b2671a3C27e779c21a10c20; // unreal
     //address public receiver = 0x5aE75eb64478067e537F0534Fc6cE4dAf464E84d; // sepolia

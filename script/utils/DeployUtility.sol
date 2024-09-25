@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: UNLICENSED
 pragma solidity ^0.8.0;
 
-import {Script, console} from "forge-std/Script.sol";
+import {Script, console, StdUtils} from "forge-std/Script.sol";
 
 import {Address} from "@openzeppelin/contracts/utils/Address.sol";
 import {ERC1967Utils, ERC1967Proxy} from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
@@ -35,7 +35,7 @@ abstract contract DeployUtility is Script {
 
     function _setup(bytes memory _salt) public {
         _loadPrivateKey();
-        _SALT = keccak256(bytes.concat(_salt, "-20240603"));
+        _SALT = keccak256(bytes.concat(_salt, "-20240924"));
     }
 
     /**

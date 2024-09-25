@@ -9,33 +9,37 @@ import { ERC1967Utils, ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC196
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 
 // local contracts
-import { TokenSilo } from "../../src/staking/TokenSilo.sol";
-import { stRWA } from "../../src/staking/stRWA.sol";
-import { WrappedstRWASatellite } from "../../src/staking/WrappedstRWASatellite.sol";
+import { TokenSilo } from "../../../src/staking/TokenSilo.sol";
+import { stRWA as StakedRWA } from "../../../src/staking/stRWA.sol";
+import { WrappedstRWASatellite } from "../../../src/staking/WrappedstRWASatellite.sol";
+import { RWAToken } from "../../../src/RWAToken.sol";
 
 // helper contracts
 //import "../../test/utils/UnrealAddresses.sol";
 //import "../../test/utils/Utility.sol";
-import "../../../src/utils/Constants.sol";
+import "../../../test/utils/Constants.sol";
 
 /** 
     @dev To run: 
-    forge script script/unreal/DeployWrappedTokenCrossChain.s.sol:DeployWrappedTokenCrossChain --broadcast --legacy \
-    --gas-estimate-multiplier 200 \
+    forge script script/deploy/unreal/DeployStRWACrossChain.s.sol:DeployStRWACrossChain --broadcast --legacy \
+    --gas-estimate-multiplier 400 \
     --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 
-    @dev To verify manually (Base, Optimism, Polygon, BSC):
+    @dev To verify manually main chain: 
+    forge verify-contract 0x82D118bB01B7f81a005D7BB139f091bA24939E3E --chain-id 18233 --watch src/staking/stRWA.sol:stRWA --verifier blockscout --verifier-url https://unreal.blockscout.com/api
+
+    @dev To verify manually satellite token:
     export ETHERSCAN_API_KEY="<API_KEY>"
-    forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch src/wrapped/WrappedBasketToken.sol:WrappedBasketToken \
-    --verifier etherscan --constructor-args $(cast abi-encode "constructor(address)" <LOCAL_LZ_ADDRESS>)
+    forge verify-contract <CONTRACT_ADDRESS> --chain-id <CHAIN_ID> --watch src/staking/WrappedstRWASatellite.sol:WrappedstRWASatellite \
+    --verifier etherscan --constructor-args $(cast abi-encode "constructor(address)" <LZ_ENDPOINT>)
 */
 
 /**
- * @title DeployWrappedTokenCrossChain
+ * @title DeployStRWACrossChain
  * @author Chase Brown
  * @notice This script deploys a new instance of a wrapped baskets vault token to the Unreal Testnet.
  */
-contract DeployWrappedTokenCrossChain is DeployUtility {
+contract DeployStRWACrossChain is DeployUtility {
 
     // ~ Script Configure ~
 
@@ -51,12 +55,21 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
 
     NetworkData[] internal allChains;
 
+    address public rwaToken;
+    address public rwaVotingEscrow;
+    address public revStream;
+    address public revDist;
+
     address immutable public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 immutable public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
-    string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
 
     function setUp() public {
-        _setup("wUKRE.testnet.deployment");// TODO
+        _setup("stRWA.testnet.deployment");
+
+        rwaToken = _loadDeploymentAddress("unreal", "RWAToken");
+        rwaVotingEscrow = _loadDeploymentAddress("unreal", "RWAVotingEscrow");
+        revStream = _loadDeploymentAddress("unreal", "RevenueStreamETH");
+        revDist = _loadDeploymentAddress("unreal", "RevenueDistributor");
 
         allChains.push(NetworkData(
             {
@@ -64,8 +77,9 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
                 rpc_url: vm.envString("UNREAL_RPC_URL"), 
                 lz_endpoint: UNREAL_LZ_ENDPOINT_V1, 
                 chainId: UNREAL_LZ_CHAIN_ID_V1,
-                basket: BASKET,
-                mainChain: true
+                mainChain: true,
+                name: "Liquid Staked RWA",
+                symbol: "stRWA"
             }
         ));
         allChains.push(NetworkData(
@@ -74,8 +88,9 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
                 rpc_url: vm.envString("SEPOLIA_RPC_URL"), 
                 lz_endpoint: SEPOLIA_LZ_ENDPOINT_V1, 
                 chainId: SEPOLIA_LZ_CHAIN_ID_V1,
-                basket: address(0),
-                mainChain: false
+                mainChain: false,
+                name: "Wrapped Staked RWA",
+                symbol: "wstRWA"
             }
         ));
     }
@@ -88,102 +103,139 @@ contract DeployWrappedTokenCrossChain is DeployUtility {
             vm.createSelectFork(allChains[i].rpc_url);
             vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-            address wrappedBasketTokenAddress;
+            address tokenAddress;
+            address tokenSilo;
             if (allChains[i].mainChain) {
-                wrappedBasketTokenAddress = _deployWrappedBasketToken(allChains[i].lz_endpoint, allChains[i].basket);
+                tokenAddress = _deployLiquidStakedRWAToken(allChains[i].lz_endpoint, allChains[i].name, allChains[i].symbol);
+                if (address(StakedRWA(tokenAddress).tokenSilo()) == address(0)) {
+                    // deploy new tokenSilo
+                    tokenSilo = _deployTokenSilo(tokenAddress);
+                }
             }
             else {
-                wrappedBasketTokenAddress = _deployWrappedBasketTokenForSatellite(allChains[i].lz_endpoint);
+                tokenAddress = _deployWrappedStakedRWATokenForSatellite(allChains[i].lz_endpoint, allChains[i].name, allChains[i].symbol);
             }
 
-            WrappedBasketToken wrappedBasketToken = WrappedBasketToken(wrappedBasketTokenAddress);
+            StakedRWA stRWAToken = StakedRWA(tokenAddress);
 
             // set trusted remote address on all other chains for each token.
             for (uint256 j; j < len; ++j) {
                 if (i != j) {
                     if (
-                        !wrappedBasketToken.isTrustedRemote(
-                            allChains[j].chainId, abi.encodePacked(wrappedBasketTokenAddress, wrappedBasketTokenAddress)
+                        !stRWAToken.isTrustedRemote(
+                            allChains[j].chainId, abi.encodePacked(tokenAddress, tokenAddress)
                         )
                     ) {
-                        wrappedBasketToken.setTrustedRemoteAddress(
-                            allChains[j].chainId, abi.encodePacked(wrappedBasketTokenAddress)
+                        stRWAToken.setTrustedRemoteAddress(
+                            allChains[j].chainId, abi.encodePacked(tokenAddress)
                         );
                     }
                 }
             }
 
-            // save wrappedBasketToken addresses to appropriate JSON
-            _saveDeploymentAddress(allChains[i].chainName, SYMBOL, wrappedBasketTokenAddress);
+            // config on main chain
+            if (tokenSilo != address(0) && allChains[i].mainChain) {
+                _saveDeploymentAddress(allChains[i].chainName, "TokenSilo", tokenSilo);
+
+                if (address(stRWAToken.tokenSilo()) != tokenSilo) stRWAToken.setTokenSilo(payable(tokenSilo));
+                if (RWAToken(rwaToken).tokenSilo() != tokenSilo) RWAToken(rwaToken).setTokenSilo(tokenSilo);
+                TokenSilo(payable(tokenSilo)).updateRatios(2, 0, 8);
+                TokenSilo(payable(tokenSilo)).setSelectorForTarget(
+                    UNREAL_SWAP_ROUTER,
+                    bytes4(keccak256("exactInputSingle((address,address,uint24,address,uint256,uint256,uint256,uint160))")),
+                    true
+                );
+            }
+
+            // save stRWAToken addresses to appropriate JSON
+            _saveDeploymentAddress(allChains[i].chainName, allChains[i].symbol, tokenAddress);
             vm.stopBroadcast();
         }
     }
 
     /**
-     * @dev This method is in charge of deploying and upgrading wrappedToken on any chain.
+     * @dev This method is in charge of deploying and upgrading stRWA on any chain.
      * This method will perform the following steps:
-     *    - Compute the wrappedToken implementation address
+     *    - Compute the stRWA implementation address
      *    - If this address is not deployed, deploy new implementation
-     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the wrappedToken address computed,
+     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the stRWA address computed,
      *      it will upgrade that proxy.
      */
-    function _deployWrappedBasketToken(address layerZeroEndpoint, address basket) internal returns (address proxyAddress) {
-        bytes memory bytecode = abi.encodePacked(type(WrappedBasketToken).creationCode);
-        address wrappedTokenAddress = vm.computeCreate2Address(
-            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(layerZeroEndpoint, basket)))
+    function _deployLiquidStakedRWAToken(address layerZeroEndpoint, string memory name, string memory symbol) internal returns (address proxyAddress) {
+        bytes memory bytecode = abi.encodePacked(type(StakedRWA).creationCode);
+        address tokenAddress = vm.computeCreate2Address(
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(block.chainid, layerZeroEndpoint, rwaToken)))
         );
 
-        WrappedBasketToken wrappedToken;
+        StakedRWA wrappedToken;
 
-        if (_isDeployed(wrappedTokenAddress)) {
-            console.log("wrappedToken is already deployed to %s", wrappedTokenAddress);
-            wrappedToken = WrappedBasketToken(wrappedTokenAddress);
+        if (_isDeployed(tokenAddress)) {
+            console.log("wrappedToken is already deployed to %s", tokenAddress);
+            wrappedToken = StakedRWA(tokenAddress);
         } else {
-            wrappedToken = new WrappedBasketToken{salt: _SALT}(layerZeroEndpoint, basket);
-            assert(wrappedTokenAddress == address(wrappedToken));
-            console.log("wrappedToken deployed to %s", wrappedTokenAddress);
+            wrappedToken = new StakedRWA{salt: _SALT}(block.chainid, layerZeroEndpoint, rwaToken);
+            assert(tokenAddress == address(wrappedToken));
+            console.log("wrappedToken deployed to %s", tokenAddress);
         }
 
         bytes memory init = abi.encodeWithSelector(
-            WrappedBasketToken.initialize.selector,
+            StakedRWA.initialize.selector,
             DEPLOYER_ADDRESS,
-            NAME,
-            SYMBOL
+            name,
+            symbol
         );
 
         proxyAddress = _deployProxy("wrappedBasketToken", address(wrappedToken), init);
     }
 
     /**
-     * @dev This method is in charge of deploying and upgrading wrappedToken on a satellite chain.
+     * @dev This method is in charge of deploying and upgrading TokenSilo on any chain.
      * This method will perform the following steps:
-     *    - Compute the wrappedToken implementation address
+     *    - Deploy a new implementation contract
+     *    - Deploy a new proxy for the tokenSilo and returns the address
+     */
+    function _deployTokenSilo(address wrappedToken) internal returns (address proxyAddress) {
+        ERC1967Proxy siloProxy = new ERC1967Proxy(
+            address(new TokenSilo(wrappedToken, rwaVotingEscrow, revStream, UNREAL_WETH)),
+            abi.encodeWithSelector(TokenSilo.initialize.selector,
+                DEPLOYER_ADDRESS
+            )
+        );
+
+        proxyAddress = address(siloProxy);
+        console.log("deployed new tokenSilo %s", proxyAddress);
+    }
+
+    /**
+     * @dev This method is in charge of deploying and upgrading WrappedstRWASatellite on a satellite chain.
+     * This method will perform the following steps:
+     *    - Compute the WrappedstRWASatellite implementation address
      *    - If this address is not deployed, deploy new implementation
-     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the wrappedToken address computed,
+     *    - Computes the proxy address. If implementation of that proxy is NOT equal to the WrappedstRWASatellite address computed,
      *      it will upgrade that proxy.
      */
-    function _deployWrappedBasketTokenForSatellite(address layerZeroEndpoint) internal returns (address proxyAddress) {
-        bytes memory bytecode = abi.encodePacked(type(WrappedBasketTokenSatellite).creationCode);
+    function _deployWrappedStakedRWATokenForSatellite(address layerZeroEndpoint, string memory name, string memory symbol) internal returns (address proxyAddress) {
+        bytes memory bytecode = abi.encodePacked(type(WrappedstRWASatellite).creationCode);
         address wrappedTokenAddress = vm.computeCreate2Address(
             _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(layerZeroEndpoint)))
         );
 
-        WrappedBasketTokenSatellite wrappedToken;
+        WrappedstRWASatellite wrappedToken;
 
         if (_isDeployed(wrappedTokenAddress)) {
             console.log("wrappedToken is already deployed to %s", wrappedTokenAddress);
-            wrappedToken = WrappedBasketTokenSatellite(wrappedTokenAddress);
+            wrappedToken = WrappedstRWASatellite(wrappedTokenAddress);
         } else {
-            wrappedToken = new WrappedBasketTokenSatellite{salt: _SALT}(layerZeroEndpoint);
+            wrappedToken = new WrappedstRWASatellite{salt: _SALT}(layerZeroEndpoint);
             assert(wrappedTokenAddress == address(wrappedToken));
             console.log("wrappedToken deployed to %s", wrappedTokenAddress);
         }
 
         bytes memory init = abi.encodeWithSelector(
-            WrappedBasketTokenSatellite.initialize.selector,
+            WrappedstRWASatellite.initialize.selector,
             DEPLOYER_ADDRESS,
-            NAME,
-            SYMBOL
+            name,
+            symbol
         );
 
         proxyAddress = _deployProxy("wrappedBasketToken", address(wrappedToken), init);

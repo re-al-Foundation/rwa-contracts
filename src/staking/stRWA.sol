@@ -5,7 +5,6 @@ pragma solidity ^0.8.20;
 import { IERC20 } from "@openzeppelin/contracts/interfaces/IERC20.sol";
 import { UUPSUpgradeable } from "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
-import { Math } from "@openzeppelin/contracts/utils/math/Math.sol";
 import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/utils/ReentrancyGuardUpgradeable.sol";
 
 // tangible imports
@@ -18,18 +17,19 @@ import { CommonValidations } from "../libraries/CommonValidations.sol";
 
 /**
  * @title stRWA
- * @notice This token is a cross-chain token that only rebases on the main chain. This token can only be minted in exchange
- * for $RWA tokens. Once minted, the $RWA tokens will be locked into a veRWA position to begin accruing revenue. The revenue
+ * @author chasebrownn
+ * @notice This token is a cross-chain rebasing token. This token can only be minted in exchange for $RWA tokens.
+ * Once minted, the $RWA tokens will be locked into a veRWA position to begin accruing revenue. The revenue
  * will be claimed and used to rebase; Distributing revenue amongst $stRWA holders.
  */
 contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
     using CommonValidations for *;
 
-    // ~ State Variables ~
+    // ---------------
+    // State Variables
+    // --------------- 
 
-    /// @dev WAD constant uses for conversions.
-    uint256 internal constant WAD = 1e18;
     /// @dev Address of token being "wrapped".
     address public immutable asset;
     /// @dev Stores contract reference to the TokenSilo.
@@ -38,16 +38,21 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     address public rebaseIndexManager;
 
 
-    // ~ Events & Errors ~
+    // ---------------
+    // Events & Errors
+    // --------------- 
 
     event Deposit(address msgSender, address receiver, uint256 amountReceived, uint256 minted);
-    event Redeem(address msgSender, address receiver, address owner, uint256 assets, uint256 burned);
+    event Redeem(address msgSender, address receiver, address owner, uint256 tokenId, uint256 assets, uint256 burned);
     event TokenSiloUpdated(address);
+    event RebaseIndexManager(address);
 
     error NotAuthorized(address);
 
 
-    // ~ Constructor ~
+    // -----------
+    // Constructor
+    // -----------
 
     /**
      * @notice Initializes stRWA.
@@ -64,10 +69,8 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     }
 
 
-    // ~ Initializer ~
-
     /**
-     * @notice Initializes stRWA's inherited upgradeables.
+     * @notice Initializes stRWA's inherited upgradeables and non-immutable variables.
      * @param owner Initial owner of contract.
      * @param name Name of wrapped token.
      * @param symbol Symbol of wrapped token.
@@ -83,7 +86,9 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     }
 
 
-    // ~ Methods ~
+    // --------
+    // External
+    // --------
 
     /**
      * @notice This method will update the `rebaseIndex` based on the rewards collected in the TokenSilo.
@@ -92,16 +97,17 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
      */
     function rebase() external {
         if (msg.sender != rebaseIndexManager && msg.sender != owner()) revert NotAuthorized(msg.sender);
-
+        // get locked balance from token silo
         uint256 locked = tokenSilo.getLockedAmount();
+        // call token silo to handle rewards and return newly locked tokens for rebase
         uint256 amountToRebase = tokenSilo.rebaseHelper();
         amountToRebase.requireDifferentUint256(0);
-
+        // calculate percentage increase
         uint256 percentageIncrease = amountToRebase * 1e18 / locked;
-
+        // grab current rebaseIndex and calculate new rebaseIndex delta
         uint256 rebaseIndex = rebaseIndex();
         uint256 delta = rebaseIndex * percentageIncrease / 1e18;
-
+        // increase rebaseIndex with delta
         rebaseIndex += delta;
         _setRebaseIndex(rebaseIndex, 1);
     }
@@ -113,7 +119,6 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     function setTokenSilo(address payable silo) external onlyOwner {
         silo.requireNonZeroAddress();
         silo.requireDifferentAddress(address(tokenSilo));
-
         emit TokenSiloUpdated(silo);
         tokenSilo = TokenSilo(silo);
     }
@@ -128,10 +133,10 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
 
     /**
      * @notice Allows a user to deposit amount of `asset` into this contract to receive
-     * shares amount of wrapped basket token.
+     * shares amount of stRWA.
      * @dev I.e. Deposit X RWA to get Y stRWA: X is provided
      * @param assets Amount of asset.
-     * @param receiver Address that will be minted wrappd token.
+     * @param receiver Address that will be minted tokens.
      */
     function deposit(uint256 assets, address receiver) external nonReentrant returns (uint256 shares) {
         assets.requireDifferentUint256(0);
@@ -146,21 +151,28 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     }
 
     /**
-     * @notice Returns an amount of basket tokens that would be redeemed if `shares` amount of wrapped tokens
+     * @notice Returns an amount of RWA tokens that would be redeemed if `shares` amount of stRWA tokens
      * were used to redeem.
      */
-    function previewRedeem(uint256 shares) external pure returns (uint256) {
-        return shares;
+    function previewRedeem(uint256 shares) external view returns (uint256) {
+        uint256 fee = tokenSilo.fee();
+        if (fee != 0) {
+            return shares - (shares * fee / 100_00);
+        } else {
+            return shares;
+        }
     }
 
     /**
-     * @notice Allows a user to use a specified amount of wrapped basket tokens to redeem basket tokens.
-     * @dev I.e. Redeem X stRWA for Y RWA: X is provided
-     * @param shares Amount of wrapped basket tokens the user wants to use in order to redeem basket tokens.
-     * @param receiver Address where the basket tokens are transferred to.
-     * @param owner Current owner of wrapped basket tokens. 'shares` amount will be burned from this address.
+     * @notice Allows a user to use a specified amount of stRWA to redeem a veRWA lock position of `assets` locked amount.
+     * @dev I.e. Redeem X stRWA for Y RWA: X is provided. The Y RWA returned is in the form a single veRWA lock position.
+     * @param shares Amount of stRWAs the user wants to use to redeem a governance token.
+     * @param receiver Address where the veRWA is transferred to.
+     * @param owner Current owner of stRWAs. 'shares` amount will be burned from this address.
+     * @return tokenId -> Token identifier of veRWA token transferred to `receiver`.
+     * @return assets -> Amount of `asset` in lock redeemed.
      */
-    function redeem(uint256 shares, address receiver, address owner) external nonReentrant returns (uint256 assets) {
+    function redeem(uint256 shares, address receiver, address owner) external nonReentrant returns (uint256 tokenId, uint256 assets) {
         shares.requireDifferentUint256(0);
         receiver.requireNonZeroAddress();
         owner.requireNonZeroAddress();
@@ -170,14 +182,14 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
         }
 
         _burn(owner, shares);
-        assets = shares;
         
-        _redeemFromTokenSilo(assets, receiver);
-        emit Redeem(msg.sender, receiver, owner, assets, shares);
+        (tokenId, assets) = _redeemFromTokenSilo(shares, receiver);
+        emit Redeem(msg.sender, receiver, owner, tokenId, assets, shares);
     }
 
     /**
-     * @notice This setter allows the factory owner to update the `rebaseIndexManager` state variable.
+     * @notice This setter allows the owner to update the `rebaseIndexManager` state variable.
+     * @dev The rebaseIndexManager address has the ability to execute rebase.
      * @param _rebaseIndexManager Address of rebase manager.
      */
     function updateRebaseIndexManager(address _rebaseIndexManager) external {
@@ -185,11 +197,14 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
             msg.sender != owner() && 
             msg.sender != tokenSilo.rebaseController()
         ) revert NotAuthorized(msg.sender);
+        emit RebaseIndexManager(_rebaseIndexManager);
         rebaseIndexManager = _rebaseIndexManager;
     }
 
 
-    // ~ Internal Methods ~
+    // --------
+    // Internal
+    // --------
 
     /**
      * @dev Pulls assets from `from` address of `amount`. Performs a pre and post balance check to 
@@ -214,12 +229,13 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
      * @notice Internal method for redeeming a veRWA position for a user based on
      * their $stRWA balance.
      */
-    function _redeemFromTokenSilo(uint256 assets, address receiver) internal {
-        tokenSilo.redeemLock(assets, receiver);
+    function _redeemFromTokenSilo(uint256 assets, address receiver) internal returns (uint256 tokenId, uint256 amountLocked) {
+        (tokenId, amountLocked) = tokenSilo.redeemLock(assets, receiver);
     }
 
     /**
      * @notice Inherited from UUPSUpgradeable.
+     * @dev Allows us to add a permissioned modifier to upgrade this contract.
      */
     function _authorizeUpgrade(address) internal override onlyOwner {}
 }

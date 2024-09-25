@@ -31,7 +31,7 @@ contract UpgradeMigrator is Script {
     // ~ Variables ~
 
     address public localEndpoint = MUMBAI_LZ_ENDPOINT_V1;
-    uint16 public remoteEndpointId = UNREAL_CHAINID;
+    uint16 public remoteEndpointId = UNREAL_LZ_CHAIN_ID_V1;
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public MUMBAI_RPC_URL = vm.envString("MUMBAI_RPC_URL");

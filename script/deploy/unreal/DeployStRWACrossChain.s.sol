@@ -61,6 +61,8 @@ contract DeployStRWACrossChain is DeployUtility {
     address immutable public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 immutable public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
+    uint256 internal mainChainId = 18233;
+
     function setUp() public {
         _setup("stRWA.testnet.deployment");
 
@@ -216,7 +218,7 @@ contract DeployStRWACrossChain is DeployUtility {
     function _deployWrappedStakedRWATokenForSatellite(address layerZeroEndpoint, string memory name, string memory symbol) internal returns (address proxyAddress) {
         bytes memory bytecode = abi.encodePacked(type(WrappedstRWASatellite).creationCode);
         address wrappedTokenAddress = vm.computeCreate2Address(
-            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(layerZeroEndpoint)))
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(mainChainId, layerZeroEndpoint)))
         );
 
         WrappedstRWASatellite wrappedToken;
@@ -225,7 +227,7 @@ contract DeployStRWACrossChain is DeployUtility {
             console.log("wrappedToken is already deployed to %s", wrappedTokenAddress);
             wrappedToken = WrappedstRWASatellite(wrappedTokenAddress);
         } else {
-            wrappedToken = new WrappedstRWASatellite{salt: _SALT}(layerZeroEndpoint);
+            wrappedToken = new WrappedstRWASatellite{salt: _SALT}(mainChainId, layerZeroEndpoint);
             assert(wrappedTokenAddress == address(wrappedToken));
             console.log("wrappedToken deployed to %s", wrappedTokenAddress);
         }

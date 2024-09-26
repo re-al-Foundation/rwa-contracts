@@ -12,7 +12,7 @@ import "../../../test/utils/Constants.sol";
 
 /** 
     @dev To run: 
-    forge script script/deploy/sepolia/UpgradeWSTRWA.s.sol:UpgradeWSTRWA --broadcast --verify -vvvv
+    forge script script/deploy/scroll/UpgradeWSTRWA.s.sol:UpgradeWSTRWA --broadcast --verify -vvvv
 */
 
 /**
@@ -30,8 +30,8 @@ contract UpgradeWSTRWA is DeployUtility {
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
     function setUp() public {
-        vm.createSelectFork(vm.envString("SEPOLIA_RPC_URL"));
-        _setUp("sepolia");
+        vm.createSelectFork(vm.envString("SCROLL_RPC_URL"));
+        _setUp("scroll");
 
         wstRWAToken = WrappedstRWASatellite(payable(_loadDeploymentAddress("wstRWA")));
     }
@@ -39,7 +39,7 @@ contract UpgradeWSTRWA is DeployUtility {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
         
-        wstRWAToken.upgradeToAndCall(address(new WrappedstRWASatellite(18233, SEPOLIA_LZ_ENDPOINT_V1)), "");
+        wstRWAToken.upgradeToAndCall(address(new WrappedstRWASatellite(111188, SCROLL_LZ_ENDPOINT_V1)), "");
 
         vm.stopBroadcast();
     }

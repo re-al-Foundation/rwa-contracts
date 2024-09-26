@@ -202,7 +202,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
 
     /**
      * @notice Allows the funds manager to claim any claimable rewards.
-     * @dev The ETH rewards claimed will remain in this contract and is unwrapped immediately.
+     * @dev The ETH rewards claimed will remain in this contract and is wrapped immediately.
      * @param claimed Amount ETH claimed
      */
     function claim() external onlyFundsManager returns (uint256 claimed) {

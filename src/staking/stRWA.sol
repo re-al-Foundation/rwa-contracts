@@ -10,6 +10,8 @@ import { ReentrancyGuardUpgradeable } from "@openzeppelin/contracts-upgradeable/
 // tangible imports
 import { LayerZeroRebaseTokenUpgradeable } from "@tangible-foundation-contracts/tokens/LayerZeroRebaseTokenUpgradeable.sol";
 import { CrossChainToken } from "@tangible-foundation-contracts/tokens/CrossChainToken.sol";
+import { RebaseTokenMath } from "@tangible-foundation-contracts/libraries/RebaseTokenMath.sol";
+import { BytesLib } from "@layerzerolabs/contracts/libraries/BytesLib.sol";
 
 // local imports
 import { TokenSilo } from "./TokenSilo.sol";
@@ -25,6 +27,8 @@ import { CommonValidations } from "../libraries/CommonValidations.sol";
 contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGuardUpgradeable {
     using SafeERC20 for IERC20;
     using CommonValidations for *;
+    using RebaseTokenMath for uint256;
+    using BytesLib for bytes;
 
     // ---------------
     // State Variables
@@ -205,6 +209,68 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     // --------
     // Internal
     // --------
+
+    /**
+     * @notice Initiates the sending of tokens to another chain.
+     * @dev This function prepares a message containing the shares. It then uses LayerZero's send functionality
+     * to send the tokens to the destination chain. The function checks adapter parameters and emits
+     * a `SendToChain` event upon successful execution.
+     *
+     * @param from The address from which tokens are sent.
+     * @param dstChainId The destination chain ID.
+     * @param toAddress The address on the destination chain to which tokens will be sent.
+     * @param amount The amount of tokens to send.
+     * @param refundAddress The address for any refunds.
+     * @param zroPaymentAddress The address for ZRO payment.
+     * @param adapterParams Additional parameters for the adapter.
+     */
+    function _send(
+        address from,
+        uint16 dstChainId,
+        bytes memory toAddress,
+        uint256 amount,
+        address payable refundAddress,
+        address zroPaymentAddress,
+        bytes memory adapterParams
+    ) internal override {
+
+        _checkAdapterParams(dstChainId, PT_SEND, adapterParams, NO_EXTRA_GAS);
+
+        uint256 shares = _debitFrom(from, dstChainId, toAddress, amount);
+
+        emit SendToChain(dstChainId, from, toAddress, shares.toTokens(rebaseIndex()));
+
+        bytes memory lzPayload = abi.encode(PT_SEND, msg.sender, from, toAddress, shares);
+        _lzSend(dstChainId, lzPayload, refundAddress, zroPaymentAddress, adapterParams, msg.value);
+    }
+
+    /**
+     * @notice Acknowledges the receipt of tokens from another chain and credits the correct amount to the recipient's
+     * address.
+     * @dev Upon receiving a payload, this function decodes it to extract the destination address and the message
+     * content, which includes shares to credit an account.
+     *
+     * @param srcChainId The source chain ID from which tokens are received.
+     * @param srcAddressBytes The address on the source chain from which the message originated.
+     * @param payload The payload containing the encoded destination address and message with shares.  
+     */
+    function _sendAck(uint16 srcChainId, bytes memory srcAddressBytes, uint64, bytes memory payload)
+        internal
+        override
+    {
+        (, address initiator, address from, bytes memory toAddressBytes, uint256 shares) =
+            abi.decode(payload, (uint16, address, address, bytes, uint256));
+
+        address src = srcAddressBytes.toAddress(0);
+        address to = toAddressBytes.toAddress(0);
+        uint256 amount;
+
+        amount = _creditTo(srcChainId, to, shares);
+
+        _tryNotifyReceiver(srcChainId, initiator, from, src, to, amount);
+
+        emit ReceiveFromChain(srcChainId, to, amount);
+    }
 
     /**
      * @dev Pulls assets from `from` address of `amount`. Performs a pre and post balance check to 

@@ -61,8 +61,10 @@ contract DeployStRWACrossChain is DeployUtility {
     address immutable public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 immutable public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
 
+    uint256 internal mainChainId = 111188;
+
     function setUp() public {
-        _setup("stRWA.testnet.deployment");
+        _setup("stRWA.mainnet.deployment");
 
         rwaToken = _loadDeploymentAddress("re.al", "RWAToken");
         rwaVotingEscrow = _loadDeploymentAddress("re.al", "RWAVotingEscrow");
@@ -195,7 +197,7 @@ contract DeployStRWACrossChain is DeployUtility {
      */
     function _deployTokenSilo(address wrappedToken) internal returns (address proxyAddress) {
         ERC1967Proxy siloProxy = new ERC1967Proxy(
-            address(new TokenSilo(wrappedToken, rwaVotingEscrow, revStream, REAL_WETH)),
+            address(new TokenSilo(wrappedToken, rwaVotingEscrow, revStream, REAL_WREETH)),
             abi.encodeWithSelector(TokenSilo.initialize.selector,
                 DEPLOYER_ADDRESS
             )
@@ -216,7 +218,7 @@ contract DeployStRWACrossChain is DeployUtility {
     function _deployWrappedStakedRWATokenForSatellite(address layerZeroEndpoint, string memory name, string memory symbol) internal returns (address proxyAddress) {
         bytes memory bytecode = abi.encodePacked(type(WrappedstRWASatellite).creationCode);
         address wrappedTokenAddress = vm.computeCreate2Address(
-            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(layerZeroEndpoint)))
+            _SALT, keccak256(abi.encodePacked(bytecode, abi.encode(mainChainId, layerZeroEndpoint)))
         );
 
         WrappedstRWASatellite wrappedToken;
@@ -225,7 +227,7 @@ contract DeployStRWACrossChain is DeployUtility {
             console.log("wrappedToken is already deployed to %s", wrappedTokenAddress);
             wrappedToken = WrappedstRWASatellite(wrappedTokenAddress);
         } else {
-            wrappedToken = new WrappedstRWASatellite{salt: _SALT}(layerZeroEndpoint);
+            wrappedToken = new WrappedstRWASatellite{salt: _SALT}(mainChainId, layerZeroEndpoint);
             assert(wrappedTokenAddress == address(wrappedToken));
             console.log("wrappedToken deployed to %s", wrappedTokenAddress);
         }

@@ -8,12 +8,15 @@ import { SafeERC20 } from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.s
 import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/access/Ownable2StepUpgradeable.sol";
 
 // local imports
+import { stRWA as StakedRWA } from "./stRWA.sol";
+import { stRWARebaseManager } from "./stRWARebaseManager.sol";
 import { RWAVotingEscrow } from "../governance/RWAVotingEscrow.sol";
 import { VotingMath } from "../governance/VotingMath.sol";
 import { RevenueStreamETH } from "../RevenueStreamETH.sol";
 import { RWAToken } from "../RWAToken.sol";
 import { CommonValidations } from "../libraries/CommonValidations.sol";
 import { ISwapRouter } from "../interfaces/ISwapRouter.sol";
+import { IPair } from "../interfaces/IPair.sol";
 import { IWETH } from "../interfaces/IWETH.sol";
 
 /**
@@ -64,9 +67,9 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     uint256 public masterTokenId;
     /// @dev Distribution ratios of ETH rewards.
     DistributionRatios public distribution;
-    /// @dev Stores contract address of rebase controller.
-    address public rebaseController;
-    /// @dev Redemption fee
+    /// @dev Stores contract address of rebase manager.
+    address public rebaseManager;
+    /// @dev Redemption fee.
     uint16 public fee;
 
 
@@ -82,7 +85,8 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     event DistributionUpdated(uint256 burn, uint256 retain, uint256 rebase);
     event ETHConverted(uint256 amountETH, uint256 amountOut);
     event FundsManagerSet(address indexed account, bool);
-    event RebaseControllerUpdated(address indexed newController);
+    event RebaseManagerUpdated(address indexed newController);
+    event FeeUpdated(uint16 fee);
 
     error NotAuthorized(address);
 
@@ -242,6 +246,8 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
         require(amountOut != 0, "no tokens received");
 
         emit ETHConverted(amount, amountOut);
+
+        if (StakedRWA(stRWA).totalSupply() != 0) _rebase();        
     }
 
     /**
@@ -291,6 +297,7 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     function setFee(uint16 _fee) external onlyOwner {
         _fee.requireDifferentUint256(fee);
         uint48(_fee).requireLessThanUint48(100_00);
+        emit FeeUpdated(_fee);
         fee = _fee;
     }
 
@@ -322,13 +329,19 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice This method allows the factory owner to update the `rebaseController` state variable.
-     * @param controller New address for `rebaseController`.
+     * @notice This method allows the factory owner to update the `rebaseManager` state variable.
+     * @param _rebaseManager New address for `rebaseManager`.
      */
-    function setRebaseController(address controller) external onlyOwner {
-        controller.requireNonZeroAddress();
-        emit RebaseControllerUpdated(controller);
-        rebaseController = controller;
+    function setRebaseManager(address _rebaseManager) external onlyOwner {
+        _rebaseManager.requireNonZeroAddress();
+        _rebaseManager.requireDifferentAddress(rebaseManager);
+
+        emit RebaseManagerUpdated(_rebaseManager);
+        rebaseManager = _rebaseManager;
+
+        if (StakedRWA(stRWA).rebaseIndexManager() != _rebaseManager) {
+            StakedRWA(stRWA).updateRebaseIndexManager(_rebaseManager);
+        }
     }
 
 
@@ -369,6 +382,13 @@ contract TokenSilo is UUPSUpgradeable, Ownable2StepUpgradeable {
     // --------
     // Internal
     // --------
+
+    /**
+     * @notice Internal method for executing a rebase call on the rebaseManager contract
+     */
+    function _rebase() internal {
+        stRWARebaseManager(rebaseManager).rebase();
+    }
 
     /**
      * @dev Pulls assets from `from` address of `amount`. Performs a pre and post balance check to 

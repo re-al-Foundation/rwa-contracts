@@ -234,29 +234,24 @@ contract StakedRWARebaseTest is Test, StakedRWATestUtility {
         uint256 preBalRWA = rwaToken.balanceOf(address(tokenSilo));
         uint256 quote = _getQuote(claimed);
 
+        uint256 preLocked = tokenSilo.getLockedAmount();
+        uint256 preSupply = rwaToken.totalSupply();
+
+        (uint256 burnAmount,,uint256 rebaseAmount) = tokenSilo.getAmounts(quote);
+        emit log_named_uint("burn amount", burnAmount);
+        emit log_named_uint("rebase amount", rebaseAmount);
+
         // convert
         uint256 amountOut = _convertRewardToken(claimed);
+        assertEq(quote, amountOut);
 
         // ~ State check 3 ~
 
         assertEq(WETH.balanceOf(address(tokenSilo)), preBalWETH - claimed);
-        assertEq(rwaToken.balanceOf(address(tokenSilo)), preBalRWA + quote);
+        assertApproxEqAbs(rwaToken.balanceOf(address(tokenSilo)), 0, 1);
 
-        uint256 preLocked = tokenSilo.getLockedAmount();
-        uint256 preSupply = rwaToken.totalSupply();
-
-        (uint256 burnAmount,,uint256 rebaseAmount) = tokenSilo.getAmounts(amountOut);
-        emit log_named_uint("burn amount", burnAmount);
-        emit log_named_uint("rebase amount", rebaseAmount);
-
-        assertEq(burnAmount, amountOut * 2 / 10);
-        assertEq(rebaseAmount, amountOut * 8 / 10);
-
-        // rebase
-        vm.prank(MULTISIG);
-        stRWA.rebase();
-
-        // ~ State check 4 ~
+        assertEq(burnAmount, quote * 2 / 10);
+        assertEq(rebaseAmount, quote * 8 / 10);
 
         assertGt(stRWA.previewRedeem(stRWA.balanceOf(JOE)), amountTokens);
         assertEq(rwaToken.totalSupply(), preSupply - burnAmount);

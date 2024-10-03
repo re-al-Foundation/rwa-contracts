@@ -7,6 +7,7 @@ import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy
 // local imports
 import { stRWA as StakedRWA } from "../../../src/staking/stRWA.sol";
 import { TokenSilo } from "../../../src/staking/TokenSilo.sol";
+import { stRWARebaseManager } from "../../../src/staking/stRWARebaseManager.sol";
 import { RWAToken } from "../../../src/RWAToken.sol";
 import { RWAVotingEscrow } from "../../../src/governance/RWAVotingEscrow.sol";
 import { RevenueStreamETH } from "../../../src/RevenueStreamETH.sol";
@@ -30,6 +31,7 @@ contract StakedRWATestUtility is Utility {
 
     StakedRWA public stRWA;
     TokenSilo public tokenSilo;
+    stRWARebaseManager public rebaseManager;
 
     // rwa contracts
     RWAToken public constant rwaToken = RWAToken(0x4644066f535Ead0cde82D209dF78d94572fCbf14);
@@ -69,11 +71,27 @@ contract StakedRWATestUtility is Utility {
         );
         tokenSilo = TokenSilo(payable(address(siloProxy)));
 
+        // Deploy rebaseManager & proxy
+        ERC1967Proxy rebaseManagerProxy = new ERC1967Proxy(
+            address(new stRWARebaseManager(address(stRWA), address(tokenSilo))),
+            abi.encodeWithSelector(stRWARebaseManager.initialize.selector,
+                MULTISIG,
+                address(0),
+                address(0),
+                address(0)
+            )
+        );
+        rebaseManager = stRWARebaseManager(address(rebaseManagerProxy));
+
         // ~ Config ~
 
         // set tokenSilo on stRWA
         vm.prank(MULTISIG);
         stRWA.setTokenSilo(payable(address(tokenSilo)));
+
+        // set rebaseManager on token silo -> sets on stRWA as well
+        vm.prank(MULTISIG);
+        tokenSilo.setRebaseManager(address(rebaseManager));
 
         // upgrade RWAToken
         _upgradeRWAToken();

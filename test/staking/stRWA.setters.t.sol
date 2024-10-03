@@ -30,7 +30,7 @@ contract StakedRWASettersTest is Test, StakedRWATestUtility {
     function test_stakedRWA_stRWA_updateRebaseIndexManager() public {
         // ~ Pre-state check ~
 
-        assertEq(stRWA.rebaseIndexManager(), address(0));
+        assertNotEq(stRWA.rebaseIndexManager(), BOB);
 
         // ~ Execute updateRebaseIndexManager ~
 
@@ -64,22 +64,36 @@ contract StakedRWASettersTest is Test, StakedRWATestUtility {
         assertEq(tokenSilo.isFundsManager(BOB), true);
     }
 
-    function test_stakedRWA_tokenSilo_setRebaseController() public {
+    /// @dev Verifies proper state changes when tokenSilo::setRebaseManage is executed.
+    function test_stakedRWA_tokenSilo_setRebaseManager() public {
         // ~ Pre-state check ~
 
-        assertEq(tokenSilo.rebaseController(), address(0));
+        assertNotEq(tokenSilo.rebaseManager(), BOB);
+        assertNotEq(stRWA.rebaseIndexManager(), BOB);
 
         // ~ Execute updateRebaseIndexManager ~
 
         vm.expectRevert();
-        tokenSilo.setRebaseController(BOB);
+        tokenSilo.setRebaseManager(BOB);
 
         vm.prank(MULTISIG);
-        tokenSilo.setRebaseController(BOB);
+        tokenSilo.setRebaseManager(BOB);
 
         // ~ Post-state check ~
 
-        assertEq(tokenSilo.rebaseController(), BOB);
+        assertEq(tokenSilo.rebaseManager(), BOB);
+        assertEq(stRWA.rebaseIndexManager(), BOB);
     }
-    
+
+    function test_stakedRWA_rebaseManager_setPair() public {
+        // TODO
+    }
+
+    function test_stakedRWA_rebaseManager_setSingleTokenLiquidityProvider() public {
+        // TODO
+    }
+
+    function test_stakedRWA_rebaseManager_setGauge() public {
+        // TODO
+    }
 }

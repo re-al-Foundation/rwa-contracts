@@ -16,6 +16,13 @@ This is meant to replace the 3,3+ Passive Income NFTs. Holders will be eligible 
 
 You can read more about veRWA NFTs. You can also migrate from the 3,3+ NFTs on our migration page as well.
 
+## Liquid Staked RWA
+
+stRWA is a wrapped, rebasing version of veRWA. RWA holders can deposit/stake their tokens in exchange for stRWA tokens (minted 1-to-1). stRWA is natively cross-chain, using LZ OFT technology. This allows stRWA holders to bridge to and from various chains in the network.
+
+The RWA staked will be locked into a single veRWA position which will earn passive yield. The yield accrued by the protocol will be distributed amongst the stRWA holders via rebase. It is also important to mention that 20% of rewards will be used to buy and burn RWA, while the remaining rewards are added to the lock position to earn the protocol more yield.
+
+
 ## Migration
 
 This ecosystem takes advantage of LayerZero v1 to facilitate cross-chain messaging. The **CrossChainMigrator** contract will spark the migration by taking the current state of the migrated asset and transferring that state over to the new contracts on Real Chain.
@@ -31,6 +38,12 @@ The CrossChainMigrator will send a message to the LayerZero endpoint on Polygon 
 - [RWAToken](./src/RWAToken.sol) - Replaces TNGBL - ERC-20 contract for RWA token. This contract facilitates any minting or transferring of RWA tokens.
 - [RoyaltyHandler](./src/RoyaltyHandler.sol) - Handles any royalties accrued from RWA swaps.
 - [RWAVotingEscrow](./src/governance/RWAVotingEscrow.sol) - Replaces PassiveIncomeNFT - An ERC-721 token contract that inherits VotesUpgradeable and assigns voting power based on the quantity of locked tokens and their vesting duration. It is designed to incentivize long-term holding and participation in governance. Locked token of choice is RWAToken.
+
+## Staking
+
+- [stRWA](./src/staking/stRWA.sol) - This token is a cross-chain rebasing token. This token can only be minted in exchange for RWA tokens.
+- [TokenSilo](./src/staking/TokenSilo.sol) - Serves as the token silo for the veRWA token being used as collateral for stRWA holders. This contract manages the veRWA lock position that earns the stRWA holders passive yield.
+- [stRWARebaseManager](./src/staking/stRWARebaseManager.sol) - This contract manages the rebase and skim logic used to execute rebases on the stRWA contract and perform any skims necessary from a pool within the ecosystem.
 
 ## Governance
 
@@ -65,6 +78,13 @@ To run tests using forge:
 ### Token
 
 - [RWATokenTest](./test/RWAToken.t.sol) - Contains basic unit tests and integration tests for **RWAToken**.
+
+### Staking
+
+- [StakedRWATestUtility](./test/staking/utils/stRWA.setUp.sol) - Contains the deployment & configuration of the staking contracts and utility functions needed for all **StakedRWATest** test files.
+- [StakedRWADepositTest](./test/staking/stRWA.deposit.t.sol) - Contains unit tests for **stRWA**. Primarily in regards to depositing/staking.
+- [StakedRWARedeemTest](./test/staking/stRWA.redeem.t.sol) - Contains unit tests for **stRWA**. Primarily in regards to redeeming/unstaking.
+- [StakedRWARebaseTest](./test/staking/stRWA.rebasing.t.sol) - Contains unit tests for **stRWA**. Primarily in regards to rebasing.
 
 ### Governance
 

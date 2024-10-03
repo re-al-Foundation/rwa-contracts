@@ -586,9 +586,7 @@ contract MainDeploymentTest is Utility {
     // ------------------
 
     /// @notice Initial state test.
-    function test_mainDeployment_init_state() public {
-
-    }
+    //function test_mainDeployment_init_state() public {}
 
 
     // ----------

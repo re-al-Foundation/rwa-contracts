@@ -20,7 +20,7 @@ import { CommonValidations } from "../libraries/CommonValidations.sol";
 /**
  * @title stRWA
  * @author chasebrownn
- * @notice This token is a cross-chain rebasing token. This token can only be minted in exchange for $RWA tokens.
+ * @notice  
  * Once minted, the $RWA tokens will be locked into a veRWA position to begin accruing revenue. The revenue
  * will be claimed and used to rebase; Distributing revenue amongst $stRWA holders.
  */
@@ -117,6 +117,17 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     }
 
     /**
+     * @notice This method disables rebaseIndex multiplier for a given address.
+     * @param account Account not affected by rebase.
+     * @param isDisabled If true, balanceOf(`account`) will not be affected by rebase.
+     */
+    function disableRebase(address account, bool isDisabled) external {
+        if (msg.sender != account && msg.sender != rebaseIndexManager) revert NotAuthorized(msg.sender);
+        require(_isRebaseDisabled(account) != isDisabled, "value already set");
+        _disableRebase(account, isDisabled);
+    }
+
+    /**
      * @notice This method allows the owner to set a new address in `tokenSilo`.
      * @param silo New address for `tokenSilo`.
      */
@@ -199,7 +210,7 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     function updateRebaseIndexManager(address _rebaseIndexManager) external {
         if (
             msg.sender != owner() && 
-            msg.sender != tokenSilo.rebaseController()
+            msg.sender != address(tokenSilo)
         ) revert NotAuthorized(msg.sender);
         emit RebaseIndexManager(_rebaseIndexManager);
         rebaseIndexManager = _rebaseIndexManager;

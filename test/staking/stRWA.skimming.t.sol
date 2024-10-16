@@ -13,6 +13,7 @@ import { RWAVotingEscrow } from "../../src/governance/RWAVotingEscrow.sol";
 import { RevenueStreamETH } from "../../src/RevenueStreamETH.sol";
 import { RevenueDistributor } from "../../src/RevenueDistributor.sol";
 import { ISingleTokenLiquidityProvider } from "../../src/interfaces/ISingleTokenLiquidityProvider.sol";
+import { IBribe } from "../../src/interfaces/IBribe.sol";
 import { ISwapRouter } from "../../src/interfaces/ISwapRouter.sol";
 import { IQuoterV2 } from "../../src/interfaces/IQuoterV2.sol";
 import { IRouter } from "../../src/interfaces/IRouter.sol";
@@ -46,16 +47,15 @@ contract StakedRWASkimUtility is Utility {
     ISwapRouter public constant SWAP_ROUTER = ISwapRouter(UNREAL_SWAP_ROUTER);
     IQuoterV2 public constant QUOTER = IQuoterV2(UNREAL_QUOTERV2);
     IRouter public constant ROUTER = IRouter(0xaFA5322cc9268E306E3C256B5BB2C2BfFFa4f775);
-    ISingleTokenLiquidityProvider public constant SINGLE_TOKEN_PROVIDER = ISingleTokenLiquidityProvider(0xB4F7FE6fd073c6D72dDcBF92A120afdfeF972893);
 
     // variables
     IWETH public constant WETH = IWETH(UNREAL_WETH);
     address public constant OWNER = 0x1F834C1a259AC590D61fd668fCb5E333E08614CE;
     address public constant POOL = 0x82A2d0f3F2FF889F4ecdC096D175136B82B42Cda;
-    address public constant GAUGE = 0x4093370686643Fe18c3187075e6385fa27e04a3A;
+    address public constant BRIBE = 0xbA1b22011e1b4981aD6F373e34dB0796994678a6;
 
     function setUp() public virtual {
-        vm.createSelectFork(UNREAL_RPC_URL, 878912);
+        vm.createSelectFork(UNREAL_RPC_URL, 890477);
 
         // ~ Deploy Contracts ~
 
@@ -72,8 +72,7 @@ contract StakedRWASkimUtility is Utility {
             abi.encodeWithSelector(stRWARebaseManager.initialize.selector,
                 OWNER,
                 POOL,
-                GAUGE,
-                SINGLE_TOKEN_PROVIDER
+                BRIBE
             )
         );
         rebaseManager = stRWARebaseManager(address(rebaseManagerProxy));
@@ -207,8 +206,9 @@ contract StakedRWASkimUtility is Utility {
         assertApproxEqAbs(stRWA.balanceOf(POOL) - _reserve1(POOL), 0, 2);
         assertApproxEqAbs(stRWA.balanceOf(OWNER), preBal + skimmable, 2);
     }
-
+ 
     /// @dev Verifies proper state changes when RebaseManager::rebase is executed.
+    /// The execution will perform a rebase, skim, and bribe.
     function test_stakedRWA_rebase_from_rebaseManager() public {
         // ~ Config ~
 
@@ -222,13 +222,31 @@ contract StakedRWASkimUtility is Utility {
 
         deal(address(rwaToken), address(tokenSilo), amountTokens);
 
-        assertEq(stRWA.balanceOf(POOL) - _reserve1(POOL), 0);
+        // ~ Pre-state check ~
+
+        assertEq(stRWA.balanceOf(BRIBE), 0);
+
+        uint256 balance = rwaToken.balanceOf(address(tokenSilo));
+        uint256 preLocked = tokenSilo.getLockedAmount();
+        uint256 preSupply = rwaToken.totalSupply();
+        (uint256 burnAmount,,uint256 rebaseAmount) = tokenSilo.getAmounts(balance);
 
         // ~ Execute rebase ~
 
         vm.prank(OWNER);
         rebaseManager.rebase();
         
-        // TODO: Complete post-state checks
+        // ~ Post-state check ~
+
+        assertNotEq(stRWA.balanceOf(BRIBE), 0);
+
+        // Verify amount burned and amount rebased is correct.
+        assertEq(burnAmount, balance * 2 / 10);
+        assertEq(rebaseAmount, balance * 8 / 10);
+        // Verify tokenSilo has 0 RWA after rebase.
+        assertApproxEqAbs(rwaToken.balanceOf(address(tokenSilo)), 0, 1);
+        // Verify RWA supply and new locked amount post-rebase.
+        assertEq(rwaToken.totalSupply(), preSupply - burnAmount);
+        assertEq(tokenSilo.getLockedAmount(), preLocked + rebaseAmount);
     }
 }

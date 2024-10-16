@@ -40,8 +40,6 @@ contract DeploystRWARebaseManager is DeployUtility {
 
     // ~ Variables ~
 
-    address public constant SINGLE_TOKEN_PROVIDER = 0x5c8beC8D9B2FF163929389cB530d6AEe886fb3c0;
-
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     address public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     string public REAL_RPC_URL = vm.envString("REAL_RPC_URL");
@@ -62,8 +60,7 @@ contract DeploystRWARebaseManager is DeployUtility {
             abi.encodeWithSelector(stRWARebaseManager.initialize.selector,
                 DEPLOYER_ADDRESS, // owner
                 address(0), // pool
-                address(0), // gaige
-                SINGLE_TOKEN_PROVIDER // singleTokenProvider
+                address(0) // bribe
             )
         );
 

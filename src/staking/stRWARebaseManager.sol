@@ -10,7 +10,7 @@ import { Ownable2StepUpgradeable } from "@openzeppelin/contracts-upgradeable/acc
 // local imports
 import { stRWA as StakedRWA } from "./stRWA.sol";
 import { CommonValidations } from "../libraries/CommonValidations.sol";
-import { ISingleTokenLiquidityProvider } from "../interfaces/ISingleTokenLiquidityProvider.sol";
+import { IBribe } from "../interfaces/IBribe.sol";
 import { IGauge } from "../interfaces/IGauge.sol";
 import { IPair } from "../interfaces/IPair.sol";
 
@@ -18,7 +18,7 @@ import { IPair } from "../interfaces/IPair.sol";
  * @title stRWARebaseManager
  * @author chasebrownn
  * @notice This contract manages the rebase and skim logic used to execute rebases on the stRWA contract and post-rebase
- * perform any skims necessary from a pool within the ecosystem.
+ * performs a skim of excess stRWA in the pool. The skimmed stRWA will be used for bribes via the PearlV2 Bribe contract.
  */
 contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
     using SafeERC20 for IERC20;
@@ -32,10 +32,8 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
     StakedRWA public immutable stRWA;
     /// @dev Stores contact address for TokenSilo.
     address public immutable tokenSilo;
-    /// @dev Stores contract reference for SingleTokenLiquidityProvider.
-    ISingleTokenLiquidityProvider public singleTokenLiquidityProvider;
-    /// @dev Stores contract reference to stRWA-RWA Gauge.
-    IGauge public gauge;
+    /// @dev Stores contract reference for Bribe.
+    IBribe public bribe;
     /// @dev stRWA-RWA pool - used for skimming post-rebase.
     IPair public pair;
 
@@ -44,9 +42,8 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
     // Events & Errors
     // ---------------
 
-    event pairUpdated(address pair);
-    event singleTokenLiquidityProviderUpdated(address provider);
-    event gaugeUpdated(address gauge);
+    event PairUpdated(address pair);
+    event BribeUpdated(address provider);
 
     error NotAuthorized(address);
 
@@ -85,18 +82,16 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
      * @notice Initializes TokenSilo non-immutables.
      * @param owner Initial owner of contract.
      * @param _pair Address of stRWA-RWA pool.
-     * @param _gauge Address of stRWA-RWA gauge.
-     * @param _stlp Address of singleTokenLiquidityProvider contract.
+     * @param _bribe Address of bribe contract.
      */
-    function initialize(address owner, address _pair, address _gauge, address _stlp) external initializer {
+    function initialize(address owner, address _pair, address _bribe) external initializer {
         owner.requireNonZeroAddress();
 
         __Ownable2Step_init();
         _transferOwnership(owner);
 
         pair = IPair(_pair);
-        gauge = IGauge(_gauge);
-        singleTokenLiquidityProvider = ISingleTokenLiquidityProvider(_stlp);
+        bribe = IBribe(_bribe);
 
         stRWA.disableRebase(address(this), true);
     }
@@ -123,34 +118,21 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
     function setPair(address _pair) external onlyOwner {
         _pair.requireDifferentAddress(address(pair));
         _pair.requireNonZeroAddress();
-        emit pairUpdated(_pair);
+        emit PairUpdated(_pair);
         pair = IPair(_pair);
     }
 
     /**
-     * @notice Allows the owner to update the `singleTokenLiquidityProvider` address.
-     * @dev The singleTokenLiquidityProvider is the address of the SingleTokenLiquidityProvider contract which
-     * allows this contact to add one-sided liquidity to the `pair`.
-     * @param _stlp New singleTokenLiquidityProvider address.
+     * @notice Allows the owner to update the `bribe` address.
+     * @dev The bribe is the address of the Bribe contract which
+     * allows this contract to bribe it's skimmed stRWA.
+     * @param _bribe New bribe address.
      */
-    function setSingleTokenLiquidityProvider(address _stlp) external onlyOwner {
-        _stlp.requireDifferentAddress(address(singleTokenLiquidityProvider));
-        _stlp.requireNonZeroAddress();
-        emit singleTokenLiquidityProviderUpdated(_stlp);
-        singleTokenLiquidityProvider = ISingleTokenLiquidityProvider(_stlp);
-    }
-
-    /**
-     * @notice Allows the owner to update the `gauge` address.
-     * @dev The gauge is the address of the GaugeV2 contract which allows this contact to stake liquidity tokens
-     * in exchange for rewards.
-     * @param _gauge New gauge address.
-     */
-    function setGauge(address _gauge) external onlyOwner {
-        _gauge.requireDifferentAddress(address(gauge));
-        _gauge.requireNonZeroAddress();
-        emit gaugeUpdated(_gauge);
-        gauge = IGauge(_gauge);
+    function setBribe(address _bribe) external onlyOwner {
+        _bribe.requireDifferentAddress(address(bribe));
+        _bribe.requireNonZeroAddress();
+        emit BribeUpdated(_bribe);
+        bribe = IBribe(_bribe);
     }
 
 
@@ -159,7 +141,7 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
     // --------
 
     /**
-     * @notice Internal method for performing a rebase and skim in one execution.
+     * @notice Internal method for performing a rebase, skim, and bribe.
      */
     function _rebaseAndSkim() internal {
         // call rebase on stRWA
@@ -167,7 +149,7 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
         // skim
         uint256 skimmed;
         if (address(pair) != address(0)) skimmed = _skim();
-        // add to liq and stake
+        // bribe skimmed stRWA
         if (skimmed != 0) _performBribe();
     }
 
@@ -184,24 +166,14 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
     }
 
     /**
-     * @notice Performs a one-sided liquidity add and staked liquidity tokens for rewards.
-     * @dev The amount referenced when adding to liquidity is the entire contract balance of stRWA tokens.
-     * Similarly, all liquidity tokens that are within the contract will also be staked into the gauge.
+     * @notice Performs a bribe by depositing into bribe contract.
+     * @dev The amount added to bribes is the amount of stRWA in the contract balance.
      */
     function _performBribe() internal {
         // add `amount` to liquidity.
         uint256 amount = stRWA.balanceOf(address(this));
-        stRWA.approve(address(singleTokenLiquidityProvider), amount);
-        uint256 liquidity = singleTokenLiquidityProvider.addLiquidity(
-            pair,
-            address(stRWA),
-            amount,
-            amount/2,
-            0
-        );
-        // stake liquidity tokens.
-        //pair.approve(address(gauge), liquidity);
-        // TODO: gauge.depositAll();
+        stRWA.approve(address(bribe), amount);
+        bribe.notifyRewardAmount(address(stRWA), amount);
     }
 
     /**

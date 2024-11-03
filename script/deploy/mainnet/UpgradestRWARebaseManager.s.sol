@@ -16,7 +16,7 @@ import "../../../test/utils/Constants.sol";
 
 /** 
     @dev To run: 
-    forge script script/deploy/mainnet/DeploystRWARebaseManager.s.sol:DeploystRWARebaseManager --broadcast --legacy \
+    forge script script/deploy/mainnet/UpgradestRWARebaseManager.s.sol:UpgradestRWARebaseManager --broadcast --legacy \
     --gas-estimate-multiplier 800 \
     --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
 
@@ -27,16 +27,17 @@ import "../../../test/utils/Constants.sol";
 */
 
 /**
- * @title DeploystRWARebaseManager
+ * @title UpgradestRWARebaseManager
  * @author Chase Brown
  * @notice This script deploys a new stRWARebaseManager contract and upgrades the current contract on mainnet.
  */
-contract DeploystRWARebaseManager is DeployUtility {
+contract UpgradestRWARebaseManager is DeployUtility {
 
     // ~ Contracts ~
 
-    TokenSilo public tokenSilo;
+    address public tokenSilo;
     address public stRWA;
+    stRWARebaseManager public rebaseManager;
 
     // ~ Variables ~
 
@@ -44,31 +45,19 @@ contract DeploystRWARebaseManager is DeployUtility {
     address public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     string public REAL_RPC_URL = vm.envString("REAL_RPC_URL");
 
-    address public POOL = 0xb28d015563c81dd66Ab781853c03B7B66aa46C1b;
-
     function setUp() public {
         vm.createSelectFork(REAL_RPC_URL);
         _setUp("re.al");
 
-        tokenSilo = TokenSilo(payable(_loadDeploymentAddress("TokenSilo")));
+        tokenSilo = _loadDeploymentAddress("TokenSilo");
         stRWA = _loadDeploymentAddress("stRWA");
+        rebaseManager = stRWARebaseManager(_loadDeploymentAddress("stRWARebaseManager"));
     }
 
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
-        
-        ERC1967Proxy rebaseManagerProxy = new ERC1967Proxy(
-            address(new stRWARebaseManager(address(stRWA), address(tokenSilo))),
-            abi.encodeWithSelector(stRWARebaseManager.initialize.selector,
-                DEPLOYER_ADDRESS, // owner
-                POOL, // pool
-                address(0) // bribe
-            )
-        );
 
-        tokenSilo.setRebaseManager(address(rebaseManagerProxy));
-
-        _saveDeploymentAddress("stRWARebaseManager", address(rebaseManagerProxy));
+        rebaseManager.upgradeToAndCall(address(new stRWARebaseManager(address(stRWA), address(tokenSilo))), "");
 
         vm.stopBroadcast();
     }

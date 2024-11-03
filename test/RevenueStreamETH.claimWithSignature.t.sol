@@ -217,33 +217,35 @@ contract RevenueStreamETHSignatureTest is Utility {
         (claimData.amount, claimData.indexes) = REV_STREAM.claimable(JOE);
         claimData.currentIndex = REV_STREAM.lastClaimIndex(JOE);
 
-        // attacker signs data hash
-        (uint8 v, bytes32 r, bytes32 s) = vm.sign(
-            attackerPK,
-            getEthSignedMessageHash(
-                keccak256(
-                    // create data hash
-                    abi.encodePacked(
-                        JOE,
-                        claimData.amount,
-                        claimData.currentIndex,
-                        claimData.indexes,
-                        block.timestamp
+        if(vm.addr(attackerPK) != signer) {
+            // attacker signs data hash
+            (uint8 v, bytes32 r, bytes32 s) = vm.sign(
+                attackerPK,
+                getEthSignedMessageHash(
+                    keccak256(
+                        // create data hash
+                        abi.encodePacked(
+                            JOE,
+                            claimData.amount,
+                            claimData.currentIndex,
+                            claimData.indexes,
+                            block.timestamp
+                        )
                     )
                 )
-            )
-        );
+            );
 
-        // claimWithSignature -> revert
-        vm.prank(JOE);
-        vm.expectRevert(abi.encodeWithSelector(RevenueStreamETH.InvalidSigner.selector, attacker));
-        REV_STREAM.claimWithSignature(
-            claimData.amount,
-            claimData.currentIndex,
-            claimData.indexes,
-            block.timestamp,
-            _packRsv(v, r, s)
-        );
+            // claimWithSignature -> revert
+            vm.prank(JOE);
+            vm.expectRevert(abi.encodeWithSelector(RevenueStreamETH.InvalidSigner.selector, attacker));
+            REV_STREAM.claimWithSignature(
+                claimData.amount,
+                claimData.currentIndex,
+                claimData.indexes,
+                block.timestamp,
+                _packRsv(v, r, s)
+            );
+        }
     }
 
     /// @dev Verifies the currentIndex input has to be equal to the lastClaimIndex.

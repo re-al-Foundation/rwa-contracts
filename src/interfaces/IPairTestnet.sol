@@ -42,5 +42,5 @@ interface IPair {
 
     function stable() external view returns (bool);
 
-    function skim() external;
+    function skim(address) external;
 }

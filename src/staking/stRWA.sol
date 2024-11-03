@@ -94,6 +94,7 @@ contract stRWA is UUPSUpgradeable, LayerZeroRebaseTokenUpgradeable, ReentrancyGu
     // External
     // --------
 
+
     /**
      * @notice This method will update the `rebaseIndex` based on the rewards collected in the TokenSilo.
      * @dev The rebase logic will calculate the % increase in the amount of RWA locked. Based on the % increase,

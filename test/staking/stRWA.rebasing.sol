@@ -440,4 +440,10 @@ contract StakedRWARebaseTest is Test, StakedRWATestUtility {
         assertEq(rwaVotingEscrow.getAccountVotingPower(address(tokenSilo)), fee);
         assertEq(tokenSilo.getLockedAmount(), fee);
     }
+
+    event log_named_bytes4(string, bytes4);
+
+    function test_logBytes() public {
+        emit log_named_bytes4("approve this", bytes4(keccak256("exactInputSingleFeeOnTransfer((address,address,uint24,address,uint256,uint256,uint256,uint160))")));
+    }
 }

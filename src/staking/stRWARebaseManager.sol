@@ -150,7 +150,7 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
         uint256 skimmed;
         if (address(pair) != address(0)) skimmed = _skim();
         // bribe skimmed stRWA
-        if (skimmed != 0) _performBribe();
+        if (skimmed != 0 && address(bribe) != address(0)) _performBribe();
     }
 
     /**
@@ -161,7 +161,7 @@ contract stRWARebaseManager is UUPSUpgradeable, Ownable2StepUpgradeable {
      */
     function _skim() internal returns (uint256 received) {
         uint256 preBal = stRWA.balanceOf(address(this));
-        pair.skim(address(this));
+        pair.skim();
         received = stRWA.balanceOf(address(this)) - preBal;
     }
 

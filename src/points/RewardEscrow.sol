@@ -25,9 +25,13 @@ contract RewardEscrow is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGua
     // State Variables
     // ---------------
 
+    /// @dev Used to track escrow elements for each token deposited.
     struct TokenData {
+        /// @dev Address which is given the rights to claim the token in escrow.
         address beneficiary;
+        /// @dev Timestamp when the token in escrow becomes no longer claimable by beneficiary.
         uint256 expiration;
+        /// @dev Address of account that deposited the token in escrow.
         address depositedBy;
     }
 
@@ -75,17 +79,19 @@ contract RewardEscrow is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGua
     // External
     // --------
 
-    // TODO: What to do with expired tokens?? Burn or claim by admin?
+    // TODO: What to do with expired tokens?? A: claim by admin
 
     function claimRewardToken(uint256 tokenId) external nonReentrant { // TODO: Test gas with msg.sender vs beneficiary.
         if (!isWithinTokenSet(tokenId)) revert InvalidToken(tokenId);
-        address beneficiary = tokenClaimable(tokenId);
+        address beneficiary = getBeneficiary(tokenId);
         if (beneficiary != msg.sender) revert InvalidBeneficiary(beneficiary, msg.sender);
         if (isExpired(tokenId)) revert ClaimingExpiredForToken(tokenId, escrowData[tokenId].expiration);
 
         emit TokenClaimed(tokenId, beneficiary);
 
         _pushToken(tokenId, beneficiary);
+        // TODO: Revoke delegation
+
         tokenSet.remove(tokenId);
 
         delete escrowData[tokenId];
@@ -99,6 +105,8 @@ contract RewardEscrow is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGua
         emit TokenDeposited(tokenId, expiration, beneficiary, msg.sender);
 
         _pullToken(tokenId);
+        // TODO: Delegate tokenId voting power to beneficiary
+
         tokenSet.add(tokenId);
 
         escrowData[tokenId] = TokenData({
@@ -113,21 +121,35 @@ contract RewardEscrow is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGua
         // must be expired
         // msg.sender must be original depositor of token
         // transfer token to msg.sender
+        // revoke delegation
         // delete data
     }
 
+    /**
+     * @notice Returns the length of `tokenSet`. Which is equivalent to the amount of tokens currently placed into escrow.
+     */
     function tokenSetLength() external view returns (uint256) {
         return tokenSet.length();
     }
 
+    /**
+     * @notice Returns the tokenId stored at the provided `index`.
+     */
     function getTokenAtIndex(uint256 index) external view returns (uint256) {
         return tokenSet.at(index);
     }
 
+    /**
+     * @notice Returns the full array stored within `tokenSet`.
+     */
     function getTokenSet() external view returns (uint256[] memory) {
         return tokenSet.values();
     }
 
+    /**
+     * @notice Returns all escrow data for a `tokenId`.
+     * @dev Returned as type TokenData.
+     */
     function getEscrowData(uint256 tokenId) external view returns (TokenData memory) {
         return escrowData[tokenId];
     }
@@ -137,14 +159,25 @@ contract RewardEscrow is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGua
     // Public
     // ------
 
+    /**
+     * @notice If the provided `tokenId` is within the tokenSet (aka "in-escrow") this method will return true.
+     * Otherwise will return false.
+     */
     function isWithinTokenSet(uint256 tokenId) public view returns (bool) {
         return tokenSet.contains(tokenId);
     }
 
-    function tokenClaimable(uint256 tokenId) public view returns (address) {
+    /**
+     * @notice Returns the beneficiary of the `tokenId` in escrow.
+     * @dev Will return address(0) if the token is invalid.
+     */
+    function getBeneficiary(uint256 tokenId) public view returns (address) {
         return escrowData[tokenId].beneficiary;
     }
 
+    /**
+     * @notice If the `tokenId` is in escrow and not expired will return false, otherwise true.
+     */
     function isExpired(uint256 tokenId) public view returns (bool) {
         return block.timestamp > escrowData[tokenId].expiration;
     }
@@ -154,10 +187,16 @@ contract RewardEscrow is UUPSUpgradeable, Ownable2StepUpgradeable, ReentrancyGua
     // Internal
     // --------
 
+    /**
+     * @notice Internal method for transferring a `tokenId` into the custody of this contract.
+     */
     function _pullToken(uint256 tokenId) internal {
         votingEscrow.transferFrom(msg.sender, address(this), tokenId);
     }
 
+    /**
+     * @notice Internal method for transferring a `tokenId` from this contract to a `to` address.
+     */
     function _pushToken(uint256 tokenId, address to) internal {
         votingEscrow.transferFrom(address(this), to, tokenId);
     }

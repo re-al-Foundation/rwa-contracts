@@ -2,24 +2,24 @@
 pragma solidity ^0.8.13;
 
 // foundry imports
-import { Test, console2 } from "../lib/forge-std/src/Test.sol";
+import { Test, console2 } from "../../lib/forge-std/src/Test.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // local imports
-import { RevenueStreamETH } from "../src/RevenueStreamETH.sol";
-import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
-import { DelegateFactory } from "../src/governance/DelegateFactory.sol";
-import { Delegator } from "../src/governance/Delegator.sol";
+import { RevenueStreamETH } from "../../src/RevenueStreamETH.sol";
+import { RWAVotingEscrow } from "../../src/governance/RWAVotingEscrow.sol";
+import { DelegateFactory } from "../../src/governance/DelegateFactory.sol";
+import { Delegator } from "../../src/governance/Delegator.sol";
 
 // helpers
-import { VotingEscrowRWAAPI } from "../src/helpers/VotingEscrowRWAAPI.sol";
-import { AutomatedDelegatee } from "../src/helpers/AutomatedDelegatee.sol";
+import { VotingEscrowRWAAPI } from "../../src/helpers/VotingEscrowRWAAPI.sol";
+import { AutomatedDelegatee } from "../../src/helpers/AutomatedDelegatee.sol";
 
 // local helper imports
-import "./utils/Utility.sol";
-import "./utils/Constants.sol";
+import "../utils/Utility.sol";
+import "../utils/Constants.sol";
 
 /**
  * @title AutomatedDelegateeTest

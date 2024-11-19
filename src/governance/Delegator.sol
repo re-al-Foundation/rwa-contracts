@@ -8,6 +8,9 @@ import { Initializable } from "@openzeppelin/contracts-upgradeable/proxy/utils/I
 import { IERC721Enumerable} from "@openzeppelin/contracts/token/ERC721/extensions/IERC721Enumerable.sol";
 import { Votes } from "@openzeppelin/contracts/governance/utils/Votes.sol";
 
+// local imports
+import { DelegateFactory } from "./DelegateFactory.sol";
+
 /**
  * @title Delegator
  * @author @chasebrownn
@@ -24,13 +27,16 @@ contract Delegator is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     /// @notice Token Id of NFT that is delegated.
     uint256 public delegatedToken;
     /// @notice Contract reference of VotingEscrowRWA (veRWA) contract.
-    IERC721Enumerable public veRWA;
+    IERC721Enumerable public votingEscrow;
     /// @notice Address being delegated voting power of `delegatedToken`
     address public delegatee;
     /// @notice EOA that was used to create the delegator.
     address public creator;
     /// @notice Address of the DelegateFactory contract.
     address public delegateFactory;
+    /// @notice If true, delegatee can claim delegatedToken.
+    bool public claimable;
+
 
     // ------
     // Events
@@ -38,17 +44,30 @@ contract Delegator is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
 
     /**
      * @notice This event is emitted when depositDelegatorToken is executed.
-     * @param _tokenId Token identifier of token being delegated.
-     * @param _delegatee Address of which the voting power of `tokenId` delegated to.
+     * @param tokenId Token identifier of token being delegated.
+     * @param delegatee Address of which the voting power of `tokenId` delegated to.
      */
-    event TokenDelegated(uint256 indexed _tokenId, address indexed _delegatee);
+    event TokenDelegated(uint256 indexed tokenId, address indexed delegatee);
 
     /**
      * @notice This event is emitted when withdrawDelegatedToken is executed.
-     * @param _tokenId Token identifier of token being withdrawn.
-     * @param _oldDelegatee Address of which the voting power of `tokenId` has removed delegated from.
+     * @param tokenId Token identifier of token being withdrawn.
+     * @param oldDelegatee Address of which the voting power of `tokenId` has removed delegated from.
      */
-    event DelegationWithdrawn(uint256 indexed _tokenId, address indexed _oldDelegatee);
+    event DelegationWithdrawn(uint256 indexed tokenId, address indexed oldDelegatee);
+
+    /**
+     * @notice This event is emitted when the delegatedToken is being claimed.
+     * @param tokenId Token identifier of token being claimed.
+     * @param claimedBy EOA that claimed token.
+     */
+    event TokenClaimed(uint256 indexed tokenId, address indexed claimedBy);
+
+    /**
+     * @notice This event is emitted when the value of claimable is updated.
+     * @param claimable The new status stored in claimable.
+     */
+    event ClaimableStatusUpdated(bool claimable);
 
     
     // -----------
@@ -77,7 +96,7 @@ contract Delegator is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     ) external initializer {
         __Ownable_init(_creator);
 
-        veRWA = IERC721Enumerable(_veRWA);
+        votingEscrow = IERC721Enumerable(_veRWA);
         creator = _creator;
         delegatee = _delegatee;
         delegateFactory = msg.sender;
@@ -89,19 +108,37 @@ contract Delegator is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     // ----------------
 
     /**
+     * @notice Allows the delegatee to claim the reward token from the Delegator.
+     * @dev Can only be done if `claimable` is true.
+     * If the token is claimed, this contract will call the DelegateFactory to remove itself
+     * from existing Delegators.
+     */
+    function claimRewardToken() external nonReentrant {
+        require(msg.sender == delegatee, "Delegator: Not authorized");
+        require(claimable, "Delegator: Not claimable");
+
+        emit TokenClaimed(delegatedToken, msg.sender);
+
+        Votes(address(votingEscrow)).delegate(address(this));
+        _pushToken(delegatedToken, msg.sender);
+
+        DelegateFactory(delegateFactory).deleteDelegator();
+    }
+
+    /**
      * @notice This method is used to deposit a delegated veRWA NFT into this contract.
      * @dev There should only be 1 NFT deposited during the lifespan of this delegator.
-     * @param _tokenId Token identifier of veRWA token.
+     * @param tokenId Token identifier of veRWA token.
      */
-    function depositDelegatorToken(uint256 _tokenId) external {     
+    function depositDelegatorToken(uint256 tokenId) external {     
         require(msg.sender == delegateFactory, "Delegator: Not authorized");
 
-        delegatedToken = _tokenId;   
+        emit TokenDelegated(tokenId, delegatee);
 
-        veRWA.transferFrom(msg.sender, address(this), _tokenId);
-        Votes(address(veRWA)).delegate(delegatee);
+        delegatedToken = tokenId;   
 
-        emit TokenDelegated(_tokenId, delegatee);
+        _pullToken(tokenId);
+        Votes(address(votingEscrow)).delegate(delegatee);
     }
 
     /**
@@ -110,9 +147,41 @@ contract Delegator is Ownable2StepUpgradeable, ReentrancyGuardUpgradeable {
     function withdrawDelegatedToken() external nonReentrant {
         require(msg.sender == delegateFactory || msg.sender == owner(), "Delegator: Not authorized");
 
-        Votes(address(veRWA)).delegate(address(this));
-        veRWA.transferFrom(address(this), creator, delegatedToken);
-
         emit DelegationWithdrawn(delegatedToken, delegatee);
+
+        Votes(address(votingEscrow)).delegate(address(this));
+        _pushToken(delegatedToken, creator);
+    }
+
+    /**
+     * @notice This method is used to allow the contract creator to update the claimable status of the delegatedToken.
+     * @param isClaimable The new status being stored in claimable. Cannot be same as value already asigned.
+     */
+    function setClaimable(bool isClaimable) external {
+        require(msg.sender == creator, "Delegator: Not authorized");
+        require(claimable != isClaimable, "Delegator: Already set");
+
+        emit ClaimableStatusUpdated(isClaimable);
+        
+        claimable = isClaimable;
+    }
+
+
+    // ----------------
+    // Internal Methods
+    // ----------------
+
+    /**
+     * @notice Internal method for transferring a `tokenId` into the custody of this contract.
+     */
+    function _pullToken(uint256 tokenId) internal {
+        votingEscrow.transferFrom(msg.sender, address(this), tokenId);
+    }
+
+    /**
+     * @notice Internal method for transferring a `tokenId` from this contract to a `to` address.
+     */
+    function _pushToken(uint256 tokenId, address to) internal {
+        votingEscrow.transferFrom(address(this), to, tokenId);
     }
 }

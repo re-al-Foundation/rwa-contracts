@@ -67,6 +67,13 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
      */
     event DelegatorRoleSet(address indexed newDelegatorRole, bool canDelegate);
 
+    /**
+     * @notice This event is emitted when the expiration date of a Delegator is updated.
+     * @param delegator Address of delegator.
+     * @param expirationTimestamp New expiration timestamp for delegator.
+     */
+    event DelegatorExpirationUpdated(address indexed delegator, uint256 expirationTimestamp);
+
     
     // -----------
     // Constructor
@@ -118,9 +125,9 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
      */
     function deployDelegator(uint256 _tokenId, address _delegatee, uint256 _duration) external nonReentrant returns (address newDelegator) {
         require(canDelegate[msg.sender] || msg.sender == owner(), "DelegateFactory: Not authorized");
-        require(_delegatee != address(0), "delegatee cannot be address(0)");
-        require(_duration != 0, "duration must be greater than 0");
-        require(delegatorLimit > delegators.length, "delegator limit cannot be exceeded");
+        require(_delegatee != address(0), "DelegateFactory: delegatee cannot be address(0)");
+        require(_duration != 0, "DelegateFactory: duration must be greater than 0");
+        require(delegatorLimit > delegators.length, "DelegateFactory: delegator limit cannot be exceeded");
 
         // take token
         veRWA.transferFrom(msg.sender, address(this), _tokenId);
@@ -157,8 +164,8 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         uint256 length = _delegators.length;
         for (uint256 i; i < length;) {
             address _delegator = _delegators[i];
-            require(isDelegator[_delegator], "Invalid delegator");
-            require(Delegator(_delegator).creator() == msg.sender || owner() == msg.sender, "Not authorized");
+            require(isDelegator[_delegator], "DelegateFactory: Invalid delegator");
+            require(Delegator(_delegator).creator() == msg.sender || owner() == msg.sender, "DelegateFactory: Not authorized");
 
             _revokeDelegator(_delegator);
 
@@ -231,6 +238,27 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     }
 
     /**
+     * @notice This external method allows a delegator creator or factory owner to update the expiration date of a delegator.
+     * @param delegator Delegator contract address we're changing the expiration for.
+     * @param newExpiration New expiration timestamp of delegator.
+     */
+    function updateDelegatorExpiration(address delegator, uint256 newExpiration) external {
+        require(msg.sender == owner() || msg.sender == Delegator(delegator).creator(), "DelegateFactory: Not authorized");
+        require(isDelegator[delegator], "DelegateFactory: Invalid delegator");
+        emit DelegatorExpirationUpdated(delegator, newExpiration);
+        delegatorExpiration[delegator] = newExpiration;
+    }
+
+    /**
+     * @notice This external method will delete the calling delegator from this factory.
+     * @dev Caller MUST be a delegator contract and a contract that will be removed from the factory storage.
+     */
+    function deleteDelegator() external {
+        require(isDelegator[msg.sender], "DelegateFactory: Not Delegator");
+        _deleteDelegator(msg.sender);
+    }
+
+    /**
      * @notice This view method is used to fetch whether there exists any expired delegators.
      * @return exists -> True if expired delegator exists.
      */
@@ -264,25 +292,37 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         return delegators;
     }
 
+
     // ----------------
     // Internal Methods
     // ----------------
 
     /**
      * @notice Withdraws delegated token from delegator contract back to the creator and deletes existance.
+     * @param delegator Address of delegator being revoked.
      */
-    function _revokeDelegator(address _delegator) internal {
-        emit DelegatorDeleted(_delegator);
+    function _revokeDelegator(address delegator) internal {
         // call withdrawDelegatedToken
-        IDelegator(_delegator).withdrawDelegatedToken();
+        IDelegator(delegator).withdrawDelegatedToken();
         // delete delegator from contract
-        delete isDelegator[_delegator];
-        delete delegatorExpiration[_delegator];
+        _deleteDelegator(delegator);
+    }
+
+    /**
+     * @notice Internal method for deleting a delegator from this factory. Occurs when a delegation is revoked post-expiration.
+     * @param delegator Delegator which is being removed from storage.
+     */
+    function _deleteDelegator(address delegator) internal {
+        emit DelegatorDeleted(delegator);
+
+        // delete delegator from contract
+        delete isDelegator[delegator];
+        delete delegatorExpiration[delegator];
 
         // delete from array and update indexes
         uint256 len = delegators.length - 1;
-        uint256 index = indexInDelegators[_delegator];
-        delete indexInDelegators[_delegator];
+        uint256 index = indexInDelegators[delegator];
+        delete indexInDelegators[delegator];
         if (index != len) {
             delegators[index] = delegators[len];
             indexInDelegators[delegators[len]] = index;
@@ -291,7 +331,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
     }
 
     /**
-     * @notice Inherited from UUPSUpgradeable. Allows us to authorize the DEFAULT_ADMIN_ROLE role to upgrade this contract's implementation.
+     * @notice Inherited from UUPSUpgradeable. Allows us to authorize the owner to upgrade this contract's implementation.
      */
     function _authorizeUpgrade(address) internal override onlyOwner {}
 }

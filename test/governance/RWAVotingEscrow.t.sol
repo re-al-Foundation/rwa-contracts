@@ -2,23 +2,23 @@
 pragma solidity ^0.8.13;
 
 // foundry imports
-import { Test, console2 } from "../lib/forge-std/src/Test.sol";
+import { Test, console2 } from "../../lib/forge-std/src/Test.sol";
 
 // oz imports
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 import { Checkpoints } from "@openzeppelin/contracts/utils/structs/Checkpoints.sol";
 
 // local imports
-import { RWAVotingEscrow } from "../src/governance/RWAVotingEscrow.sol";
-import { VotingEscrowVesting } from "../src/governance/VotingEscrowVesting.sol";
-import { RWAToken } from "../src/RWAToken.sol";
+import { RWAVotingEscrow } from "../../src/governance/RWAVotingEscrow.sol";
+import { VotingEscrowVesting } from "../../src/governance/VotingEscrowVesting.sol";
+import { RWAToken } from "../../src/RWAToken.sol";
 
-import { VotingEscrowRWAAPI } from "../src/helpers/VotingEscrowRWAAPI.sol";
+import { VotingEscrowRWAAPI } from "../../src/helpers/VotingEscrowRWAAPI.sol";
 
 // local helper imports
-import { Utility } from "./utils/Utility.sol";
-import { VotingMath } from "../src/governance/VotingMath.sol";
-import "./utils/Constants.sol";
+import { Utility } from "../utils/Utility.sol";
+import { VotingMath } from "../../src/governance/VotingMath.sol";
+import "../utils/Constants.sol";
 
 /**
  * @title RWAVotingEscrowTest

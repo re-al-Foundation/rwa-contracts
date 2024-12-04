@@ -19,7 +19,7 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     // ---------------
 
     /// @dev Contract reference for DelegateFactory.
-    DelegateFactory public constant delegateFactory = DelegateFactory(0x4Bc715a61dF515944907C8173782ea83d196D0c9);
+    DelegateFactory public immutable delegateFactory;
     /// @dev Contract reference for RWAVotingEscrow.
     RWAVotingEscrow public veRWA;
     /// @dev Contract reference for VotingEscrowVesting.
@@ -53,6 +53,10 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
         uint256 expirationDate;
         /// @dev Creator of delegation and original owner of NFT.
         address owner;
+        /// @dev Contract address of Delegator contract.
+        address delegator;
+        /// @dev If returns true, tokenId is claimable.
+        bool claimable;
     }
 
     /// @dev Object used to return veRWA vesting data.
@@ -72,7 +76,8 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
     // Constructor
     // -----------
 
-    constructor() {
+    constructor(address factory) {
+        delegateFactory = DelegateFactory(factory);
         _disableInitializers();
     }
 
@@ -186,7 +191,9 @@ contract VotingEscrowRWAAPI is UUPSUpgradeable, AccessControlUpgradeable {
                     remainingDuration: veRWA.getRemainingVestingDuration(tokenId),
                     votingPower: veRWA.getPastVotingPower(tokenId, block.timestamp-1),
                     expirationDate: delegateFactory.delegatorExpiration(address(delegator)),
-                    owner: delegator.creator()
+                    owner: delegator.creator(),
+                    delegator: address(delegator),
+                    claimable: delegator.claimable()
                 });
                 unchecked {
                     ++num;

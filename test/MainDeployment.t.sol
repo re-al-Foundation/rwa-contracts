@@ -244,7 +244,7 @@ contract MainDeploymentTest is Utility {
         delegateFactory = DelegateFactory(address(delegateFactoryProxy));
 
         // Deploy API
-        api = new VotingEscrowRWAAPI();
+        api = new VotingEscrowRWAAPI(address(delegateFactoryProxy));
 
         // Deploy api proxy
         ERC1967Proxy apiProxy = new ERC1967Proxy(
@@ -3329,6 +3329,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Execute revokeAllExpiredDelegators ~
 
+        vm.prank(ADMIN);
         delegateFactory.revokeAllExpiredDelegators();
 
         // ~ Post-state check ~
@@ -3429,6 +3430,7 @@ contract MainDeploymentTest is Utility {
 
         // ~ Execute revokeAllExpiredDelegators ~
 
+        vm.prank(ADMIN);
         delegateFactory.revokeAllExpiredDelegators();
 
         // ~ Post-state check ~

@@ -29,6 +29,7 @@ contract DeployAPI is DeployUtility {
     address public veRWA;
     address public vesting;
     address public revStream;
+    address public factory;
 
     address public DEPLOYER_ADDRESS = vm.envAddress("DEPLOYER_ADDRESS");
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
@@ -41,6 +42,7 @@ contract DeployAPI is DeployUtility {
         veRWA = payable(_loadDeploymentAddress("RWAVotingEscrow"));
         vesting = payable(_loadDeploymentAddress("VotingEscrowVesting"));
         revStream = payable(_loadDeploymentAddress("RevenueStreamETH"));
+        factory = payable(_loadDeploymentAddress("DelegateFactory"));
     }
 
     function run() public {
@@ -49,7 +51,7 @@ contract DeployAPI is DeployUtility {
         // ~ Deploy VotingEscrowRWAAPI ~
 
         // Deploy api
-        VotingEscrowRWAAPI api = new VotingEscrowRWAAPI();
+        VotingEscrowRWAAPI api = new VotingEscrowRWAAPI(factory);
 
         // Deploy proxy for api
         ERC1967Proxy apiProxy = new ERC1967Proxy(

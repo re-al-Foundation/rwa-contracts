@@ -240,7 +240,7 @@ contract DeployAll is DeployUtility {
 
 
         // Deploy api
-        api = new VotingEscrowRWAAPI();
+        api = new VotingEscrowRWAAPI(address(delegateFactoryProxy));
         // Deploy proxy for api
         ERC1967Proxy apiProxy = new ERC1967Proxy(
             address(api),

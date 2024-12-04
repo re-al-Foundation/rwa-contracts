@@ -15,12 +15,13 @@ import "../../../test/utils/Constants.sol";
 /** 
     @dev To run: 
     forge script script/deploy/mainnet/UpgradeAPI.s.sol:UpgradeAPI --broadcast --legacy \
-    --gas-estimate-multiplier 600 \
+    --gas-estimate-multiplier 800 \
     --verify --verifier blockscout --verifier-url https://explorer.re.al//api -vvvv
 
     @dev To verify manually: 
     forge verify-contract <CONTRACT_ADDRESS> --chain-id 111188 --watch \ 
     src/helpers/VotingEscrowRWAAPI.sol:VotingEscrowRWAAPI \
+    --constructor-args $(cast abi-encode "constructor(address)" <DELEGATE_FACTORY_ADDRESS>) \
     --verifier blockscout --verifier-url https://explorer.re.al//api
 */
 
@@ -34,17 +35,16 @@ contract UpgradeAPI is Script {
     // ~ Contracts ~
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
-    string public REAL_RPC_URL = vm.envString("REAL_RPC_URL");
 
     function setUp() public {
-        vm.createSelectFork(REAL_RPC_URL);
+        vm.createSelectFork(vm.envString("REAL_RPC_URL"));
     }
 
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
         // Deploy api
-        VotingEscrowRWAAPI newApi = new VotingEscrowRWAAPI();
+        VotingEscrowRWAAPI newApi = new VotingEscrowRWAAPI(address(0x4Bc715a61dF515944907C8173782ea83d196D0c9));
 
         // TODO Upgrade
         // api.upgradeToAndCall(address(newApi), "");

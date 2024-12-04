@@ -83,7 +83,7 @@ contract RWAVotingEscrowTest is Utility {
         veRWA = RWAVotingEscrow(address(veRWAProxy));
 
         // Deploy API
-        api = new VotingEscrowRWAAPI();
+        api = new VotingEscrowRWAAPI(address(2));
 
         // Deploy api proxy
         apiProxy = new ERC1967Proxy(

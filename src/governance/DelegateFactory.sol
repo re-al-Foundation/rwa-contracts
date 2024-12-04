@@ -50,9 +50,11 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
 
     /**
      * @notice This event is emitted when deployDelegator is executed.
+     * @param tokenId Token that was delegated.
+     * @param delegatee Beneficiary of delegation.
      * @param _delegator New address of delegator.
      */
-    event DelegatorCreated(address indexed _delegator);
+    event DelegatorCreated(uint256 indexed tokenId, address indexed delegatee, address indexed _delegator);
 
     /**
      * @notice This event is emitted when revokeAllExpiredDelegators is executed for each expired Delegator.
@@ -153,7 +155,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         veRWA.approve(newDelegator, _tokenId);
         IDelegator(newDelegator).depositDelegatorToken(_tokenId);
 
-        emit DelegatorCreated(newDelegator);
+        emit DelegatorCreated(_tokenId, _delegatee, newDelegator);
     }
 
     /**
@@ -179,7 +181,7 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
      * @notice This method is used to fetch any expired Delegators, withdraw the delegated token from the Delegator,
      *         and delete it's instance from this contract.
      */
-    function revokeAllExpiredDelegators() external nonReentrant {
+    function revokeAllExpiredDelegators() external onlyOwner nonReentrant {
         uint256 length = delegators.length;
         for (uint256 i; i < length;) {
             address delegator = delegators[i];
@@ -234,6 +236,9 @@ contract DelegateFactory is UUPSUpgradeable, Ownable2StepUpgradeable, Reentrancy
         uint256 length = delegators.length;
         for (uint256 i; i < length;) {
             indexInDelegators[delegators[i]] = i;
+            unchecked {
+                ++i;
+            }
         }
     }
 

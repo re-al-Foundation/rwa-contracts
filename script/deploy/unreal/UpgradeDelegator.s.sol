@@ -7,24 +7,25 @@ import {Script, console2} from "forge-std/Script.sol";
 import { ERC1967Proxy } from "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
 
 // local imports
-import { VotingEscrowRWAAPI } from "../../../src/helpers/VotingEscrowRWAAPI.sol";
+import { DelegateFactory } from "../../../src/governance/DelegateFactory.sol";
+import { Delegator } from "../../../src/governance/Delegator.sol";
 
 //helper contracts
 import "../../../test/utils/Constants.sol";
 
-/// @dev To run: forge script script/deploy/unreal/UpgradeAPI.s.sol:UpgradeAPI --broadcast --legacy --gas-estimate-multiplier 600 --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
+/// @dev To run: forge script script/deploy/unreal/UpgradeDelegator.s.sol:UpgradeDelegator --broadcast --legacy --gas-estimate-multiplier 200 --verify --verifier blockscout --verifier-url https://unreal.blockscout.com/api -vvvv
 /// @dev To verify manually: forge verify-contract <CONTRACT_ADDRESS> --chain-id 18231 --watch src/Contract.sol:Contract --verifier blockscout --verifier-url https://unreal.blockscout.com/api
 
 /**
- * @title UpgradeAPI
+ * @title UpgradeDelegator
  * @author Chase Brown
- * @notice This script upgrades the VotingEscrowRWAAPI on UNREAL Testnet.
+ * @notice This script upgrades the Delegator on UNREAL Testnet.
  */
-contract UpgradeAPI is Script {
+contract UpgradeDelegator is Script {
 
     // ~ Contracts ~
 
-    VotingEscrowRWAAPI public api = VotingEscrowRWAAPI(UNREAL_RWA_API);
+    DelegateFactory public delegateFactory = DelegateFactory(0x8A59e74a793214251Bc4dfC8c211Ecc00F77a422);
 
     uint256 public DEPLOYER_PRIVATE_KEY = vm.envUint("DEPLOYER_PRIVATE_KEY");
     string public UNREAL_RPC_URL = vm.envString("UNREAL_RPC_URL");
@@ -36,15 +37,8 @@ contract UpgradeAPI is Script {
     function run() public {
         vm.startBroadcast(DEPLOYER_PRIVATE_KEY);
 
-        // Deploy api
-        VotingEscrowRWAAPI newApi = new VotingEscrowRWAAPI(address(UNREAL_DELEGATE_FACTORY)); // TODO
-
-        // Upgrade
-        api.upgradeToAndCall(address(newApi), "");
-
-        // ~ Logs ~
-
-        console2.log("API imp", address(newApi));
+        // Deploy new Delegator implementation upgrade beacon
+        delegateFactory.updateDelegatorImplementation(address(new Delegator()));
 
         vm.stopBroadcast();
     }

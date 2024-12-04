@@ -426,6 +426,7 @@ contract DelegationTest is Utility {
 
         // ~ Execute revokeAllExpiredDelegators ~
 
+        vm.prank(ADMIN);
         delegateFactory.revokeAllExpiredDelegators();
 
         // ~ Post-state check ~
@@ -511,6 +512,7 @@ contract DelegationTest is Utility {
 
         // ~ Execute revokeAllExpiredDelegators ~
 
+        vm.prank(ADMIN);
         delegateFactory.revokeAllExpiredDelegators();
 
         // ~ Post-state check ~
